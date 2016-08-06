@@ -31,6 +31,9 @@
 (define (set-buffer-meta buff meta)
   (set buff 10 meta))
 
+(define (buffer-x buff) (ref buff 5))
+(define (buffer-y buff) (ref buff 6))
+
 (define (make-file-state w h path meta)
   (let ((data (map string->list (force-ll (lines (open-input-file path))))))
     (if (pair? data)
@@ -352,38 +355,39 @@
                   (led-buffer buff (push-new undo buff) 'command))
                (else
                   (led-buffer buff undo mode)))
-            (begin
-               (log "command mode has no actual functionality yet")
-               (mail 'terminal
-                (tio*
-                  (set-cursor 1 (screen-height buff))
-                  (clear-line)
-                  (list #\@ #\space)))
-               (lets
-                  ((ll (interact 'terminal 'get-input))
-                   (metadata (buffer-meta buff))
-                   (ll res 
-                    (readline ll 
-                      (get (buffer-meta buff) 'command-history null) 
-                      1 (screen-height buff) (screen-width buff))))
-                  (log "restoring input stream " ll " to terminal")
-                  (mail 'terminal ll) ;; restore input stream
-                  (log (str "readline returned '" res "'"))
-                  (mail 'terminal
-                    (tio
-                      (set-cursor 4 4)
-                      (clear-line-right)
-                      (output (str "readline got " res))
-                      (set-cursor 1 1)))
-                  (if (equal? res "quit")
-                    (print "Bye bye")
-                    (led-buffer 
-                      (set-buffer-meta buff
-                        (put metadata 'command-history
-                          (cons res (get metadata 'command-history null))))
-                      undo 'insert)))))
-         (begin
-            (led-buffer buff undo mode)))))
+            (tuple-case msg
+              ((key k)
+                  (cond
+                     ((eq? k #\:)
+                       (mail 'terminal (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
+                       (lets
+                          ((ll (interact 'terminal 'get-input))
+                           (metadata (buffer-meta buff))
+                           (ll res 
+                            (readline ll 
+                              (get (buffer-meta buff) 'command-history null) 
+                              2 (screen-height buff) (screen-width buff))))
+                          (log "restoring input stream " ll " to terminal")
+                          (mail 'terminal ll) ;; restore input stream
+                          (log (str "readline returned '" res "'"))
+                          (mail 'terminal 
+                           (tio 
+                              (set-cursor 1 (screen-height buff)) 
+                              (clear-line)
+                              (set-cursor (buffer-x buff) (buffer-y buff))
+                              ))
+                          (if (equal? res "quit")
+                            (print "Bye bye")
+                            (led-buffer 
+                              (set-buffer-meta buff
+                                (put metadata 'command-history
+                                  (cons res (get metadata 'command-history null))))
+                              undo 'command))))
+                     (else
+                        (log "not handling command " msg)
+                        (led-buffer buff undo mode))))
+              (else
+                  (log "not handling command " msg)))))))
 
 
 ;;; Program startup 
