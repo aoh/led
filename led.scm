@@ -1,7 +1,10 @@
 #!/usr/bin/ol --run
 
 (import
-  (owl terminal))
+  (owl terminal)
+  (owl args))
+
+(define version-str "led v0.1a")
 
 (define logfd (open-output-file "led.log"))
 
@@ -9,9 +12,10 @@
    (print-to logfd what))
 
 (define (trampoline)
-  (print "main: " (wait-mail))
-  (halt 1)
-  (trampoline))
+  (let ((env (wait-mail)))
+    (log "main: " env)
+    (print "main: " env)
+    (halt 1)))
 
 (define (move-cursor msg x y)
   (lets ((from msg msg))
@@ -361,8 +365,8 @@
             (debug "odd message " envelope)
             (led-buffer buff undo mode)))))
 
-(define (start-led args)
-  (log "started")
+(define (start-led dict args)
+  (log "start-led " dict ", " args)
   (lets ((dimensions (interact 'terminal 'get-terminal-size))
          (w h dimensions))
     (log "dimensions " dimensions)
@@ -371,8 +375,6 @@
         (clear-screen)
         (set-cursor (- (div w 2) 4) (div h 2))
         (raw (font-bold (render "LED 0.1" null)))
-        ;(set-cursor 1 h)
-        ;(output ": ")
         (font-normal)
         (set-cursor 1 1)
         ))
@@ -383,11 +385,31 @@
           (make-empty-state w h #empty))))
       (mail 'terminal (update-screen buff))
       (led-buffer buff null 'insert))))
-    
-(λ (args)
-  (fork-linked-server 'terminal
-    (λ () (terminal-server stdin 'led)))
-  (fork-linked-server 'led 
-    (λ () (start-led (cdr args))))
-  (trampoline)
-  0)
+
+(define usage-text 
+  "Usage: led [flags] [file]")
+
+(define command-line-rules
+  (cl-rules
+    `((help "-h" "--help" comment "show this thing")
+      (version "-V" "--version" comment "show program version"))))
+
+(define (start-led-threads dict args)
+  (cond
+    ((getf dict 'help)
+      (print usage-text)
+      (print (format-rules command-line-rules))
+      0)
+    ((getf dict 'version)
+      (print version-str)
+      0)
+    (else
+      (log "started " dict ", " args)
+      (fork-linked-server 'terminal (λ () (terminal-server stdin 'led)))
+      (fork-linked-server 'led (λ () (start-led dict args)))
+      (trampoline))))
+
+(define (main args)
+  (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
+
+main
