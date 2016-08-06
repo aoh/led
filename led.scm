@@ -2,6 +2,7 @@
 
 (import
   (owl terminal)
+  ;(led readline)
   (owl args))
 
 (define version-str "led v0.1a")
@@ -31,9 +32,9 @@
         (put meta 'path path))
       (error "could not open " path))))
 
-(define (screen-width buff) (ref buff 5))
+(define (screen-width buff) (ref buff 7))
 
-(define (screen-height buff) (ref buff 6))
+(define (screen-height buff) (ref buff 8))
 
 (define (draw-lines-at-offset tl w dx y dy end lines)
    (cond
@@ -346,9 +347,23 @@
                (else
                   (led-buffer buff undo mode)))
             (begin
-               (log "debug mode has no functionality yet")
-               (print "Exiting command mode on " msg)
-               0))
+               (log "command mode has no actual functionality yet")
+               (mail 'terminal
+                (tio*
+                  (set-cursor 1 (screen-height buff))
+                  (clear-line)
+                  (list #\@ #\space)))
+               (lets
+                  ((ll (interact 'terminal 'get-input))
+                   (ll res (readline ll null 1 (screen-height buff) (screen-width buff))))
+                  (mail 'terminal ll) ;; restore input stream
+                  (mail 'terminal
+                    (tio
+                      (set-cursor 4 4)
+                      (clear-line-right)
+                      (output (str "readline got " res))
+                      (set-cursor 1 1)))
+                  0)))
          (begin
             (led-buffer buff undo mode)))))
 
