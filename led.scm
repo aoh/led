@@ -25,6 +25,12 @@
 (define (make-empty-state w h meta)
 	(buffer null null null null 1 1 w h (cons 0 0) meta))
 
+(define (buffer-meta buff)
+  (ref buff 10))
+
+(define (set-buffer-meta buff meta)
+  (set buff 10 meta))
+
 (define (make-file-state w h path meta)
   (let ((data (map string->list (force-ll (lines (open-input-file path))))))
     (if (pair? data)
@@ -355,15 +361,27 @@
                   (list #\@ #\space)))
                (lets
                   ((ll (interact 'terminal 'get-input))
-                   (ll res (readline ll null 1 (screen-height buff) (screen-width buff))))
+                   (metadata (buffer-meta buff))
+                   (ll res 
+                    (readline ll 
+                      (get (buffer-meta buff) 'command-history null) 
+                      1 (screen-height buff) (screen-width buff))))
+                  (log "restoring input stream " ll " to terminal")
                   (mail 'terminal ll) ;; restore input stream
+                  (log (str "readline returned '" res "'"))
                   (mail 'terminal
                     (tio
                       (set-cursor 4 4)
                       (clear-line-right)
                       (output (str "readline got " res))
                       (set-cursor 1 1)))
-                  0)))
+                  (if (equal? res "quit")
+                    (print "Bye bye")
+                    (led-buffer 
+                      (set-buffer-meta buff
+                        (put metadata 'command-history
+                          (cons res (get metadata 'command-history null))))
+                      undo 'insert)))))
          (begin
             (led-buffer buff undo mode)))))
 
