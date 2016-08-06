@@ -6,30 +6,17 @@
 
 (define version-str "led v0.1a")
 
-(define logfd (open-output-file "led.log"))
+;;; Temporary logging
+
+(define logfd 
+   (open-output-file "led.log"))
 
 (define (log . what)
    (print-to logfd what))
 
-(define (trampoline)
-  (let ((env (wait-mail)))
-    (log "main: " env)
-    (print "main: " env)
-    (halt 1)))
 
-(define (move-cursor msg x y)
-  (lets ((from msg msg))
-    (if (and (eq? from 'terminal) (tuple? msg) (eq? (ref msg 1) 'arrow))
-      (cond
-        ((eq? (ref msg 2) 'up)
-          (values x (max 1 (- y 1))))
-        ((eq? (ref msg 2) 'down)
-          (values x (+ y 1)))
-        ((eq? (ref msg 2) 'left)
-          (values (max 1 (- x 1)) y))
-        (else
-          (values (+ x 1) y)))
-      (values x y))))
+
+;;; Movement and insert mode edit operation
 
 (define (buffer up down left right x y w h off meta)
    (tuple up down left right x y w h off meta))
@@ -45,23 +32,8 @@
       (error "could not open " path))))
 
 (define (screen-width buff) (ref buff 5))
-(define (screen-height buff) (ref buff 6))
 
-(define (debug . stuff)
-   '(lets
-      ((max-msg-width 60)
-       (val (take (foldr render null stuff) max-msg-width)))
-      (mail 'terminal
-         (tio
-            (cursor-save)
-            (cursor-hide)
-            (font-bold)
-            (set-cursor 1 1)
-            (clear-line-right)
-            (raw val)
-            (font-normal)
-            (cursor-restore)
-            (cursor-show)))))
+(define (screen-height buff) (ref buff 6))
 
 (define (draw-lines-at-offset tl w dx y dy end lines)
    (cond
@@ -319,7 +291,21 @@
          (else
             (log "odd line move: " dir)
             (values buff null)))))
-      
+
+;;; Undo
+
+(define empty-undo 
+   (cons null null))
+
+(define (push-new undo buff)
+   (log "pushing new version")
+   (lets ((prev new undo))
+      ;; no way to return to future after changing the past
+      (cons (cons buff prev) null)))
+
+
+;;; Event dispatcher
+
 (define (led-buffer buff undo mode)
    (log-buff buff)
    (lets ((envelope (wait-mail))
@@ -352,18 +338,22 @@
                   (lets ((buff out (move-arrow buff dir)))
                      (mail 'terminal out)
                      (led-buffer buff undo mode)))
-               ((end-of-text)
-                  (mail 'terminal 'stop)
-                  0)
+               ((end-of-text) 
+                  (led-buffer buff (push-new undo buff) 'command))
+               ((esc)         
+                  (log "switching out of insert mode on esc")
+                  (led-buffer buff (push-new undo buff) 'command))
                (else
-                  (debug "odd terminal msg " msg)
                   (led-buffer buff undo mode)))
             (begin
-               (debug "odd mode " mode " for " envelope)
-               (led-buffer buff undo mode)))
+               (log "debug mode has no functionality yet")
+               (print "Exiting command mode on " msg)
+               0))
          (begin
-            (debug "odd message " envelope)
             (led-buffer buff undo mode)))))
+
+
+;;; Program startup 
 
 (define (start-led dict args)
   (log "start-led " dict ", " args)
@@ -384,7 +374,7 @@
           (make-file-state w h (car args) #empty)
           (make-empty-state w h #empty))))
       (mail 'terminal (update-screen buff))
-      (led-buffer buff null 'insert))))
+      (led-buffer buff empty-undo 'insert))))
 
 (define usage-text 
   "Usage: led [flags] [file]")
@@ -393,6 +383,12 @@
   (cl-rules
     `((help "-h" "--help" comment "show this thing")
       (version "-V" "--version" comment "show program version"))))
+
+(define (trampoline)
+  (let ((env (wait-mail)))
+    (log "main: " env)
+    (print "main: " env)
+    (halt 1)))
 
 (define (start-led-threads dict args)
   (cond
