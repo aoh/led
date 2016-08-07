@@ -377,7 +377,13 @@
                               (set-cursor (buffer-x buff) (buffer-y buff))
                               ))
                           (if (equal? res "quit")
-                            (print "Bye bye")
+                            (begin
+                              (mail 'terminal
+                                (tio
+                                  (raw (list #\newline))
+                                  (set-cursor 1 (screen-height buff))))
+                              (mail 'terminal 'stop)
+                              0)
                             (led-buffer 
                               (set-buffer-meta buff
                                 (put metadata 'command-history
@@ -392,25 +398,28 @@
 
 ;;; Program startup 
 
+(define (splash w h)
+    (mail 'terminal
+      (tio
+        (clear-screen)
+        (set-cursor (- (div w 2) (div (string-length version-str) 2)) (div h 2))
+        (raw (font-bold (render version-str null)))
+        (font-normal)
+        (set-cursor 1 1))))
+
 (define (start-led dict args)
   (log "start-led " dict ", " args)
   (lets ((dimensions (interact 'terminal 'get-terminal-size))
          (w h dimensions))
     (log "dimensions " dimensions)
-    (mail 'terminal
-      (tio
-        (clear-screen)
-        (set-cursor (- (div w 2) 4) (div h 2))
-        (raw (font-bold (render "LED 0.1" null)))
-        (font-normal)
-        (set-cursor 1 1)
-        ))
     (lets 
       ((buff 
         (if (= (length args) 1)
           (make-file-state w h (car args) #empty)
           (make-empty-state w h #empty))))
-      (mail 'terminal (update-screen buff))
+      (if (= (length args) 0)
+        (splash w h)
+        (mail 'terminal (update-screen buff)))
       (led-buffer buff empty-undo 'insert))))
 
 (define usage-text 
@@ -424,8 +433,11 @@
 (define (trampoline)
   (let ((env (wait-mail)))
     (log "main: " env)
-    (print "main: " env)
-    (halt 1)))
+    (if (and (eq? (ref env 1) 'led) (eq? (ref (ref env 2) 1) 'finished))
+      (halt 0)
+      (begin
+        (print "error: " env)
+        (halt 1)))))
 
 (define (start-led-threads dict args)
   (cond
