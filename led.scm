@@ -47,6 +47,16 @@
 
 (define (screen-height buff) (ref buff 8))
 
+(define (node-screen-width x) (ref x 3))
+
+(define (node-screen-representation x) (ref x 4))
+
+(define (node-width x)
+   (cond
+      ((eq? (type x) type-fix+) 1)
+      ((tuple? x) (node-screen-width x))
+      (else (error "node-width: " x))))
+
 (define (take-printable line n)
   (cond
     ((eq? n 0) null)
@@ -60,18 +70,50 @@
               (cons x (take-printable line (- n 1)))
               (encode-point x
                 (take-printable line (- n 1)))))
+          ((tuple? x)
+            ;; #(type actual-codepoints width-on-screen screen-codepoints)
+            (lets ((type cps width output x))
+              (cond
+                ((eq? type 'replace)
+                    (take-printable (append output line) n))
+                (else
+                  (error "take-printable: what is " x)))))
           (else
             (error "take-printable: what is " x)))))
     (else
       null)))
-            
+
+(define (drop-printable line n)
+   (log "drop-printable " line ", " n)
+  (cond
+    ((eq? n 0) line)
+    ((pair? line)
+      (lets ((x line line))
+        (cond
+          ((eq? (type x) type-fix+)
+            (drop-printable line (- n 1)))
+          ((tuple? x)
+            ;; #(type actual-codepoints width-on-screen screen-codepoints)
+            (lets ((type cps width output x))
+               (drop-printable (append output line) n)))
+          (else
+            (error "drop-printable: what is " x)))))
+    (else
+      null)))
+
+(define (printable-length line)
+   (fold (λ (n x) (+ n (node-width x))) 0 line))
+
+(define tab-node 
+  (tuple 'replace (list #\tab) 4 (list #\| #\- #\- #\.)))
 
 (define (draw-lines-at-offset tl w dx y dy end lines)
    (cond
       ((null? lines) tl)
       ((eq? y end) tl)
       (else
-         (let ((these (drop (car lines) dx)))
+         (let ((these (drop-printable (car lines) dx)))
+            (log "printable after " dx " of " (car lines) " is " (drop-printable (car lines) dx))
             (tio*
                (set-cursor 1 y)
                (clear-line-right)
@@ -148,51 +190,66 @@
 (define (log-buff buff)
   (lets
     ((u d l r x y w h off meta buff))
+    (log "left " l ", right " r)
     (log "log: cursor at " (cons x y) " at offset " off ", line pos " (+ (car off) (- x 1)))))
-        
+       
+(define (key-node k)
+  (cond
+    ((eq? k #\tab)
+      tab-node)
+    (else k)))
+
+(define (encode-node k tl)
+   (cond 
+      ((eq? (type k) type-fix+)
+         (encode-point k tl))
+      (else
+         (foldr encode-node tl (node-screen-representation k)))))
 
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
-      (if (eq? x w)
-         (lets
-            ((buff scroll-tio (scroll-right buff))
-             (buff insert-tio (insert-handle-key buff k)))
-            (values buff
-               (append scroll-tio insert-tio)))
-         (begin
-            (log "insert of key " k " at " (cons x y))
-            (values
-               (buffer u d (cons k l) r (+ x 1) y w h off meta)
-               (encode-point k
-                  (if (null? r)
-                     null
-                     (tio
-                        (clear-line-right)
-                        (cursor-save)
-                        (raw (take-printable r (- w (+ x 1))))
-                        (cursor-restore)))))))))
+      (lets ((node (key-node k))
+             (nw (node-width node)))
+         (if (< (+ x nw) w)
+            (begin
+               (log "insert of key " k " at " (cons x y) " = " node)
+               (values
+                  (buffer u d (cons node l) r (+ x nw) y w h off meta)
+                  (encode-node node
+                     (if (null? r)
+                        null
+                        (tio
+                           (clear-line-right)
+                           (cursor-save)
+                           (raw (take-printable r (- w (+ x nw))))
+                           (cursor-restore))))))
+            (lets
+               ((buff scroll-tio (scroll-right buff))
+                (buff insert-tio (insert-handle-key buff k)))
+               (values buff
+                  (append scroll-tio insert-tio)))))))
 
 (define (insert-backspace buff)
    (lets ((u d l r x y w h off meta buff))
-      (cond
-         ((null? l)
-            ;; no-op (could also backspace to line above)
-            (values buff null))
-         ((eq? x 1)
+      (if (null? l)
+         ;; no-op (could also backspace to line above)
+         (values buff null)
+         (let ((cw (node-width (car l))))
+           (if (> x cw)
+             (values
+                (buffer u d (cdr l) r (- x cw) y w h off meta)
+                (tio
+                   (cursor-left cw)
+                   (clear-line-right)
+                   (cursor-save)
+                   (raw (take-printable r (- w x)))
+                   (cursor-restore)))
             (lets 
                ((buff scroll-tio (scroll-left buff))
                 (buff bs-tio     (insert-backspace buff)))
                (values buff
-                  (append scroll-tio bs-tio))))
-         (else
-            (values
-               (buffer u d (cdr l) r (- x 1) y w h off meta)
-               (tio
-                  (cursor-left 1)
-                  (clear-line-right)
-                  (cursor-save)
-                  (raw (take-printable r (- w x)))
-                  (cursor-restore)))))))
+                  (append scroll-tio bs-tio))))))))
+
 
 ;; (a b c d ... n) 3 → (c b a) (d... n)
 (define (line-seek line pos)
@@ -214,11 +271,11 @@
           (u (cons line u))
           (y (+ y 1))
           (line d (uncons d null))
-          (x (min x (+ 1 (- (length line) (car off)))))
+          (x (min x (+ 1 (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
           (l r (line-seek line line-pos)))
         (log "line-down went to (x . y) " (cons x y))
-        (log "next line length is " (length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
+        (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
         (values
           (buffer u d l r x y w h off meta)
           x y)))
@@ -231,11 +288,11 @@
           (d (cons line d))
           (y (- y 1))
           (line u (uncons u null))
-          (x (min x (+ 1 (- (length line) (car off)))))
+          (x (min x (+ 1 (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
           (l r (line-seek line line-pos)))
         (log "line-up went to (x . y) " (cons x y))
-        (log "next line length is " (length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
+        (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
         (values
           (buffer u d l r x y w h off meta)
           x y)))
@@ -255,7 +312,7 @@
                     (values buff
                       (append tio-scroll tio-move))))
               ((not (eq? 0 (car off))) ;; there is x-offset
-                (let ((next-len (length (car u))))
+                (let ((next-len (printable-length (car u))))
                   (if (< next-len (car off)) ;; next line start not visible
                     (lets ;; dummy version
                       ((buff tio (move-arrow buff 'left))
@@ -279,7 +336,7 @@
                   (values buff
                     (append tio-scroll tio-move))))
               ((not (eq? 0 (car off))) ;; there is x-offset
-                (let ((next-len (length (car d))))
+                (let ((next-len (printable-length (car d))))
                   (if (< next-len (car off)) ;; next line start not visible
                     (lets ;; dummy version
                       ((buff tio (move-arrow buff 'left))
@@ -292,33 +349,30 @@
                 (lets ((buff x y (line-down buff)))
                   (values buff (tio (set-cursor x y)))))))
          ((eq? dir 'left)
-            (cond
-               ((null? l)
-                  (values buff null))
-               ((eq? x 1)
-                  (lets
-                    ((buff scroll-tio (scroll-left buff))
-                     (buff move-tio (move-arrow buff dir)))
-                    (values buff (append scroll-tio move-tio))))
-               (else
-                  (values
-                     (buffer u d (cdr l) (cons (car l) r) (- x 1) y w h off meta)
-                     (tio
-                        (cursor-left 1))))))
+            (if (null? l)
+               (values buff null)
+               (let ((step (node-width (car l))))
+                  (if (<= x step)
+                     (lets
+                       ((buff scroll-tio (scroll-left buff))
+                        (buff move-tio (move-arrow buff dir)))
+                       (values buff (append scroll-tio move-tio)))
+                     (values
+                        (buffer u d (cdr l) (cons (car l) r) (- x step) y w h off meta)
+                        (tio
+                           (cursor-left step)))))))
          ((eq? dir 'right)
-            (cond
-               ((null? r)
-                  (values buff null))
-               ((eq? x w)
-                  (lets
-                    ((buff scroll-tio (scroll-right buff))
-                     (buff move-tio (move-arrow buff dir)))
-                    (values buff (append scroll-tio move-tio))))
-               (else
-                  (values 
-                     (buffer u d (cons (car r) l) (cdr r) (+ x 1) y w h off meta)
-                     (tio
-                        (cursor-right 1))))))
+            (if (null? r)
+               (values buff null)
+               (let ((step (node-width (car r))))
+                  (if (< (+ x step) w)
+                     (values 
+                        (buffer u d (cons (car r) l) (cdr r) (+ x step) y w h off meta)
+                        (tio (cursor-right step)))
+                     (lets
+                       ((buff scroll-tio (scroll-right buff))
+                        (buff move-tio (move-arrow buff dir)))
+                       (values buff (append scroll-tio move-tio)))))))
          (else
             (log "odd line move: " dir)
             (values buff null)))))
@@ -414,7 +468,8 @@
                         (log "not handling command " msg)
                         (led-buffer buff undo mode))))
               (else
-                  (log "not handling command " msg)))))))
+                  (log "not handling command " msg)
+                  (led-buffer buff undo mode)))))))
 
 
 ;;; Program startup 
