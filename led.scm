@@ -256,11 +256,16 @@
   (let loop ((line line) (pos pos) (l null))
     (cond
       ((eq? pos 0)
-        (values l line))
+        (values l line 0))
       ((null? line)
         (error "empty line at line-seek: " pos))
       (else
-        (loop (cdr line) (- pos 1) (cons (car line) l))))))
+        (lets 
+          ((w (node-width (car line)))
+           (pos (- pos w)))
+          (if (> pos 0)
+            (loop (cdr line) pos (cons (car line) l))
+            (values (cons (car line) l) (cdr line) pos)))))))
 
 ;; move line down within the same screen preserving cursor position if possible
 (define (line-down buff)
@@ -273,12 +278,12 @@
           (line d (uncons d null))
           (x (min x (+ 1 (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
-          (l r (line-seek line line-pos)))
+          (l r offset (line-seek line line-pos)))
         (log "line-down went to (x . y) " (cons x y))
-        (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
+        (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "', offset " offset) 
         (values
-          (buffer u d l r x y w h off meta)
-          x y)))
+          (buffer u d l r (- x offset) y w h off meta)
+          (- x offset) y)))
 
 ;; move line up within the same screen preserving cursor position if possible
 (define (line-up buff)
@@ -290,12 +295,12 @@
           (line u (uncons u null))
           (x (min x (+ 1 (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
-          (l r (line-seek line line-pos)))
+          (l r offset (line-seek line line-pos)))
         (log "line-up went to (x . y) " (cons x y))
         (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
         (values
-          (buffer u d l r x y w h off meta)
-          x y)))
+          (buffer u d l r (- x offset) y w h off meta)
+          (- x offset) y)))
 
 (define (move-arrow buff dir)
    (lets ((u d l r x y w h off meta buff))
