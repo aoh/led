@@ -57,7 +57,7 @@
             ;; a printable unicode code point
             (if (eq? 0 (fxband x #x80))
               ;; a printable ascii range thingie (usual suspect)
-              (cons x (take-printable line (- n )))
+              (cons x (take-printable line (- n 1)))
               (encode-point x
                 (take-printable line (- n 1)))))
           (else
@@ -163,7 +163,7 @@
             (log "insert of key " k " at " (cons x y))
             (values
                (buffer u d (cons k l) r (+ x 1) y w h off meta)
-               (cons k
+               (encode-point k
                   (if (null? r)
                      null
                      (tio
