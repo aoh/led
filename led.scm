@@ -1,8 +1,10 @@
 #!/usr/bin/ol --run
 
+; id€ntitéèttı = λÅ.(Å Å)
+
 (import
   (owl terminal)
-  ;(led readline)
+  (only (owl unicode) encode-point)
   (owl args))
 
 (define version-str "led v0.1a")
@@ -45,6 +47,25 @@
 
 (define (screen-height buff) (ref buff 8))
 
+(define (take-printable line n)
+  (cond
+    ((eq? n 0) null)
+    ((pair? line)
+      (lets ((x line line))
+        (cond
+          ((eq? (type x) type-fix+)
+            ;; a printable unicode code point
+            (if (eq? 0 (fxband x #x80))
+              ;; a printable ascii range thingie (usual suspect)
+              (cons x (take-printable line (- n )))
+              (encode-point x
+                (take-printable line (- n 1)))))
+          (else
+            (error "take-printable: what is " x)))))
+    (else
+      null)))
+            
+
 (define (draw-lines-at-offset tl w dx y dy end lines)
    (cond
       ((null? lines) tl)
@@ -54,7 +75,7 @@
             (tio*
                (set-cursor 1 y)
                (clear-line-right)
-               (raw (take these w))
+               (raw (take-printable these w))
                (draw-lines-at-offset w dx (+ y dy) dy end (cdr lines))
                tl)))))
                   
@@ -121,7 +142,7 @@
                   (draw-lines-at-offset w 0 (+ y 1) +1 (+ h 1) d)
                   (set-cursor 1 y)
                   (clear-line-right)
-                  (raw (take r w))
+                  (raw (take-printable r w))
                   (set-cursor 1 y))))))
 
 (define (log-buff buff)
@@ -148,7 +169,7 @@
                      (tio
                         (clear-line-right)
                         (cursor-save)
-                        (raw (take r (- w (+ x 1))))
+                        (raw (take-printable r (- w (+ x 1))))
                         (cursor-restore)))))))))
 
 (define (insert-backspace buff)
@@ -170,7 +191,7 @@
                   (cursor-left 1)
                   (clear-line-right)
                   (cursor-save)
-                  (raw (take r (- w x)))
+                  (raw (take-printable r (- w x)))
                   (cursor-restore)))))))
 
 ;; (a b c d ... n) 3 → (c b a) (d... n)
