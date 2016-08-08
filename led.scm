@@ -384,15 +384,31 @@
 
 ;;; Undo
 
-(define empty-undo 
-   (cons null null))
+(define (initial-undo buff)
+   (cons (list buff) null))
 
+;; fixme - should have current at head of undo for dirtiness, or keep track otherwise
 (define (push-new undo buff)
    (log "pushing new version")
    (lets ((prev new undo))
       ;; no way to return to future after changing the past
       (cons (cons buff prev) null)))
 
+(define (pop-undo undo buff)
+   (log "popping undo")
+   (lets ((prev new undo))
+      (if (null? prev)
+         (values undo buff)
+         (values
+            (cons (cdr prev) (cons buff new))
+            (car prev)))))
+
+(define (unpop-undo undo buff)
+   (log "unpopping undo")
+   (lets ((prev new undo))
+      (if (null? new)
+         (values undo buff)
+         (values (cons (cons buff prev) (cdr new)) (car new)))))
 
 ;;; Event dispatcher
 
@@ -446,7 +462,11 @@
                            (ll res 
                             (readline ll 
                               (get (buffer-meta buff) 'command-history null) 
-                              2 (screen-height buff) (screen-width buff))))
+                              2 (screen-height buff) (screen-width buff)))
+                           (buff
+                              (set-buffer-meta buff
+                                (put metadata 'command-history
+                                  (cons res (get metadata 'command-history null))))))
                           (log "restoring input stream " ll " to terminal")
                           (mail 'terminal ll) ;; restore input stream
                           (log (str "readline returned '" res "'"))
@@ -456,22 +476,34 @@
                               (clear-line)
                               (set-cursor (buffer-x buff) (buffer-y buff))
                               ))
-                          (if (equal? res "quit")
-                            (begin
-                              (mail 'terminal
-                                (tio
-                                  (raw (list #\newline))
-                                  (set-cursor 1 (screen-height buff))))
-                              (mail 'terminal 'stop)
-                              0)
-                            (led-buffer 
-                              (set-buffer-meta buff
-                                (put metadata 'command-history
-                                  (cons res (get metadata 'command-history null))))
-                              undo 'command))))
+                          (cond
+                            ((equal? res "q")
+                              (begin
+                                (mail 'terminal
+                                  (tio
+                                    (raw (list #\newline))
+                                    (set-cursor 1 (screen-height buff))))
+                                (mail 'terminal 'stop)
+                                0))
+                            ((equal? res "vi")
+                              (led-buffer buff (cons buff undo) 'insert))
+                            (else
+                              (led-buffer buff undo mode)))))
+                     ((eq? k #\u)
+                        (lets ((undo buff (pop-undo undo buff)))
+                           (mail 'terminal (update-screen buff))
+                           (led-buffer buff undo mode)))
                      (else
                         (log "not handling command " msg)
                         (led-buffer buff undo mode))))
+              ((ctrl key)
+                (cond
+                  ((eq? key #\r)
+                    (lets ((undo buff (unpop-undo undo buff))) ;; does not keep track of dirtiness
+                      (mail 'terminal (update-screen buff))
+                      (led-buffer buff undo 'command)))
+                  (else
+                    (led-buffer buff undo mode))))
               (else
                   (log "not handling command " msg)
                   (led-buffer buff undo mode)))))))
@@ -501,7 +533,7 @@
       (if (= (length args) 0)
         (splash w h)
         (mail 'terminal (update-screen buff)))
-      (led-buffer buff empty-undo 'insert))))
+      (led-buffer buff (initial-undo buff) 'insert))))
 
 (define usage-text 
   "Usage: led [flags] [file]")
