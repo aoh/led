@@ -388,7 +388,7 @@
    (cons (list buff) null))
 
 ;; fixme - should have current at head of undo for dirtiness, or keep track otherwise
-(define (push-new undo buff)
+(define (push-undo undo buff)
    (log "pushing new version")
    (lets ((prev new undo))
       ;; no way to return to future after changing the past
@@ -445,10 +445,10 @@
                      (mail 'terminal out)
                      (led-buffer buff undo mode)))
                ((end-of-text) 
-                  (led-buffer buff (push-new undo buff) 'command))
+                  (led-buffer buff undo 'command))
                ((esc)         
                   (log "switching out of insert mode on esc")
-                  (led-buffer buff (push-new undo buff) 'command))
+                  (led-buffer buff undo 'command))
                (else
                   (led-buffer buff undo mode)))
             (tuple-case msg
@@ -486,7 +486,7 @@
                                 (mail 'terminal 'stop)
                                 0))
                             ((equal? res "vi")
-                              (led-buffer buff (cons buff undo) 'insert))
+                              (led-buffer buff (push-undo undo buff) 'insert))
                             (else
                               (led-buffer buff undo mode)))))
                      ((eq? k #\u)
