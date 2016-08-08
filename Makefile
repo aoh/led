@@ -10,5 +10,8 @@ bin/led: led.c
 led.c: led.scm
 	$(OL) $(OFLAGS) -o led.c led.scm
 
+install: led
+	install -m 755 led /usr/bin
+
 clean:
 	-rm led.c led.log

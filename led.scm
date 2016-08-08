@@ -18,7 +18,6 @@
    (print-to logfd what))
 
 
-
 ;;; Movement and insert mode edit operation
 
 (define (buffer up down left right x y w h off meta)
@@ -84,7 +83,6 @@
       null)))
 
 (define (drop-printable line n)
-   (log "drop-printable " line ", " n)
   (cond
     ((eq? n 0) line)
     ((pair? line)
@@ -107,13 +105,22 @@
 (define tab-node 
   (tuple 'replace (list #\tab) 4 (list #\| #\- #\- #\.)))
 
+(define empty-buffer-line
+	(tio
+		(font-bold)
+		(raw (render "~" null))
+		(font-normal)
+		))
+
 (define (draw-lines-at-offset tl w dx y dy end lines)
    (cond
-      ((null? lines) tl)
+      ((null? lines) 
+			(draw-lines-at-offset tl w dx y dy end
+				(list empty-buffer-line)))
       ((eq? y end) tl)
       (else
          (let ((these (drop-printable (car lines) dx)))
-            (log "printable after " dx " of " (car lines) " is " (drop-printable (car lines) dx))
+            ;(log "printable after " dx " of " (car lines) " is " (drop-printable (car lines) dx))
             (tio*
                (set-cursor 1 y)
                (clear-line-right)
@@ -170,27 +177,10 @@
     (values buff
       (update-screen buff))))
 
-;; scroll window all the way left, if necessary
-(define (reset-left buff)
-   (lets 
-      ((u d l r x y w h off meta buff)
-       (dx dy off))
-;      (if (eq? dx 1) (values buff null) ...)
-         (let ((r (append (reverse l) r)))
-            (values
-               (buffer u d null r 1 y w h (cons 0 dy) meta)
-               (tio
-                  (draw-lines-at-offset w 0 (- y 1) -1 0 u)
-                  (draw-lines-at-offset w 0 (+ y 1) +1 (+ h 1) d)
-                  (set-cursor 1 y)
-                  (clear-line-right)
-                  (raw (take-printable r w))
-                  (set-cursor 1 y))))))
-
 (define (log-buff buff)
   (lets
     ((u d l r x y w h off meta buff))
-    (log "left " l ", right " r)
+    ;(log "left " l ", right " r)
     (log "log: cursor at " (cons x y) " at offset " off ", line pos " (+ (car off) (- x 1)))))
        
 (define (key-node k)
@@ -304,7 +294,7 @@
 
 (define (move-arrow buff dir)
    (lets ((u d l r x y w h off meta buff))
-      (log "arrow " dir " from " (cons x y))
+      (log "arrow " dir " from " (cons x y) ", dim " (cons w h))
       (cond
          ((eq? dir 'up)
             (cond
@@ -334,7 +324,7 @@
             (cond
               ((null? d)
                 (values buff null))
-              ((eq? y h)
+              ((>= y h)
                 (lets
                   ((buff tio-scroll (scroll-down buff))
                    (buff tio-move (move-arrow buff dir)))
@@ -428,14 +418,15 @@
                ((enter)
                   (lets 
                      ((u d l r x y w h off meta buff)
-                      (u (cons (reverse l) u))
-                      (buff (buffer u d null r 1 (+ y 1) w h off meta))
-                      (buff reset-tio (reset-left buff)))
-                     (mail 'terminal
-                        (append reset-tio
-                           (tio 
-                              (set-cursor 1 (+ y 1)))))
-                     (led-buffer buff undo mode)))
+                      ;(u (cons (reverse l) u))
+                      ;(buff (buffer u d null r 1 (+ y 1) w h off meta))
+							 (buff 
+							 	(buffer u (cons r d) null (reverse l) 1 y w h (cons 0 (cdr off)) meta))
+							 (draw-tio (if (eq? (car off) 1) (tio (clear-line-right)) (update-screen buff)))
+							 (buff move-tio (move-arrow buff 'down)))
+							(mail 'terminal 
+								(append draw-tio move-tio))
+							(led-buffer buff undo mode)))
                ((backspace)
                   (lets ((buff out (insert-backspace buff)))
                      (mail 'terminal out)
@@ -493,6 +484,8 @@
                         (lets ((undo buff (pop-undo undo buff)))
                            (mail 'terminal (update-screen buff))
                            (led-buffer buff undo mode)))
+							((eq? k #\i)
+								(led-buffer buff undo 'insert))
                      (else
                         (log "not handling command " msg)
                         (led-buffer buff undo mode))))
@@ -512,13 +505,18 @@
 ;;; Program startup 
 
 (define (splash w h)
-    (mail 'terminal
-      (tio
-        (clear-screen)
-        (set-cursor (- (div w 2) (div (string-length version-str) 2)) (div h 2))
-        (raw (font-bold (render version-str null)))
-        (font-normal)
-        (set-cursor 1 1))))
+   (lets
+      ((mw (>> w 1))
+       (mh (>> h 1)))
+      (mail 'terminal
+         (tio
+           (clear-screen)
+           (set-cursor (- mw (>> (string-length version-str) 1)) mh)
+           (raw (font-bold (render version-str null)))
+           (font-normal)
+           (set-cursor (max 1 (- mw 6)) (+ mh 2))
+           (raw (render "esc + :q quits" null))
+           (set-cursor 1 1)))))
 
 (define (start-led dict args)
   (log "start-led " dict ", " args)
@@ -530,10 +528,8 @@
         (if (= (length args) 1)
           (make-file-state w h (car args) #empty)
           (make-empty-state w h #empty))))
-      (if (= (length args) 0)
-        (splash w h)
-        (mail 'terminal (update-screen buff)))
-      (led-buffer buff (initial-undo buff) 'insert))))
+	   (mail 'terminal (update-screen buff))
+      (led-buffer buff (initial-undo buff) 'command))))
 
 (define usage-text 
   "Usage: led [flags] [file]")
