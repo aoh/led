@@ -1,6 +1,6 @@
 #!/usr/bin/ol --run
 
-; id€ntitéèttı = λÅ.(Å Å)
+; id€ntitéèttı = λä.(ä ä)
 
 (import
   (owl terminal)
@@ -81,6 +81,15 @@
             (error "take-printable: what is " x)))))
     (else
       null)))
+
+(define (render-node node tl)
+	(cond
+		((eq? (type node) type-fix+)
+			(encode-point node tl))
+		((and (tuple? node) (eq? (ref node 1) 'replace))
+			(foldr render-node tl (ref node 2)))
+		(else
+			(error "render-node: what is " node))))
 
 (define (drop-printable line n)
   (cond
@@ -400,6 +409,29 @@
          (values undo buff)
          (values (cons (cons buff prev) (cdr new)) (car new)))))
 
+;; special case of input not having a terminal newline can be handled 
+;; in buffer metadata if necessary
+(define (buffer->bytes buff)
+	(lets ((u d l r x y w h off meta buff))
+		(foldr render-node null
+			(foldr 
+				(λ (line tl)
+					(append line (cons #\newline tl)))
+				null
+				(append (reverse u) (list (append (reverse l) r)) d)))))
+
+(define (write-buffer buff path)
+	(lets
+		((port (open-output-file path))
+		 (lst (buffer->bytes buff))
+		 (n (length lst))
+		 (res (byte-stream->port lst port)))
+		(if res
+			(foldr render null 
+				(list "Wrote " n " bytes to '" path "'"))
+			(foldr render null
+				(list "Failed to write to '" path "'")))))
+		
 ;;; Event dispatcher
 
 (define (led-buffer buff undo mode)
@@ -436,10 +468,10 @@
                      (mail 'terminal out)
                      (led-buffer buff undo mode)))
                ((end-of-text) 
-                  (led-buffer buff undo 'command))
+                  (led-buffer (push-undo undo buff)  undo 'command))
                ((esc)         
                   (log "switching out of insert mode on esc")
-                  (led-buffer buff undo 'command))
+                  (led-buffer buff (push-undo undo buff) 'command))
                (else
                   (led-buffer buff undo mode)))
             (tuple-case msg
@@ -477,7 +509,18 @@
                                 (mail 'terminal 'stop)
                                 0))
                             ((equal? res "vi")
-                              (led-buffer buff (push-undo undo buff) 'insert))
+                              (led-buffer buff undo 'insert))
+									 ((m/^w / res)
+										(let ((path (s/^w +// res)))
+											(log "saving buffer to " path)
+											(lets ((write-tio (write-buffer buff path)))
+												(mail 'terminal
+													(tio
+														(cursor-save)
+														(set-cursor 1 (screen-height buff))
+														(raw write-tio)
+														(cursor-restore)))
+												(led-buffer buff undo mode))))
                             (else
                               (led-buffer buff undo mode)))))
                      ((eq? k #\u)
