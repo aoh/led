@@ -1,7 +1,5 @@
 #!/usr/bin/ol --run
 
-; id€ntitéèttı = λä.(ä ä)
-
 (import
   (owl terminal)
   (only (owl unicode) encode-point)
@@ -26,17 +24,25 @@
 (define (make-empty-state w h meta)
 	(buffer null null null null 1 1 w h (cons 0 0) meta))
 
-(define (buffer-meta buff)
-  (ref buff 10))
+(define (buffer-meta buff) (ref buff 10))
+(define (set-buffer-meta buff meta) (set buff 10 meta))
 
-(define (set-buffer-meta buff meta)
-  (set buff 10 meta))
+(define (put-buffer-meta buff key val)
+	(set-buffer-meta buff (put (buffer-meta buff) key val)))
 
 (define (buffer-x buff) (ref buff 5))
 (define (buffer-y buff) (ref buff 6))
 
+(define tab-node 
+  (tuple 'replace (list #\tab) 3 (list #\space #\space #\space)))
+
+(define (untab meta)
+	(let ((tab (get meta 'tab tab-node)))
+		(λ (line)
+			(map (λ (node) (if (eq? node #\tab) tab node)) line))))
+
 (define (make-file-state w h path meta)
-  (let ((data (map string->list (force-ll (lines (open-input-file path))))))
+  (let ((data (map (untab meta) (map string->list (force-ll (lines (open-input-file path)))))))
     (if (pair? data)
       (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) 
         (put meta 'path path))
@@ -110,9 +116,6 @@
 
 (define (printable-length line)
    (fold (λ (n x) (+ n (node-width x))) 0 line))
-
-(define tab-node 
-  (tuple 'replace (list #\tab) 4 (list #\| #\- #\- #\.)))
 
 (define empty-buffer-line
 	(tio
@@ -481,7 +484,7 @@
                      (mail 'terminal out)
                      (led-buffer buff undo mode)))
                ((end-of-text) 
-                  (led-buffer (push-undo undo buff)  undo 'command))
+                  (led-buffer buff (push-undo undo buff) 'command))
                ((esc)         
                   (log "switching out of insert mode on esc")
                   (led-buffer buff (push-undo undo buff) 'command))
@@ -533,6 +536,20 @@
 														(set-cursor 1 (screen-height buff))
 														(raw write-tio)
 														(cursor-restore)))
+												(led-buffer 
+													(put-buffer-meta buff 'path path)
+													undo mode))))
+									 ((m/^w$/ res)
+										(let ((path (getf (buffer-meta buff) 'path)))
+											(if path
+												(lets ((write-tio (write-buffer buff path)))
+													(mail 'terminal
+														(tio
+															(cursor-save)
+															(set-cursor 1 (screen-height buff))
+															(raw write-tio)
+															(cursor-restore)))
+													(led-buffer buff undo mode))
 												(led-buffer buff undo mode))))
                             (else
                               (led-buffer buff undo mode)))))
@@ -580,10 +597,14 @@
          (w h dimensions))
     (log "dimensions " dimensions)
     (lets 
-      ((buff 
+		((state 
+			(-> #empty
+				(put 'tab tab-node)
+				(put 'path (if (null? args) #false (car args)))))
+       (buff 
         (if (= (length args) 1)
           (make-file-state w h (car args) #empty)
-          (make-empty-state w h #empty))))
+          (make-empty-state w h state))))
 	   (mail 'terminal (update-screen buff))
       (led-buffer buff (initial-undo buff) 'command))))
 
