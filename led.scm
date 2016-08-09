@@ -232,7 +232,20 @@
    (lets ((u d l r x y w h off meta buff))
       (if (null? l)
          ;; no-op (could also backspace to line above)
-         (values buff null)
+			(if (null? u)
+				(values buff null)
+				(if (eq? y 1)
+					(values buff null)
+					(lets
+						((line u (uncons u null))
+						 (line-len (printable-length line))
+						 (q x (quotrem (+ line-len 1) w))
+						 (xp (* q w))
+						 (buff
+							(buffer u d (reverse line) null x (- y 1) w h (cons xp (cdr off)) meta)))
+						(log "backspace")
+						(values buff
+							(update-screen buff)))))
          (let ((cw (node-width (car l))))
            (if (> x cw)
              (values
