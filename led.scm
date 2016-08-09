@@ -9,7 +9,8 @@
 
 ;;; Temporary logging
 
-(define logfd 
+;; move to a log server
+(define logfd  
    (open-output-file "led.log"))
 
 (define (log . what)
@@ -32,6 +33,12 @@
 
 (define (buffer-x buff) (ref buff 5))
 (define (buffer-y buff) (ref buff 6))
+
+(define rp-unmatched-node
+	(tuple 'replace (list 41) 1 (tio (font-bold) (raw (list 41)) (font-normal))))
+
+(define lp-unmatched-node
+	(tuple 'replace (list 40) 1 (tio (font-bold) (raw (list 40)) (font-normal))))
 
 (define tab-node 
   (tuple 'replace (list #\tab) 3 (list #\space #\space #\space)))
@@ -196,10 +203,12 @@
     (log "log: cursor at " (cons x y) " at offset " off ", line pos " (+ (car off) (- x 1)))))
        
 (define (key-node k)
-  (cond
-    ((eq? k #\tab)
-      tab-node)
-    (else k)))
+	(cond
+		((eq? k #\tab)
+			tab-node)
+		((eq? k 40) ;; lp
+			lp-unmatched-node)
+		(else k)))
 
 (define (encode-node k tl)
    (cond 
@@ -208,6 +217,24 @@
       (else
          (foldr encode-node tl (node-screen-representation k)))))
 
+(define (replace-node lst old new)
+	(cond
+		((null? lst)
+			#false)
+		((eq? (car lst) old)
+			(cons new (cdr lst)))
+		((replace-node (cdr lst) old new) =>
+			(λ (tl) (cons (car lst) tl)))
+		(else #false)))
+			
+(define (find-matching-lp l u)
+	(cond
+		((replace-node l lp-unmatched-node 40) =>
+			(λ (l)
+				(values l u #true)))
+		(else
+			(values l u #false))))
+
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
       (lets ((node (key-node k))
@@ -215,16 +242,25 @@
          (if (< (+ x nw) w)
             (begin
                (log "insert of key " k " at " (cons x y) " = " node)
-               (values
-                  (buffer u d (cons node l) r (+ x nw) y w h off meta)
-                  (encode-node node
-                     (if (null? r)
-                        null
-                        (tio
-                           (clear-line-right)
-                           (cursor-save)
-                           (raw (take-printable r (- w (+ x nw))))
-                           (cursor-restore))))))
+					(cond
+						((eq? node 41) ; rp
+							(lets ((l u found? (find-matching-lp l u)))
+								(if found?
+									(let ((buff (buffer u d (cons node l) r (+ x 1) y w h off meta)))
+										(values buff (update-screen buff)))
+									(let ((buff (buffer u d (cons rp-unmatched-node l) r (+ x 1) y w h off meta)))
+										(values buff (update-screen buff))))))
+						(else
+							(values
+								(buffer u d (cons node l) r (+ x nw) y w h off meta)
+								(encode-node node
+									(if (null? r)
+										null
+										(tio
+											(clear-line-right)
+											(cursor-save)
+											(raw (take-printable r (- w (+ x nw))))
+											(cursor-restore))))))))
             (lets
                ((buff scroll-tio (scroll-right buff))
                 (buff insert-tio (insert-handle-key buff k)))
