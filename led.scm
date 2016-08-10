@@ -275,7 +275,7 @@
 						 (q x (quotrem (+ line-len 1) w))
 						 (xp (* q w))
 						 (buff
-							(buffer u d (reverse line) null x (- y 1) w h (cons xp (cdr off)) meta)))
+							(buffer u d (reverse line) r x (- y 1) w h (cons xp (cdr off)) meta)))
 						(log "backspace")
 						(values buff
 							(update-screen buff)))))
@@ -496,11 +496,13 @@
                ((enter)
                   (lets 
                      ((u d l r x y w h off meta buff)
-                      ;(u (cons (reverse l) u))
-                      ;(buff (buffer u d null r 1 (+ y 1) w h off meta))
 							 (buff 
-							 	(buffer u (cons r d) null (reverse l) 1 y w h (cons 0 (cdr off)) meta))
-							 (draw-tio (if (eq? (car off) 1) (tio (clear-line-right)) (update-screen buff)))
+							 	(buffer u (cons r d) null (reverse l) 1 
+									y w h (cons 0 (cdr off)) meta))
+							 (draw-tio 
+								(if (eq? (car off) 1) 
+									(tio (clear-line-right)) 
+									(update-screen buff)))
 							 (buff move-tio (move-arrow buff 'down)))
 							(mail 'terminal 
 								(append draw-tio move-tio))
@@ -654,6 +656,8 @@
       (halt 0)
       (begin
         (print "error: " env)
+		  (mail 'logger (list 'ERROR env))
+		  (wait 100)
         (halt 1)))))
 
 (define (sink arg)
