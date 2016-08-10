@@ -25,6 +25,9 @@
 (define (put-buffer-meta buff key val)
 	(set-buffer-meta buff (put (buffer-meta buff) key val)))
 
+(define (get-buffer-meta buff key def)
+	(get (buffer-meta buff) key def))
+
 (define (buffer-x buff) (ref buff 5))
 (define (buffer-y buff) (ref buff 6))
 
@@ -347,6 +350,15 @@
           (buffer u d l r (- x offset) y w h off meta)
           (- x offset) y)))
 
+(define (find-next buff)
+   (lets ((u d l r x y w h off meta buff)
+			 (row (get meta 'search-row 0))
+			 (regex (get meta 'search-regex (λ (x) #false))))
+		(log "would run regex " regex " from row " row)
+		buff))
+		
+		
+
 (define (move-arrow buff dir)
    (lets ((u d l r x y w h off meta buff))
       (log "arrow " dir " from " (cons x y) ", dim " (cons w h))
@@ -477,7 +489,7 @@
 				(list "Wrote " n " bytes to '" path "'"))
 			(foldr render null
 				(list "Failed to write to '" path "'")))))
-		
+
 ;;; Event dispatcher
 
 (define (led-buffer buff undo mode)
@@ -525,6 +537,28 @@
             (tuple-case msg
               ((key k)
                   (cond
+							((eq? k #\/)
+                       (mail 'terminal (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\/)))
+							  (log "searching")
+							  (lets ((ll (interact 'terminal 'get-input))
+										(search-history 
+											(get (buffer-meta buff) 'search-history null))
+										(ll res (readline ll search-history
+														2 (screen-height buff) (screen-width buff)))
+										(buff (put-buffer-meta buff 'search-history 
+													(cons res search-history)))
+										(regex 
+											(string->regex (str "m/" res "/")))
+										(buff 
+											(-> buff
+												(put-buffer-meta 'search-regex regex)
+												(put-buffer-meta 'search-row 0)
+												(put-buffer-meta 'search-row-pos 0)))
+										(buff 
+											(find-next buff)))
+                           (mail 'terminal ll) ;; restore input stream
+									(mail 'terminal (update-screen buff))
+									(led-buffer buff undo mode)))
                      ((eq? k #\:)
                        (mail 'terminal (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
                        (lets
