@@ -10,7 +10,6 @@
 (define (log . what)
 	(mail 'logger what))
 
-
 ;;; Movement and insert mode edit operation
 
 (define (buffer up down left right x y w h off meta)
@@ -299,14 +298,15 @@
                   (append scroll-tio bs-tio))))))))
 
 
-;; (a b c d ... n) 3 → (c b a) (d... n)
-(define (line-seek line pos)
+;; (a b c d ... n) 3 → (c b a) (d... n) delta, because some chars require more space
+(define (seek-in-line line pos)
   (let loop ((line line) (pos pos) (l null))
     (cond
       ((eq? pos 0)
         (values l line 0))
       ((null? line)
-        (error "empty line at line-seek: " pos))
+			(log "warning: empty line at seek-in-line")
+			(values l line pos))
       (else
         (lets 
           ((w (node-width (car line)))
@@ -314,6 +314,47 @@
           (if (> pos 0)
             (loop (cdr line) pos (cons (car line) l))
             (values (cons (car line) l) (cdr line) pos)))))))
+
+;; lines → u line d
+(define (seek-line lines pos)
+	(let loop ((lines lines) (pos pos) (u null))
+		(cond
+			((null? lines)
+				(values u null lines))
+			((eq? pos 0)
+				(values u (car lines) (cdr lines)))
+			(else
+				(loop (cdr lines) (- pos 1) (cons (car lines) u))))))
+
+;; compute place to show the buffer horizontally to get printable
+;; position pos on screen visible
+(define (set-line-pos buff pos)
+	(log "set-line-pos, pos " pos)
+   (lets ((u d l r x y w h off meta buff)
+			 (dx dy off)
+			 (line (append (reverse l) r))
+			 (pos (min pos (printable-length line))))
+		(if (< pos w)
+			;; can be show without scrolling, so do that
+			(lets ((l r off (seek-in-line line pos))
+					 (x (+ 1 (- pos off))) ;; bug, but doesn't matter for now
+				    (buff (buffer u d l r x y w h (cons 0 dy) meta)))
+				buff)
+			(begin
+				(log "not moving here yet")
+				buff))))
+
+;; row+1 = y + dy, dy = row + 1 - y
+(define (buffer-seek buff x y)
+	(log "buffer seek" x "," y)
+   (lets ((u d l r old-x old-y w h off meta buff)
+			 (lines (append (reverse u) (list (append (reverse l) r)) d))
+			 (u line d (seek-line lines y))
+			 (yp (if (< y h) (+ y 1) (>> h 1))) ;; real or middle of screen
+			 (off (cons 0 (- (+ y 1) yp)))
+			 (buff
+				 (buffer u d null line 1 yp w h off meta)))
+			(set-line-pos buff x)))
 
 ;; move line down within the same screen preserving cursor position if possible
 (define (line-down buff)
@@ -326,7 +367,7 @@
           (line d (uncons d null))
           (x (min x (+ 1 (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
-          (l r offset (line-seek line line-pos)))
+          (l r offset (seek-in-line line line-pos)))
         (log "line-down went to (x . y) " (cons x y))
         (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "', offset " offset) 
         (values
@@ -343,7 +384,7 @@
           (line u (uncons u null))
           (x (min x (+ 1 (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
-          (l r offset (line-seek line line-pos)))
+          (l r offset (seek-in-line line line-pos)))
         (log "line-up went to (x . y) " (cons x y))
         (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
         (values
@@ -482,10 +523,12 @@
 	(lets 
 		((u d l r x y w h off meta buff)
 		 (dx dy off)
+		 (mark-x (+ (- x 1) dx))
+		 (mark-y (+ (- y 1) dy))
 		 (marks (get meta 'marks #empty)))
+		(log "marked" (list->string (list char)) " as " (cons mark-x mark-y))
 		(put-buffer-meta buff 'marks
-			(put marks char
-				(cons (+ x dx) (+ y dy))))))
+			(put marks char (cons mark-x mark-y)))))
 
 (define (write-buffer buff path)
 	(lets
@@ -499,11 +542,6 @@
 			(foldr render null
 				(list "Failed to write to '" path "'")))))
 
-;; buff (x . y) → buff', where x and y may be valid
-
-(define (seek-position buff pos)
-	(log "would seek position " pos)
-	buff)
 
 (define (led-buffer buff undo mode)
    (log-buff buff)
@@ -588,9 +626,11 @@
 										(lets
 											((char (ref (ref msg 2) 2))
 											 (pos (getf (get-buffer-meta buff 'marks #empty) char)))
-											(log "would go back to position " pos)
+											(log "going back to position " pos)
 											(if pos
-												(let ((buff (seek-position buff pos)))
+												(lets 
+													((x y pos)
+													 (buff (buffer-seek buff x y)))
 													(mail 'terminal (update-screen buff))
 													(led-buffer buff undo mode))
 												(led-buffer buff undo mode))))))
