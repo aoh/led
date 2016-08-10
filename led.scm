@@ -478,6 +478,15 @@
 				null
 				(append (reverse u) (list (append (reverse l) r)) d)))))
 
+(define (mark-position buff char)
+	(lets 
+		((u d l r x y w h off meta buff)
+		 (dx dy off)
+		 (marks (get meta 'marks #empty)))
+		(put-buffer-meta buff 'marks
+			(put marks char
+				(cons (+ x dx) (+ y dy))))))
+
 (define (write-buffer buff path)
 	(lets
 		((port (open-output-file path))
@@ -490,7 +499,11 @@
 			(foldr render null
 				(list "Failed to write to '" path "'")))))
 
-;;; Event dispatcher
+;; buff (x . y) → buff', where x and y may be valid
+
+(define (seek-position buff pos)
+	(log "would seek position " pos)
+	buff)
 
 (define (led-buffer buff undo mode)
    (log-buff buff)
@@ -536,8 +549,8 @@
                   (led-buffer buff undo mode)))
             (tuple-case msg
               ((key k)
-                  (cond
-							((eq? k #\/)
+                  (cond 
+							((eq? k #\/) ;; regex search
                        (mail 'terminal (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\/)))
 							  (log "searching")
 							  (lets ((ll (interact 'terminal 'get-input))
@@ -559,7 +572,29 @@
                            (mail 'terminal ll) ;; restore input stream
 									(mail 'terminal (update-screen buff))
 									(led-buffer buff undo mode)))
-                     ((eq? k #\:)
+							((eq? k #\m) ;; mark a position
+								(let ((msg (wait-mail)))
+									(if (and (eq? (ref msg 1) 'terminal) ;; fixme, add wait-key
+												(eq? (ref (ref msg 2) 1) 'key))
+										(let ((char (ref (ref msg 2) 2)))
+											(log "would mark position to tag " (list->string (list char)))
+											(led-buffer (mark-position buff char) undo mode))
+										(led-buffer buff undo mode))))
+							((eq? k #\') ;; go to marked position
+								(log "marks is " (get-buffer-meta buff 'marks #empty))
+								(let ((msg (wait-mail)))
+									(if (and (eq? (ref msg 1) 'terminal)
+												(eq? (ref (ref msg 2) 1) 'key))
+										(lets
+											((char (ref (ref msg 2) 2))
+											 (pos (getf (get-buffer-meta buff 'marks #empty) char)))
+											(log "would go back to position " pos)
+											(if pos
+												(let ((buff (seek-position buff pos)))
+													(mail 'terminal (update-screen buff))
+													(led-buffer buff undo mode))
+												(led-buffer buff undo mode))))))
+                     ((eq? k #\:) ;; enter command interactively
                        (mail 'terminal (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
                        (lets
                           ((ll (interact 'terminal 'get-input))
