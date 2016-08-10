@@ -7,14 +7,8 @@
 
 (define version-str "led v0.1a")
 
-;;; Temporary logging
-
-;; move to a log server
-(define logfd  
-   (open-output-file "led.log"))
-
 (define (log . what)
-   (print-to logfd what))
+	(mail 'logger what))
 
 
 ;;; Movement and insert mode edit operation
@@ -650,7 +644,8 @@
 (define command-line-rules
   (cl-rules
     `((help "-h" "--help" comment "show this thing")
-      (version "-V" "--version" comment "show program version"))))
+      (version "-V" "--version" comment "show program version")
+		(log "-L" "--log" has-arg comment "debug log file") )))
 
 (define (trampoline)
   (let ((env (wait-mail)))
@@ -660,6 +655,26 @@
       (begin
         (print "error: " env)
         (halt 1)))))
+
+(define (sink arg)
+	(sink (wait-mail)))
+
+(define (log-to port)
+	(print-to port (ref (wait-mail) 2))
+	(log-to port))
+
+(define (logger meta)
+	(let ((log-path (getf meta 'log)))
+		(if log-path
+			(let ((port (open-output-file log-path)))
+				(if port
+					(begin
+						(print-to port "Started logging")
+						(log-to port))
+					(begin
+						(print-to stderr "could not open log file " log-path)
+						(halt 1))))
+			(sink #f))))
 
 (define (start-led-threads dict args)
   (cond
@@ -672,8 +687,10 @@
       0)
     (else
       (log "started " dict ", " args)
+      (fork-linked-server 'logger (λ () (logger dict)))
       (fork-linked-server 'terminal (λ () (terminal-server stdin 'led)))
       (fork-linked-server 'led (λ () (start-led dict args)))
+		(log "started")
       (trampoline))))
 
 (define (main args)
