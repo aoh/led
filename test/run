@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 DELAY=1
 
@@ -10,4 +10,4 @@ do
 	cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; exit 1; }
 done
 
-echo "OK"
+echo "Tests OK"
