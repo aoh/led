@@ -345,12 +345,12 @@
 				buff))))
 
 ;; row+1 = y + dy, dy = row + 1 - y
-(define (buffer-seek buff x y)
-	(log "buffer seek" x "," y)
+(define (buffer-seek buff x y screen-y)
+	(log "buffer seek" x "," y ", y row at " screen-y)
    (lets ((u d l r old-x old-y w h off meta buff)
 			 (lines (append (reverse u) (list (append (reverse l) r)) d))
 			 (u line d (seek-line lines y))
-			 (yp (if (< y h) (+ y 1) (>> h 1))) ;; real or middle of screen
+			 (yp (or screen-y (if (< y h) (+ y 1) (>> h 1)))) ;; real or middle of screen
 			 (off (cons 0 (- (+ y 1) yp)))
 			 (buff
 				 (buffer u d null line 1 yp w h off meta)))
@@ -618,6 +618,22 @@
 											(log "would mark position to tag " (list->string (list char)))
 											(led-buffer (mark-position buff char) undo mode))
 										(led-buffer buff undo mode))))
+							((eq? k #\h)
+								(lets ((buff out (move-arrow buff 'left)))
+									(mail 'terminal out)
+									(led-buffer buff undo mode)))
+							((eq? k #\j)
+								(lets ((buff out (move-arrow buff 'down)))
+									(mail 'terminal out)
+									(led-buffer buff undo mode)))
+							((eq? k #\k)
+								(lets ((buff out (move-arrow buff 'up)))
+									(mail 'terminal out)
+									(led-buffer buff undo mode)))
+							((eq? k #\l)
+								(lets ((buff out (move-arrow buff 'right)))
+									(mail 'terminal out)
+									(led-buffer buff undo mode)))
 							((eq? k #\') ;; go to marked position
 								(log "marks is " (get-buffer-meta buff 'marks #empty))
 								(let ((msg (wait-mail)))
@@ -630,7 +646,7 @@
 											(if pos
 												(lets 
 													((x y pos)
-													 (buff (buffer-seek buff x y)))
+													 (buff (buffer-seek buff x y #f)))
 													(mail 'terminal (update-screen buff))
 													(led-buffer buff undo mode))
 												(led-buffer buff undo mode))))))
@@ -709,6 +725,19 @@
                     (lets ((undo buff (unpop-undo undo buff))) ;; does not keep track of dirtiness
                       (mail 'terminal (update-screen buff))
                       (led-buffer buff undo 'command)))
+						((eq? key #\f)
+                     (lets ((u d l r x y w h off meta buff)
+									 (y (+ (cdr off) (- y 1)))
+									 (buff (buffer-seek buff (- x 1) (+ y (max 1 (- h 3))) 1)))
+								(log "buffer seeking to " (cons x (+ y (max 1 (- h 3)))) " with y at " y)
+								(mail 'terminal (update-screen buff))
+								(led-buffer buff undo mode)))
+						((eq? key #\b)
+                     (lets ((u d l r x y w h off meta buff)
+									 (y (+ (cdr off) (- y 1)))
+									 (buff (buffer-seek buff (- x 1) (- y (min (- h 3) y)) 1)))
+								(mail 'terminal (update-screen buff))
+								(led-buffer buff undo mode)))
                   (else
                     (led-buffer buff undo mode))))
               (else
