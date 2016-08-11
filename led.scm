@@ -391,14 +391,29 @@
           (buffer u d l r (- x offset) y w h off meta)
           (- x offset) y)))
 
+;; regex is a ^... one
+(define (search-from l ls regex x y)
+	(cond
+		((null? l)
+			(if (null? ls)
+				(values #f #f)
+				(search-from (car ls) (cdr ls) regex 0 (+ y 1))))
+		((regex l)
+			(values x y))
+		(else
+			(search-from (cdr l) ls regex (+ x 1) y))))
+			
 (define (find-next buff)
    (lets ((u d l r x y w h off meta buff)
-			 (row (get meta 'search-row 0))
-			 (regex (get meta 'search-regex (λ (x) #false))))
-		(log "would run regex " regex " from row " row)
-		buff))
-		
-		
+			 (dx dy off)
+			 (regex (get meta 'search-regex (λ (x) #false)))
+			 (row (+ (length u) 1))
+			 (_ rt (uncons r #false)) ;; move one char forward
+			 (mx my 
+				(search-from rt d regex (+ (- x 1) dx) (+ (- y 1) dy))))
+			(if mx
+				(buffer-seek buff mx my #false)
+				buff)))
 
 (define (move-arrow buff dir)
    (lets ((u d l r x y w h off meta buff))
@@ -596,18 +611,23 @@
 											(get (buffer-meta buff) 'search-history null))
 										(ll res (readline ll search-history
 														2 (screen-height buff) (screen-width buff)))
-										(buff (put-buffer-meta buff 'search-history 
-													(cons res search-history)))
-										(regex 
-											(string->regex (str "m/" res "/")))
 										(buff 
-											(-> buff
-												(put-buffer-meta 'search-regex regex)
-												(put-buffer-meta 'search-row 0)
-												(put-buffer-meta 'search-row-pos 0)))
+											(if (equal? res "") buff
+												(put-buffer-meta buff 'search-history 
+													(cons res search-history))))
+										(regex ;; note: ^ and $ need special handling later
+											(string->regex (str "m/^" res "/")))
+										(buff 
+											(if (equal? res "")
+												buff
+												(-> buff (put-buffer-meta 'search-regex regex))))
 										(buff 
 											(find-next buff)))
                            (mail 'terminal ll) ;; restore input stream
+									(mail 'terminal (update-screen buff))
+									(led-buffer buff undo mode)))
+							((eq? k #\n)
+								(lets ((buff (find-next buff)))
 									(mail 'terminal (update-screen buff))
 									(led-buffer buff undo mode)))
 							((eq? k #\m) ;; mark a position
@@ -785,7 +805,7 @@
   (cl-rules
     `((help "-h" "--help" comment "show this thing")
       (version "-V" "--version" comment "show program version")
-		(log "-L" "--log" has-arg comment "debug log file") )))
+		(log "-L" "--log" has-arg comment "debug log file"))))
 
 (define (trampoline)
   (let ((env (wait-mail)))
