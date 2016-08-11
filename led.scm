@@ -805,7 +805,8 @@
   (cl-rules
     `((help "-h" "--help" comment "show this thing")
       (version "-V" "--version" comment "show program version")
-		(log "-L" "--log" has-arg comment "debug log file"))))
+		(log "-L" "--log" has-arg comment "debug log file")
+		(faketerm "-I" "--input" has-arg comment "fake terminal input stream source"))))
 
 (define (trampoline)
   (let ((env (wait-mail)))
@@ -838,6 +839,15 @@
 						(halt 1))))
 			(sink #f))))
 
+(define (start-terminal-server dict target)
+	(let ((path (getf dict 'faketerm)))
+		(if path
+			(let ((port (open-input-file path)))
+				(if port	
+					(terminal-server port target)
+					(mail target 'eof)))
+			(terminal-server stdin target))))
+
 (define (start-led-threads dict args)
   (cond
     ((getf dict 'help)
@@ -850,7 +860,7 @@
     (else
       (log "started " dict ", " args)
       (fork-linked-server 'logger (λ () (logger dict)))
-      (fork-linked-server 'terminal (λ () (terminal-server stdin 'led)))
+      (fork-linked-server 'terminal (λ () (start-terminal-server dict 'led)))
       (fork-linked-server 'led (λ () (start-led dict args)))
 		(log "started")
       (trampoline))))
