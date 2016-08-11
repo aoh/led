@@ -631,10 +631,9 @@
 								(output (update-screen buff))
 								(led-buffer ll buff undo mode)))
 						((eq? k #\m) ;; mark a position
-							(let ((msg (wait-mail)))
-								(if (and (eq? (ref msg 1) 'terminal) ;; fixme, add wait-key
-											(eq? (ref (ref msg 2) 1) 'key))
-									(let ((char (ref (ref msg 2) 2)))
+							(lets ((msg ll (uncons ll #false)))
+								(if (eq? (ref msg 1) 'key)
+									(let ((char (ref msg 2)))
 										(led-buffer ll (mark-position buff char) undo mode))
 									(led-buffer ll buff undo mode))))
 						((eq? k #\h)
@@ -655,11 +654,10 @@
 								(led-buffer ll buff undo mode)))
 						((eq? k #\') ;; go to marked position
 							(log "marks is " (get-buffer-meta buff 'marks #empty))
-							(let ((msg (wait-mail)))
-								(if (and (eq? (ref msg 1) 'terminal)
-											(eq? (ref (ref msg 2) 1) 'key))
+							(lets ((msg ll (uncons ll #false)))
+								(if (eq? (ref msg 1) 'key)
 									(lets
-										((char (ref (ref msg 2) 2))
+										((char (ref msg 1))
 										 (pos (getf (get-buffer-meta buff 'marks #empty) char)))
 										(log "going back to position " pos)
 										(if pos
