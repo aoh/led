@@ -1,0 +1,6 @@
+led {
+	esc = 27
+	enter = 13
+	cursorpos  = esc "[10;10R" 
+	prelude = cursorpos cursorpos
+}

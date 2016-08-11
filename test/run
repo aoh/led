@@ -1,0 +1,13 @@
+#!/bin/sh
+
+DELAY=1
+
+echo "Running tests with ${DELAY}s delay"
+for foo in *.io
+do
+	echo " - $foo"
+	(sleep $DELAY; cat "$foo") | "$@" > /dev/null 2>&1
+	cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; exit 1; }
+done
+
+echo "OK"
