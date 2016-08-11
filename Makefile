@@ -4,7 +4,7 @@ CFLAGS=-O2 -Wall
 OWLVERSION=0.1.13
 OL?=owl-lisp-$(OWLVERSION)/bin/vm owl-lisp-$(OWLVERSION)/fasl/init.fasl
 
-everything: led
+everything: led .parrot
 
 .parrot: led 
 	cd test && ./run ../led
