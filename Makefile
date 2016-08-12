@@ -4,20 +4,20 @@ CFLAGS=-O2 -Wall
 OWLVERSION=0.1.13
 OL?=owl-lisp-$(OWLVERSION)/bin/vm owl-lisp-$(OWLVERSION)/fasl/init.fasl
 
-everything: led .parrot
+everything: bin/led .parrot
 
 .parrot: led 
-	cd test && ./run ../led
+	cd test && ./run ../bin/led
 	touch .parrot
 
-led: led.c
-	$(CC) $(CFLAGS) -o led led.c
+bin/led: led.c
+	$(CC) $(CFLAGS) -o bin/led led.c
 
 led.c: led.scm
 	make get-owl
 	$(OL) $(OFLAGS) -o led.c led.scm
 
-install: led
+install: bin/led .parrot
 	install -m 755 led /usr/bin
 
 get-owl:
