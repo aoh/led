@@ -497,7 +497,7 @@
           (row (+ (length u) 1))
           (_ rt (uncons r #false)) ;; move one char forward
           (mx my 
-            (search-from rt d regex (+ (- x 1) dx) (+ (- y 1) dy))))
+            (search-from rt d regex (+ x dx) (+ (- y 1) dy))))
          (if mx
             (buffer-seek buff mx my #false)
             buff)))
