@@ -1,5 +1,11 @@
 #!/usr/bin/ol --run
 
+;; keskeisimmät puuttuvat command mode komennot helppousjärjestyksessä
+;;  % = hyppää vastaavaan sulkuun
+;;  x = poista merkki
+;;  [n]dd = poista rivejä + lisää bufferiin
+;;  [n]y[d%]
+
 (import
   (owl terminal)
   (only (owl unicode) encode-point)
@@ -347,6 +353,63 @@
 				(log "not moving here yet")
 				buff))))
 
+(define (seek-line-end buff)
+	(lets ((u d l r x y w h off meta buff)
+			 (step (>> w 1))
+          (dx dy off))
+		(let loop ((l l) (r r) (x x) (dx dx) (moved? #false))
+			(cond
+				((null? r)
+					(let ((buff (buffer u d l r x y w h (cons dx dy) meta)))
+						(values buff
+							(if moved? (update-screen buff) (tio (set-cursor x y))))))
+				((eq? x w)
+					(loop l r (- x step) (+ dx step) #true))
+				(else
+					(loop (cons (car r) l) (cdr r) (+ x (node-width (car r))) dx moved?))))))
+
+(define (left-paren? x)
+	(or (eq? x 40)
+		 (equal? x lp-unmatched-node)))
+
+(define (right-paren? x)
+	(or (eq? x 41)
+		 (equal? x rp-unmatched-node)))
+
+;; buff → (x . y) | #false
+(define (seek-matching-paren-back buff)
+	(lets ((u d l r x y w h off meta buff))
+		(let loop 
+			((x (length l))
+			 (y (+ (cdr off) (- y 1)))
+			 (l l) 
+			 (u u)
+			 (depth 1))
+			(cond
+				((null? l)
+					(if (null? u)
+						#false
+						(loop (length (car u)) (- y 1) (reverse (car u)) (cdr u) depth)))
+				((left-paren? (car l))
+					(if (eq? depth 1)
+						(cons (- x 1) y)
+						(loop (- x 1) y (cdr l) u (- depth 1))))
+				((right-paren? (car l))
+					(loop (- x 1) y (cdr l) u (+ depth 1)))
+				(else
+					(loop (- x 1) y (cdr l) u depth))))))
+
+(define (seek-line-start buff)
+	(lets ((u d l r x y w h off meta buff)
+          (dx dy off)
+			 (buff 
+				(buffer u d null (append (reverse l) r) 1 y w h (cons 0 dy) meta)))
+			(values buff
+				(if (eq? dy 0)
+					(tio (set-cursor 1 y))
+					(update-screen buff)))))
+
+;; fixme: seeking when lhs has non-fixed-width chars doesn't work count position correctly
 ;; row+1 = y + dy, dy = row + 1 - y
 (define (buffer-seek buff x y screen-y)
 	(log "buffer seek" x "," y ", y row at " screen-y)
@@ -363,7 +426,6 @@
 (define (line-down buff)
    (lets ((u d l r x y w h off meta buff)
           (dx dy off)
-          (_ (log "line-down starting from " (cons x y)))
           (line (append (reverse l) r))
           (u (cons line u))
           (y (+ y 1))
@@ -371,8 +433,7 @@
           (x (min x (+ 1 (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
           (l r offset (seek-in-line line line-pos)))
-        (log "line-down went to (x . y) " (cons x y))
-        (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "', offset " offset) 
+        ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "', offset " offset) 
         (values
           (buffer u d l r (- x offset) y w h off meta)
           (- x offset) y)))
@@ -388,8 +449,8 @@
           (x (min x (+ 1 (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
           (l r offset (seek-in-line line line-pos)))
-        (log "line-up went to (x . y) " (cons x y))
-        (log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
+        ;(log "line-up went to (x . y) " (cons x y))
+        ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
         (values
           (buffer u d l r (- x offset) y w h off meta)
           (- x offset) y)))
@@ -560,7 +621,25 @@
 			(foldr render null
 				(list "Failed to write to '" path "'")))))
 
-
+(define (maybe-seek-matching-paren buff)
+	(lets 
+		((u d l r x y w h off meta buff))
+		(cond
+			((null? r)
+				(values buff null))
+			((eq? (car r) 41) ;; rp
+				(lets ((match (seek-matching-paren-back buff)))
+					(log "matching close paren result " match)
+					(if match
+						(lets ((x y match)
+								 (buff (buffer-seek buff x y #false)))
+							(values buff 
+								(update-screen buff)))
+						(values buff null))))
+			(else
+				(log "seek-matching-paren: current is " (car r))
+				(values buff null)))))
+					
 (define (led-buffer ll buff undo mode)
    (log-buff buff)
 	(lets 
@@ -640,6 +719,14 @@
 							(lets ((buff out (move-arrow buff 'left)))
 								(output out)
 								(led-buffer ll buff undo mode)))
+						((eq? k #\$)
+							(lets ((buff out (seek-line-end buff)))
+								(output out)
+								(led-buffer ll buff undo mode)))
+						((eq? k #\0)
+							(lets ((buff out (seek-line-start buff)))
+								(output out)
+								(led-buffer ll buff undo mode)))
 						((eq? k #\j)
 							(lets ((buff out (move-arrow buff 'down)))
 								(output out)
@@ -652,12 +739,16 @@
 							(lets ((buff out (move-arrow buff 'right)))
 								(output out)
 								(led-buffer ll buff undo mode)))
+						((eq? k #\%)
+							(lets ((buff out (maybe-seek-matching-paren buff)))
+								(output out)
+								(led-buffer ll buff undo mode)))
 						((eq? k #\') ;; go to marked position
 							(log "marks is " (get-buffer-meta buff 'marks #empty))
 							(lets ((msg ll (uncons ll #false)))
 								(if (eq? (ref msg 1) 'key)
 									(lets
-										((char (ref msg 1))
+										((char (ref msg 2))
 										 (pos (getf (get-buffer-meta buff 'marks #empty) char)))
 										(log "going back to position " pos)
 										(if pos
