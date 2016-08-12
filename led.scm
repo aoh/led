@@ -621,6 +621,25 @@
             null
             (append (reverse u) (list (append (reverse l) r)) d)))))
 
+(define (delete-line buff)
+   (lets ((u d l r x y w h off meta buff)
+          (next d (uncons d null)))
+      (values
+         (buffer u d null next 1 y w h off meta)
+         (append (reverse l) r))))
+
+(define (paste-yank buff)
+   (lets ((u d l r x y w h off meta buff)
+          (data (getf meta 'yank)))
+      (cond
+         ((not data)
+            buff)
+         ((eq? 'lines (ref data 1))
+            (log "appending " (ref data 2))
+            (buffer u (append (ref data 2) d) l r x y w h off meta))
+         (else
+            (error "how do i paste " data)))))
+ 
 (define (mark-position buff char)
    (lets 
       ((u d l r x y w h off meta buff)
@@ -855,6 +874,24 @@
                         (led-buffer ll buff undo mode)))
                   ((eq? k #\i)
                      (led-buffer ll buff undo 'insert))
+                  ((eq? k #\p)
+                     (lets ((undo (push-undo undo buff))
+                            (buff (paste-yank buff)))
+                        (output (update-screen buff))
+                        (led-buffer ll buff undo mode)))
+                  ((eq? k #\d)
+                     (lets ((what ll (uncons ll #\d)))
+                        (cond
+                           ((equal? what (tuple 'key #\d))
+                              (log "removing a line")
+                              (lets ((buff this (delete-line buff)))
+                                 (output (update-screen buff))
+                                 (led-buffer ll
+                                    (put-buffer-meta buff 'yank (tuple 'lines (list this)))
+                                    (push-undo undo buff) mode)))
+                           (else
+                              (log "cannot delete " what " yet")
+                              (led-buffer ll buff undo mode)))))
                   (else
                      (log "not handling command " msg)
                      (led-buffer ll buff undo mode))))
@@ -991,49 +1028,6 @@
   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
