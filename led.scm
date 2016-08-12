@@ -46,7 +46,14 @@
 	(tuple 'replace (list 40) 1 (tio (font-bold) (raw (list 40)) (font-normal))))
 
 (define tab-node 
-  (tuple 'replace (list #\tab) 3 (list #\space #\space #\space)))
+  (tuple 'replace 
+   (list #\tab) 
+	3 
+	;(list #\_ #\_ #\_)
+	;(list #\_ #\_ #\_)
+	;(list #\⇥ #\space #\space)
+	(list #\space #\▹ #\space)
+	))
 
 (define (untab meta)
 	(let ((tab (get meta 'tab tab-node)))
@@ -380,11 +387,7 @@
 (define (seek-matching-paren-back buff)
 	(lets ((u d l r x y w h off meta buff))
 		(let loop 
-			((x (length l))
-			 (y (+ (cdr off) (- y 1)))
-			 (l l) 
-			 (u u)
-			 (depth 1))
+			((x (length l)) (y (+ (cdr off) (- y 1))) (l l) (u u) (depth 1))
 			(cond
 				((null? l)
 					(if (null? u)
@@ -398,6 +401,24 @@
 					(loop (- x 1) y (cdr l) u (+ depth 1)))
 				(else
 					(loop (- x 1) y (cdr l) u depth))))))
+
+(define (seek-matching-paren-forward buff)
+	(lets ((u d l r x y w h off meta buff))
+		(let loop 
+			((x (length l)) (y (+ (cdr off) (- y 1))) (r r) (d d) (depth 0))
+			(cond
+				((null? r)
+					(if (null? d)
+						#false
+						(loop 0 (+ y 1) (car d) (cdr d) depth)))
+				((right-paren? (car r))
+					(if (eq? depth 1)
+						(cons x y)
+						(loop (+ x 1) y (cdr r) d (- depth 1))))
+				((left-paren? (car r))
+					(loop (+ x 1) y (cdr r) d (+ depth 1)))
+				(else
+					(loop (+ x 1) y (cdr r) d depth))))))
 
 (define (seek-line-start buff)
 	(lets ((u d l r x y w h off meta buff)
@@ -627,8 +648,17 @@
 		(cond
 			((null? r)
 				(values buff null))
-			((eq? (car r) 41) ;; rp
+			((right-paren? (car r))
 				(lets ((match (seek-matching-paren-back buff)))
+					(log "matching open paren result " match)
+					(if match
+						(lets ((x y match)
+								 (buff (buffer-seek buff x y #false)))
+							(values buff 
+								(update-screen buff)))
+						(values buff null))))
+			((left-paren? (car r))
+				(lets ((match (seek-matching-paren-forward buff)))
 					(log "matching close paren result " match)
 					(if match
 						(lets ((x y match)
