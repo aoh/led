@@ -19,7 +19,7 @@ led.c: led/led.scm led/terminal.scm
 	$(OL) $(OFLAGS) -o led.c led/led.scm
 
 install: bin/led .parrot
-	install -m 755 led /usr/bin
+	install -m 755 bin/led /usr/bin
 
 get-owl:
 	test -d owl-lisp-$(OWLVERSION) || curl -L https://github.com/aoh/owl-lisp/archive/v$(OWLVERSION).tar.gz | tar -zxvf -

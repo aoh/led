@@ -866,6 +866,11 @@
                                           (cursor-restore)))
                                     (led-buffer ll buff undo mode))
                                  (led-buffer ll buff undo mode))))
+                         ((m/^[0-9]+$/ res)
+                           (lets ((line (max 0 (- (string->number res 10) 1)))
+                                  (buff (buffer-seek buff 0 line #false)))
+                              (output (update-screen buff))
+                              (led-buffer ll buff undo mode)))
                          (else
                            (led-buffer ll buff undo mode)))))
                   ((eq? k #\u)
@@ -1028,6 +1033,33 @@
   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
