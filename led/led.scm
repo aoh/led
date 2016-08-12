@@ -1,7 +1,7 @@
 #!/usr/bin/ol --run
 
 (import
-  (owl terminal)
+  (led terminal)
   (only (owl unicode) encode-point)
   (owl args))
 

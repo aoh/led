@@ -6,16 +6,17 @@ OL?=owl-lisp-$(OWLVERSION)/bin/vm owl-lisp-$(OWLVERSION)/fasl/init.fasl
 
 everything: bin/led .parrot
 
-.parrot: led 
+.parrot: bin/led 
 	cd test && ./run ../bin/led
 	touch .parrot
 
 bin/led: led.c
+	mkdir -p bin
 	$(CC) $(CFLAGS) -o bin/led led.c
 
-led.c: led.scm
+led.c: led/led.scm led/terminal.scm
 	make get-owl
-	$(OL) $(OFLAGS) -o led.c led.scm
+	$(OL) $(OFLAGS) -o led.c led/led.scm
 
 install: bin/led .parrot
 	install -m 755 led /usr/bin
@@ -27,7 +28,8 @@ get-owl:
 test: .parrot
 
 clean:
-	-rm led.c led.log led test/*.out
+	-rm led.c led.log led test/*.out bin/led
+	-rmdir bin
 	-cd owl-lisp-$(OWLVERSION) && make clean
 
 mrproper:
