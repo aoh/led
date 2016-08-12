@@ -2,3 +2,4 @@ led.c
 led.log
 .parrot
 owl-lisp-*
+bin/led
