@@ -223,11 +223,13 @@
       ((eq? k #\tab)
          tab-node)
       ((eq? k 40) ;; lp
-         ;k
-         lp-node)
+         k
+         ;lp-node
+         )
       ((eq? k 41) ;; rp
-         ;k
-         rp-node)
+         k
+         ;rp-node
+         )
       (else k)))
 
 (define (encode-node k tl)
@@ -896,15 +898,20 @@
 
 (define (command-delete ll buff undo mode r cont)
    (log "would delete " r " of something")
-   (lets ((what ll (uncons ll #\d)))
+   (lets
+      ((what ll (uncons ll #\d))
+       (r (if (number? r) r 1))) ;; fixme, also supports ranges
       (cond
          ((equal? what (tuple 'key #\d))
-            (log "removing a line")
-            (lets ((buff this (delete-line buff)))
-               (output (update-screen buff))
-               (cont ll
-                  (put-buffer-meta buff 'yank (tuple 'lines (list this)))
-                  (push-undo undo buff) mode)))
+            (let loop ((new buff) (lines null) (r r))
+               (if (= r 0)
+                  (begin
+                     (output (update-screen new))
+                     (cont ll
+                        (put-buffer-meta new 'yank (tuple 'lines lines))
+                        (push-undo undo buff) mode))
+                  (lets ((new this (delete-line new)))
+                     (loop new (append lines (list this)) (- r 1))))))
          (else
             (log "cannot delete " what " yet")
             (cont ll buff undo mode)))))
