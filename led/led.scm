@@ -691,6 +691,34 @@
             (log "seek-matching-paren: current is " (car r))
             (values buff null)))))
 
+
+
+(define (command-regex-search ll buff undo mode cont)
+   (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\/)))
+   (lets ((search-history 
+            (get (buffer-meta buff) 'search-history null))
+         (ll res (readline ll search-history
+                     2 (screen-height buff) (screen-width buff)))
+         (buff 
+            (if (equal? res "") buff
+               (put-buffer-meta buff 'search-history 
+                  (cons res search-history))))
+         (regex ;; note: ^ and $ need special handling later
+            (string->regex (str "m/^" res "/")))
+         (buff 
+            (if (equal? res "")
+               buff
+               (-> buff (put-buffer-meta 'search-regex regex))))
+         (buff 
+            (find-next buff)))
+      (output (update-screen buff))
+      (cont ll buff undo mode)))
+
+;; key → (ll buff undo mode → ll' buff' undo' mode' tio)
+(define *command-mode-actions*
+   (-> #empty
+      (put #\/ command-regex-search)))
+   
 (define space-node (tuple 'key #\space))
 
 (define (led-buffer ll buff undo mode)
@@ -738,168 +766,150 @@
                (led-buffer ll buff undo mode)))
          (tuple-case msg
            ((key k)
-               (cond 
-                  ((eq? k #\/) ;; regex search
-                    (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\/)))
-                    (log "searching")
-                    (lets ((search-history 
-                              (get (buffer-meta buff) 'search-history null))
-                           (ll res (readline ll search-history
-                                       2 (screen-height buff) (screen-width buff)))
-                           (buff 
-                              (if (equal? res "") buff
-                                 (put-buffer-meta buff 'search-history 
-                                    (cons res search-history))))
-                           (regex ;; note: ^ and $ need special handling later
-                              (string->regex (str "m/^" res "/")))
-                           (buff 
-                              (if (equal? res "")
-                                 buff
-                                 (-> buff (put-buffer-meta 'search-regex regex))))
-                           (buff 
-                              (find-next buff)))
-                        (output (update-screen buff))
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\n)
-                     (lets ((buff (find-next buff)))
-                        (output (update-screen buff))
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\m) ;; mark a position
-                     (lets ((msg ll (uncons ll #false)))
-                        (if (eq? (ref msg 1) 'key)
-                           (let ((char (ref msg 2)))
-                              (led-buffer ll (mark-position buff char) undo mode))
-                           (led-buffer ll buff undo mode))))
-                  ((eq? k #\h)
-                     (lets ((buff out (move-arrow buff 'left)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\$)
-                     (lets ((buff out (seek-line-end buff)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\0)
-                     (lets ((buff out (seek-line-start buff)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\j)
-                     (lets ((buff out (move-arrow buff 'down)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\k)
-                     (lets ((buff out (move-arrow buff 'up)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\l)
-                     (lets ((buff out (move-arrow buff 'right)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\%)
-                     (lets ((buff out (maybe-seek-matching-paren buff)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\') ;; go to marked position
-                     (log "marks is " (get-buffer-meta buff 'marks #empty))
-                     (lets ((msg ll (uncons ll #false)))
-                        (if (eq? (ref msg 1) 'key)
-                           (lets
-                              ((char (ref msg 2))
-                               (pos (getf (get-buffer-meta buff 'marks #empty) char)))
-                              (log "going back to position " pos)
-                              (if pos
-                                 (lets 
-                                    ((x y pos)
-                                     (buff (buffer-seek buff x y #f)))
-                                    (output (update-screen buff))
-                                    (led-buffer ll buff undo mode))
-                                 (led-buffer ll buff undo mode))))))
-                  ((eq? k #\:) ;; enter command interactively
-                    (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
-                    (lets
-                       ((metadata (buffer-meta buff))
-                        (ll res 
-                         (readline ll 
-                           (get (buffer-meta buff) 'command-history null) 
-                           2 (screen-height buff) (screen-width buff)))
-                        (buff
-                           (set-buffer-meta buff
-                             (put metadata 'command-history
-                               (cons res (get metadata 'command-history null))))))
-                       (log (str "readline returned '" res "'"))
-                       (output
-                        (tio 
-                           (set-cursor 1 (screen-height buff)) 
-                           (clear-line)
-                           (set-cursor (buffer-x buff) (buffer-y buff))
-                           ))
-                       (cond
-                         ((equal? res "q")
-                          (output
-                            (tio
-                              (raw (list #\newline))
-                              (set-cursor 1 (screen-height buff))))
-                              0)
-                         ((equal? res "vi")
-                           (led-buffer ll buff undo 'insert))
-                         ((m/^w / res)
-                           (let ((path (s/^w +// res)))
-                              (log "saving buffer to " path)
-                              (lets ((write-tio (write-buffer buff path)))
-                                 (output
-                                    (tio
-                                       (cursor-save)
-                                       (set-cursor 1 (screen-height buff))
-                                       (raw write-tio)
-                                       (cursor-restore)))
-                                 (led-buffer ll 
-                                    (put-buffer-meta buff 'path path)
-                                    undo mode))))
-                         ((m/^w$/ res)
-                           (let ((path (getf (buffer-meta buff) 'path)))
-                              (if path
-                                 (lets ((write-tio (write-buffer buff path)))
-                                    (output
-                                       (tio
-                                          (cursor-save)
-                                          (set-cursor 1 (screen-height buff))
-                                          (raw write-tio)
-                                          (cursor-restore)))
-                                    (led-buffer ll buff undo mode))
-                                 (led-buffer ll buff undo mode))))
-                         ((m/^[0-9]+$/ res)
-                           (lets ((line (max 0 (- (string->number res 10) 1)))
-                                  (buff (buffer-seek buff 0 line #false)))
+               (let ((action (getf *command-mode-actions* k)))
+                  (if action
+                     (action ll buff undo mode led-buffer)
+                     (cond 
+                        ((eq? k #\n)
+                           (lets ((buff (find-next buff)))
                               (output (update-screen buff))
                               (led-buffer ll buff undo mode)))
-                         (else
-                           (led-buffer ll buff undo mode)))))
-                  ((eq? k #\u)
-                     (lets ((undo buff (pop-undo undo buff)))
-                        (output (update-screen buff))
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\i)
-                     (led-buffer ll buff undo 'insert))
-                  ((eq? k #\p)
-                     (lets ((undo (push-undo undo buff))
-                            (buff (paste-yank buff)))
-                        (output (update-screen buff))
-                        (led-buffer ll buff undo mode)))
-                  ((eq? k #\d)
-                     (lets ((what ll (uncons ll #\d)))
-                        (cond
-                           ((equal? what (tuple 'key #\d))
-                              (log "removing a line")
-                              (lets ((buff this (delete-line buff)))
-                                 (output (update-screen buff))
-                                 (led-buffer ll
-                                    (put-buffer-meta buff 'yank (tuple 'lines (list this)))
-                                    (push-undo undo buff) mode)))
-                           (else
-                              (log "cannot delete " what " yet")
-                              (led-buffer ll buff undo mode)))))
-                  (else
-                     (log "not handling command " msg)
-                     (led-buffer ll buff undo mode))))
+                        ((eq? k #\m) ;; mark a position
+                           (lets ((msg ll (uncons ll #false)))
+                              (if (eq? (ref msg 1) 'key)
+                                 (let ((char (ref msg 2)))
+                                    (led-buffer ll (mark-position buff char) undo mode))
+                                 (led-buffer ll buff undo mode))))
+                        ((eq? k #\h)
+                           (lets ((buff out (move-arrow buff 'left)))
+                              (output out)
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\$)
+                           (lets ((buff out (seek-line-end buff)))
+                              (output out)
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\0)
+                           (lets ((buff out (seek-line-start buff)))
+                              (output out)
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\j)
+                           (lets ((buff out (move-arrow buff 'down)))
+                              (output out)
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\k)
+                           (lets ((buff out (move-arrow buff 'up)))
+                              (output out)
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\l)
+                           (lets ((buff out (move-arrow buff 'right)))
+                              (output out)
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\%)
+                           (lets ((buff out (maybe-seek-matching-paren buff)))
+                              (output out)
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\') ;; go to marked position
+                           (log "marks is " (get-buffer-meta buff 'marks #empty))
+                           (lets ((msg ll (uncons ll #false)))
+                              (if (eq? (ref msg 1) 'key)
+                                 (lets
+                                    ((char (ref msg 2))
+                                     (pos (getf (get-buffer-meta buff 'marks #empty) char)))
+                                    (log "going back to position " pos)
+                                    (if pos
+                                       (lets 
+                                          ((x y pos)
+                                           (buff (buffer-seek buff x y #f)))
+                                          (output (update-screen buff))
+                                          (led-buffer ll buff undo mode))
+                                       (led-buffer ll buff undo mode))))))
+                        ((eq? k #\:) ;; enter command interactively
+                          (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
+                          (lets
+                             ((metadata (buffer-meta buff))
+                              (ll res 
+                               (readline ll 
+                                 (get (buffer-meta buff) 'command-history null) 
+                                 2 (screen-height buff) (screen-width buff)))
+                              (buff
+                                 (set-buffer-meta buff
+                                   (put metadata 'command-history
+                                     (cons res (get metadata 'command-history null))))))
+                             (log (str "readline returned '" res "'"))
+                             (output
+                              (tio 
+                                 (set-cursor 1 (screen-height buff)) 
+                                 (clear-line)
+                                 (set-cursor (buffer-x buff) (buffer-y buff))
+                                 ))
+                             (cond
+                               ((equal? res "q")
+                                (output
+                                  (tio
+                                    (raw (list #\newline))
+                                    (set-cursor 1 (screen-height buff))))
+                                    0)
+                               ((equal? res "vi")
+                                 (led-buffer ll buff undo 'insert))
+                               ((m/^w / res)
+                                 (let ((path (s/^w +// res)))
+                                    (log "saving buffer to " path)
+                                    (lets ((write-tio (write-buffer buff path)))
+                                       (output
+                                          (tio
+                                             (cursor-save)
+                                             (set-cursor 1 (screen-height buff))
+                                             (raw write-tio)
+                                             (cursor-restore)))
+                                       (led-buffer ll 
+                                          (put-buffer-meta buff 'path path)
+                                          undo mode))))
+                               ((m/^w$/ res)
+                                 (let ((path (getf (buffer-meta buff) 'path)))
+                                    (if path
+                                       (lets ((write-tio (write-buffer buff path)))
+                                          (output
+                                             (tio
+                                                (cursor-save)
+                                                (set-cursor 1 (screen-height buff))
+                                                (raw write-tio)
+                                                (cursor-restore)))
+                                          (led-buffer ll buff undo mode))
+                                       (led-buffer ll buff undo mode))))
+                               ((m/^[0-9]+$/ res)
+                                 (lets ((line (max 0 (- (string->number res 10) 1)))
+                                        (buff (buffer-seek buff 0 line #false)))
+                                    (output (update-screen buff))
+                                    (led-buffer ll buff undo mode)))
+                               (else
+                                 (led-buffer ll buff undo mode)))))
+                        ((eq? k #\u)
+                           (lets ((undo buff (pop-undo undo buff)))
+                              (output (update-screen buff))
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\i)
+                           (led-buffer ll buff undo 'insert))
+                        ((eq? k #\p)
+                           (lets ((undo (push-undo undo buff))
+                                  (buff (paste-yank buff)))
+                              (output (update-screen buff))
+                              (led-buffer ll buff undo mode)))
+                        ((eq? k #\d)
+                           (lets ((what ll (uncons ll #\d)))
+                              (cond
+                                 ((equal? what (tuple 'key #\d))
+                                    (log "removing a line")
+                                    (lets ((buff this (delete-line buff)))
+                                       (output (update-screen buff))
+                                       (led-buffer ll
+                                          (put-buffer-meta buff 'yank (tuple 'lines (list this)))
+                                          (push-undo undo buff) mode)))
+                                 (else
+                                    (log "cannot delete " what " yet")
+                                    (led-buffer ll buff undo mode)))))
+                        (else
+                           (log "not handling command " msg)
+                           (led-buffer ll buff undo mode))))))
            ((ctrl key)
              (cond
                ((eq? key #\r)
@@ -1033,6 +1043,7 @@
   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
+
 
 
 
