@@ -1,1 +1,1 @@
-[10;10R[10;10Rifoo:w foo.io.out:q
+[10;10R[10;10Rifoo:w foo.io.out:q
