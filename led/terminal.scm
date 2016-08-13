@@ -2,8 +2,13 @@
 
    (export
       set-terminal-rawness
+
       font-normal          ;; lst → lst'
-      font-bold            ;; lst → lst'
+      font-bright          ;; lst → lst'
+      font-dim             ;; lst → lst'
+      font-standard        ;; lst → lst'
+      font-reverse         ;; lst → lst'
+      
       clear-screen         ;; lst → lst'
       clear-screen-top     ;; lst → lst'
       clear-screen-bottom  ;; lst → lst'
@@ -72,8 +77,11 @@
 
       ;;; Text mode
 
-      (define (font-normal lst)  (ilist 27 #\[     #\m lst))
-      (define (font-bold lst)    (ilist 27 #\[ #\1 #\m lst))
+      (define (font-normal lst)    (ilist 27 #\[     #\m lst))
+      (define (font-bright lst)    (ilist 27 #\[ #\1 #\m lst))
+      (define (font-dim lst)       (ilist 27 #\[ #\2 #\m lst))
+      (define (font-standard lst)  (ilist 27 #\[ #\3 #\m lst))
+      (define (font-reverse lst)   (ilist 27 #\[ #\7 #\m lst))
 
       ;;; Clearing content
 
