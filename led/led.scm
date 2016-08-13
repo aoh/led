@@ -712,7 +712,7 @@
 ;;; Command mode actions
 ;;;
 
-(define (command-regex-search ll buff undo mode cont)
+(define (command-regex-search ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\/)))
    (lets ((search-history 
             (get (buffer-meta buff) 'search-history null))
@@ -733,60 +733,60 @@
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-find-next ll buff undo mode cont)
+(define (command-find-next ll buff undo mode r cont)
    (lets ((buff (find-next buff)))
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-mark-position ll buff undo mode cont)
+(define (command-mark-position ll buff undo mode r cont)
    (lets ((msg ll (uncons ll #false)))
       (if (eq? (ref msg 1) 'key)
          (let ((char (ref msg 2)))
             (cont ll (mark-position buff char) undo mode))
          (cont ll buff undo mode))))
 
-(define (command-line-end ll buff undo mode cont)
+(define (command-line-end ll buff undo mode r cont)
    (lets ((buff out (seek-line-end buff)))
       (output out)
       (cont ll buff undo mode)))
 
-(define (command-line-start ll buff undo mode cont)
+(define (command-line-start ll buff undo mode r cont)
    (lets ((buff out (seek-line-start buff)))
       (output out)
       (cont ll buff undo mode)))
 
-(define (command-move-down ll buff undo mode cont)
+(define (command-move-down ll buff undo mode r cont)
    (lets ((buff out (move-arrow buff 'down))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-move-up ll buff undo mode cont)
+(define (command-move-up ll buff undo mode r cont)
    (lets ((buff out (move-arrow buff 'up))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-move-right ll buff undo mode cont)
+(define (command-move-right ll buff undo mode r cont)
    (lets ((buff out (move-arrow buff 'right))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-move-left ll buff undo mode cont)
+(define (command-move-left ll buff undo mode r cont)
    (lets ((buff out (move-arrow buff 'left))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-seek-matching-paren ll buff undo mode cont)
+(define (command-seek-matching-paren ll buff undo mode r cont)
    (lets ((buff out (maybe-seek-matching-paren buff))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-paste ll buff undo mode cont)
+(define (command-paste ll buff undo mode r cont)
    (lets ((undo (push-undo undo buff))
           (buff (paste-yank buff)))
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-add-line-below ll buff undo mode cont)
+(define (command-add-line-below ll buff undo mode r cont)
    (lets
       ((undo (push-undo undo buff))
        (u d l r x y w h off meta buff)
@@ -795,7 +795,7 @@
       (output (update-screen buff))
       (cont ll buff undo 'insert)))
 
-(define (command-delete-char ll buff undo mode cont)
+(define (command-delete-char ll buff undo mode r cont)
    (lets
       ((undo (push-undo undo buff))
        (u d l r x y w h off meta buff)
@@ -803,7 +803,7 @@
       (output (update-screen buff)) ;; todo: can refresh just current line
       (cont ll buff undo mode)))
 
-(define (command-go-to-mark ll buff undo mode cont)
+(define (command-go-to-mark ll buff undo mode r cont)
    (log "marks is " (get-buffer-meta buff 'marks #empty))
    (lets ((msg ll (uncons ll #false)))
       (if (eq? (ref msg 1) 'key)
@@ -819,7 +819,7 @@
                   (cont ll buff undo mode))
                (cont ll buff undo mode))))))
 
-(define (command-enter-command ll buff undo mode cont)
+(define (command-enter-command ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
    (lets
      ((metadata (buffer-meta buff))
@@ -881,20 +881,21 @@
        (else
          (cont ll buff undo mode)))))
 
-(define (command-redo ll buff undo mode cont)
+(define (command-redo ll buff undo mode r cont)
   (lets ((undo buff (unpop-undo undo buff)))
     (output (update-screen buff))
     (cont ll buff undo mode)))
 
-(define (command-undo ll buff undo mode cont)
+(define (command-undo ll buff undo mode r cont)
    (lets ((undo buff (pop-undo undo buff)))
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-insert-before ll buff undo mode cont)
+(define (command-insert-before ll buff undo mode r cont)
    (cont ll buff undo 'insert))
 
-(define (command-delete ll buff undo mode cont)
+(define (command-delete ll buff undo mode r cont)
+   (log "would delete " r " of something")
    (lets ((what ll (uncons ll #\d)))
       (cond
          ((equal? what (tuple 'key #\d))
@@ -908,11 +909,11 @@
             (log "cannot delete " what " yet")
             (cont ll buff undo mode)))))
 
-(define (command-no-op ll buff undo mode cont)
+(define (command-no-op ll buff undo mode r cont)
    (cont ll buff undo mode))
 
 ;; todo: add count/range parameter
-;; key → (ll buff undo mode cont → (cont ll' buff' undo' mode'))
+;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
 (define *command-mode-actions*
    (-> #empty
       (put #\/ command-regex-search)
@@ -935,7 +936,7 @@
       (put #\d command-delete)
       (put #\% command-seek-matching-paren)))
 
-(define (command-step-forward ll buff undo mode cont)
+(define (command-step-forward ll buff undo mode r cont)
    (lets ((u d l r x y w h off meta buff)
           (y (+ (cdr off) (- y 1)))
           (buff (buffer-seek buff (- x 1) (+ y (max 1 (- h 3))) 1)))
@@ -943,17 +944,17 @@
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-step-backward ll buff undo mode cont)
+(define (command-step-backward ll buff undo mode r cont)
    (lets ((u d l r x y w h off meta buff)
           (y (+ (cdr off) (- y 1)))
           (buff (buffer-seek buff (- x 1) (- y (min (- h 3) y)) 1)))
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-previous-buffer ll buff undo mode cont)
+(define (command-previous-buffer ll buff undo mode r cont)
    (values ll buff undo mode 'left))
 
-(define (command-next-buffer ll buff undo mode cont)
+(define (command-next-buffer ll buff undo mode r cont)
    (values ll buff undo mode 'right))
 
 (define *command-mode-control-actions*
@@ -973,75 +974,94 @@
 ;;;
 
 (define (key->digit k)
-   (let ((n (- k #\0)))
-      (cond
-         ((< n 0) #false)
-         ((> n 9) #false)
-         (else n))))
+   (if (eq? (ref k 1) 'key)
+      (let ((n (- (ref k 2) #\0)))
+         (cond
+            ((< n 0) #false)
+            ((> n 9) #false)
+            (else n)))
+      #false))
          
 (define space-node (tuple 'key #\space))
+
+(define (maybe-get-range ll)
+   (lets ((k ll (uncons ll space-node))
+          (n (key->digit k)))
+      (log "maybe-get-range: " k " -> " n)
+      (cond
+         ((not n) (values #false (cons k ll)))
+         ((eq? n 0) (values #false (cons k ll)))
+         (else
+            (let loop ((n n) (ll ll))
+               (lets ((x ll (uncons ll 0))
+                      (m (key->digit x)))
+                  (if m
+                     (loop (+ (* 10 n) m) ll)
+                     (values n (cons x ll)))))))))
 
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
    (log-buff buff)
-   (lets 
-      ((msg ll (uncons ll #false))
-       (u d l r x y w h off meta buff))
-      (log "cursor " (cons x y) ", offset " off ", event " msg)
-      (if (eq? mode 'insert)
-         (tuple-case msg
-            ((key x)
-               (if (eq? x #\tab)
-                  (led-buffer (ilist space-node space-node space-node ll) buff undo mode)
-                  (lets ((buff out (insert-handle-key buff x)))
+   (if (eq? mode 'insert)
+      (lets 
+         ((msg ll (uncons ll #false))
+          (u d l r x y w h off meta buff))
+         (log "cursor " (cons x y) ", offset " off ", event " msg)
+            (tuple-case msg
+               ((key x)
+                  (if (eq? x #\tab)
+                     (led-buffer (ilist space-node space-node space-node ll) buff undo mode)
+                     (lets ((buff out (insert-handle-key buff x)))
+                        (output out)
+                        (led-buffer ll buff undo mode))))
+               ((enter)
+                  (lets 
+                     ((u d l r x y w h off meta buff)
+                      (buff 
+                        (buffer u (cons r d) null (reverse l) 1 
+                           y w h (cons 0 (cdr off)) meta))
+                      (draw-tio 
+                        (if (eq? (car off) 1) 
+                           (tio (clear-line-right)) 
+                           (update-screen buff)))
+                      (buff move-tio (move-arrow buff 'down)))
+                     (output
+                        (append draw-tio move-tio))
+                     (led-buffer ll buff undo mode)))
+               ((backspace)
+                  (lets ((buff out (insert-backspace buff)))
                      (output out)
-                     (led-buffer ll buff undo mode))))
-            ((enter)
-               (lets 
-                  ((u d l r x y w h off meta buff)
-                   (buff 
-                     (buffer u (cons r d) null (reverse l) 1 
-                        y w h (cons 0 (cdr off)) meta))
-                   (draw-tio 
-                     (if (eq? (car off) 1) 
-                        (tio (clear-line-right)) 
-                        (update-screen buff)))
-                   (buff move-tio (move-arrow buff 'down)))
-                  (output
-                     (append draw-tio move-tio))
-                  (led-buffer ll buff undo mode)))
-            ((backspace)
-               (lets ((buff out (insert-backspace buff)))
-                  (output out)
-                  (led-buffer ll buff undo mode)))
-            ((arrow dir)
-               (lets ((buff out (move-arrow buff dir)))
-                  (output out)
-                  (led-buffer ll buff undo mode)))
-            ((end-of-text) 
-               (led-buffer ll buff (push-undo undo buff) 'command))
-            ((esc)         
-               (log "switching out of insert mode on esc")
-               (led-buffer ll buff (push-undo undo buff) 'command))
-            ((ctrl key)
-               (cond
-                  ((eq? key 'arrow-left)
-                     (values ll buff undo mode 'left))
-                  ((eq? key 'arrow-right)
-                     (values ll buff undo mode 'right))
-                  (else
-                     (log "ignoring control " key " in insert mode")
-                     (led-buffer ll buff undo mode))))
-            (else
-               (led-buffer ll buff undo mode)))
-         ;; command mode
+                     (led-buffer ll buff undo mode)))
+               ((arrow dir)
+                  (lets ((buff out (move-arrow buff dir)))
+                     (output out)
+                     (led-buffer ll buff undo mode)))
+               ((end-of-text) 
+                  (led-buffer ll buff (push-undo undo buff) 'command))
+               ((esc)         
+                  (log "switching out of insert mode on esc")
+                  (led-buffer ll buff (push-undo undo buff) 'command))
+               ((ctrl key)
+                  (cond
+                     ((eq? key 'arrow-left)
+                        (values ll buff undo mode 'left))
+                     ((eq? key 'arrow-right)
+                        (values ll buff undo mode 'right))
+                     (else
+                        (log "ignoring control " key " in insert mode")
+                        (led-buffer ll buff undo mode))))
+               (else
+                  (led-buffer ll buff undo mode))))
+      ;; command mode
+      (lets ((range ll (maybe-get-range ll))
+             (msg ll (uncons ll space-node)))
          (tuple-case msg
            ((key k)
                ((get *command-mode-actions* k command-no-op)
-                  ll buff undo mode led-buffer))
+                  ll buff undo mode range led-buffer))
            ((ctrl key)
                ((get *command-mode-control-actions* key command-no-op)
-                  ll buff undo mode led-buffer))
+                  ll buff undo mode range led-buffer))
            (else
                (log "not handling command " msg)
                (led-buffer ll buff undo mode))))))
