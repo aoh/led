@@ -692,6 +692,9 @@
             (values buff null)))))
 
 
+;;;
+;;; Command mode actions
+;;;
 
 (define (command-regex-search ll buff undo mode cont)
    (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\/)))
@@ -727,14 +730,14 @@
          (cont ll buff undo mode))))
 
 (define (command-line-end ll buff undo mode cont)
-                           (lets ((buff out (seek-line-end buff)))
-                              (output out)
-                              (cont ll buff undo mode)))
+   (lets ((buff out (seek-line-end buff)))
+      (output out)
+      (cont ll buff undo mode)))
 
 (define (command-line-start ll buff undo mode cont)
-                           (lets ((buff out (seek-line-start buff)))
-                              (output out)
-                              (cont ll buff undo mode)))
+   (lets ((buff out (seek-line-start buff)))
+      (output out)
+      (cont ll buff undo mode)))
 
 (define (command-move-down ll buff undo mode cont)
    (lets ((buff out (move-arrow buff 'down))) 
@@ -774,7 +777,17 @@
       (put #\l command-move-right)
       (put #\h command-move-left)
       (put #\% command-seek-matching-paren)))
-   
+
+
+;;;
+;;; Insert mode actions
+;;;
+
+
+;;;
+;;; Buffer handling loop
+;;;
+
 (define space-node (tuple 'key #\space))
 
 (define (led-buffer ll buff undo mode)
