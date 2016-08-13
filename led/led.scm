@@ -636,7 +636,9 @@
             buff)
          ((eq? 'lines (ref data 1))
             (log "appending " (ref data 2))
-            (buffer u (append (ref data 2) d) l r x y w h off meta))
+            (lets ((buff (buffer u (append (ref data 2) d) l r x y w h off meta))
+                   (buff tio (move-arrow buff 'down)))
+               buff))
          (else
             (error "how do i paste " data)))))
  
@@ -764,7 +766,22 @@
       (output out) 
       (cont ll buff undo mode)))
 
-;; key → (ll buff undo mode → ll' buff' undo' mode' tio)
+(define (command-paste ll buff undo mode cont)
+   (lets ((undo (push-undo undo buff))
+          (buff (paste-yank buff)))
+      (output (update-screen buff))
+      (cont ll buff undo mode)))
+
+(define (command-add-line-below ll buff undo mode cont)
+   (lets
+      ((undo (push-undo undo buff))
+       (u d l r x y w h off meta buff)
+       (buff (buffer u (cons null d) l r x y w h off meta))
+       (buff tio (move-arrow buff 'down)))
+      (output (update-screen buff))
+      (cont ll buff undo 'insert)))
+
+;; key → (ll buff undo mode cont → (cont ll' buff' undo' mode'))
 (define *command-mode-actions*
    (-> #empty
       (put #\/ command-regex-search)
@@ -776,6 +793,8 @@
       (put #\k command-move-up)
       (put #\l command-move-right)
       (put #\h command-move-left)
+      (put #\p command-paste)
+      (put #\o command-add-line-below)
       (put #\% command-seek-matching-paren)))
 
 
@@ -833,6 +852,7 @@
                (led-buffer ll buff (push-undo undo buff) 'command))
             (else
                (led-buffer ll buff undo mode)))
+         ;; command mode
          (tuple-case msg
            ((key k)
                (let ((action (getf *command-mode-actions* k)))
@@ -924,11 +944,6 @@
                               (led-buffer ll buff undo mode)))
                         ((eq? k #\i)
                            (led-buffer ll buff undo 'insert))
-                        ((eq? k #\p)
-                           (lets ((undo (push-undo undo buff))
-                                  (buff (paste-yank buff)))
-                              (output (update-screen buff))
-                              (led-buffer ll buff undo mode)))
                         ((eq? k #\d)
                            (lets ((what ll (uncons ll #\d)))
                               (cond
