@@ -213,7 +213,8 @@
       ((eq? k #\tab)
          tab-node)
       ((eq? k 40) ;; lp
-         lp-unmatched-node)
+         ;lp-unmatched-node
+         k)
       (else k)))
 
 (define (encode-node k tl)
@@ -249,13 +250,13 @@
             (begin
                (log "insert of key " k " at " (cons x y) " = " node)
                (cond
-                  ((eq? node 41) ; rp
-                     (lets ((l u found? (find-matching-lp l u)))
-                        (if found?
-                           (let ((buff (buffer u d (cons node l) r (+ x 1) y w h off meta)))
-                              (values buff (update-screen buff)))
-                           (let ((buff (buffer u d (cons rp-unmatched-node l) r (+ x 1) y w h off meta)))
-                              (values buff (update-screen buff))))))
+                  ;((eq? node 41) ; rp
+                  ;  (lets ((l u found? (find-matching-lp l u)))
+                  ;      (if found?
+                  ;         (let ((buff (buffer u d (cons node l) r (+ x 1) y w h off meta)))
+                  ;            (values buff (update-screen buff)))
+                  ;         (let ((buff (buffer u d (cons rp-unmatched-node l) r (+ x 1) y w h off meta)))
+                  ;            (values buff (update-screen buff))))))
                   (else
                      (values
                         (buffer u d (cons node l) r (+ x nw) y w h off meta)
@@ -790,81 +791,78 @@
       (cont ll buff undo mode)))
 
 (define (command-go-to-mark ll buff undo mode cont)
-	(log "marks is " (get-buffer-meta buff 'marks #empty))
-	(lets ((msg ll (uncons ll #false)))
-		(if (eq? (ref msg 1) 'key)
-			(lets
-				((char (ref msg 2))
-				 (pos (getf (get-buffer-meta buff 'marks #empty) char)))
-				(log "going back to position " pos)
-				(if pos
-					(lets 
-						((x y pos)
-						 (buff (buffer-seek buff x y #f)))
-						(output (update-screen buff))
-						(cont ll buff undo mode))
-					(cont ll buff undo mode))))))
+   (log "marks is " (get-buffer-meta buff 'marks #empty))
+   (lets ((msg ll (uncons ll #false)))
+      (if (eq? (ref msg 1) 'key)
+         (lets
+            ((char (ref msg 2))
+             (pos (getf (get-buffer-meta buff 'marks #empty) char)))
+            (log "going back to position " pos)
+            (if pos
+               (lets 
+                  ((x y pos)
+                   (buff (buffer-seek buff x y #f)))
+                  (output (update-screen buff))
+                  (cont ll buff undo mode))
+               (cont ll buff undo mode))))))
 
 (define (command-enter-command ll buff undo mode cont)
-	(output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
-	(lets
-	  ((metadata (buffer-meta buff))
-		(ll res 
-		 (readline ll 
-			(get (buffer-meta buff) 'command-history null) 
-			2 (screen-height buff) (screen-width buff)))
-		(buff
-			(set-buffer-meta buff
-			  (put metadata 'command-history
-				 (cons res (get metadata 'command-history null))))))
-		(log (str "readline returned '" res "'"))
-		(output
-			(tio 
-				(set-cursor 1 (screen-height buff)) 
-				(clear-line)
-				(set-cursor (buffer-x buff) (buffer-y buff))
-				))
-		(cond
-		 ((equal? res "q")
-		  (output
-			 (tio
-				(raw (list #\newline))
-				(set-cursor 1 (screen-height buff))))
-				0)
-		 ((equal? res "vi")
-			(cont ll buff undo 'insert))
-		 ((m/^w / res)
-			(let ((path (s/^w +// res)))
-				(log "saving buffer to " path)
-				(lets ((write-tio (write-buffer buff path)))
-					(output
-						(tio
-							(cursor-save)
-							(set-cursor 1 (screen-height buff))
-							(raw write-tio)
-							(cursor-restore)))
-					(cont ll 
-						(put-buffer-meta buff 'path path)
-						undo mode))))
-		 ((m/^w$/ res)
-			(let ((path (getf (buffer-meta buff) 'path)))
-				(if path
-					(lets ((write-tio (write-buffer buff path)))
-						(output
-							(tio
-								(cursor-save)
-								(set-cursor 1 (screen-height buff))
-								(raw write-tio)
-								(cursor-restore)))
-						(cont ll buff undo mode))
-					(cont ll buff undo mode))))
-		 ((m/^[0-9]+$/ res)
-			(lets ((line (max 0 (- (string->number res 10) 1)))
-					 (buff (buffer-seek buff 0 line #false)))
-				(output (update-screen buff))
-				(cont ll buff undo mode)))
-		 (else
-			(cont ll buff undo mode)))))
+   (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
+   (lets
+     ((metadata (buffer-meta buff))
+      (ll res 
+       (readline ll 
+         (get (buffer-meta buff) 'command-history null) 
+         2 (screen-height buff) (screen-width buff)))
+      (buff
+         (set-buffer-meta buff
+           (put metadata 'command-history
+             (cons res (get metadata 'command-history null))))))
+      (log (str "readline returned '" res "'"))
+      (output
+         (tio 
+            (set-cursor 1 (screen-height buff)) 
+            (clear-line)
+            (set-cursor (buffer-x buff) (buffer-y buff))
+            ))
+      (cond
+       ((equal? res "q")
+         (log "exiting via command-enter-command")
+         (values ll buff undo mode 'close))
+       ((equal? res "vi")
+         (cont ll buff undo 'insert))
+       ((m/^w / res)
+         (let ((path (s/^w +// res)))
+            (log "saving buffer to " path)
+            (lets ((write-tio (write-buffer buff path)))
+               (output
+                  (tio
+                     (cursor-save)
+                     (set-cursor 1 (screen-height buff))
+                     (raw write-tio)
+                     (cursor-restore)))
+               (cont ll 
+                  (put-buffer-meta buff 'path path)
+                  undo mode))))
+       ((m/^w$/ res)
+         (let ((path (getf (buffer-meta buff) 'path)))
+            (if path
+               (lets ((write-tio (write-buffer buff path)))
+                  (output
+                     (tio
+                        (cursor-save)
+                        (set-cursor 1 (screen-height buff))
+                        (raw write-tio)
+                        (cursor-restore)))
+                  (cont ll buff undo mode))
+               (cont ll buff undo mode))))
+       ((m/^[0-9]+$/ res)
+         (lets ((line (max 0 (- (string->number res 10) 1)))
+                (buff (buffer-seek buff 0 line #false)))
+            (output (update-screen buff))
+            (cont ll buff undo mode)))
+       (else
+         (cont ll buff undo mode)))))
 
 ;; todo: add count/range parameter
 ;; key → (ll buff undo mode cont → (cont ll' buff' undo' mode'))
@@ -898,6 +896,7 @@
 
 (define space-node (tuple 'key #\space))
 
+;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
    (log-buff buff)
    (lets 
@@ -939,6 +938,15 @@
             ((esc)         
                (log "switching out of insert mode on esc")
                (led-buffer ll buff (push-undo undo buff) 'command))
+            ((ctrl key)
+               (cond
+                  ((eq? key 'arrow-left)
+                     (values ll buff undo mode 'left))
+                  ((eq? key 'arrow-right)
+                     (values ll buff undo mode 'right))
+                  (else
+                     (log "ignoring control " key " in insert mode")
+                     (led-buffer ll buff undo mode))))
             (else
                (led-buffer ll buff undo mode)))
          ;; command mode
@@ -989,6 +997,12 @@
                          (buff (buffer-seek buff (- x 1) (- y (min (- h 3) y)) 1)))
                      (output (update-screen buff))
                      (led-buffer ll buff undo mode)))
+               ((eq? key 'arrow-left)
+                  (log "switching buffer left")
+                  (values ll buff undo mode 'left))
+               ((eq? key 'arrow-right)
+                  (log "switching buffer rith")
+                  (values ll buff undo mode 'right))
                (else
                  (led-buffer ll buff undo mode))))
            (else
@@ -1012,6 +1026,37 @@
            (raw (render "esc + :q quits" null))
            (set-cursor 1 1)))))
 
+(define (led-buffers ll left state right)
+   (lets ((buff undo mode state)
+          (_ (output (update-screen buff)))
+          (ll buff undo mode action
+            (led-buffer ll buff undo mode))
+          (state (tuple buff undo mode)))
+      (log "led-buffers: action " action)
+      (cond
+         ((eq? action 'close)
+            (cond
+               ((pair? left)
+                  (led-buffers ll (cdr left) (car left) right))
+               ((pair? left)
+                  (led-buffers ll left (car right) (cdr right)))
+               (else
+                  (log "all buffers closed")
+                  0)))
+         ((eq? action 'left)
+            (if (null? left)
+               (led-buffers ll left state right)
+               (led-buffers ll (cdr left) (car left)
+                  (cons state right))))
+         ((eq? action 'right)
+            (if (null? right)
+               (led-buffers ll left state right)
+               (led-buffers ll (cons state left)
+                  (car right) (cdr right))))
+         (else
+            (log "unknown buffer action " action)
+            (led-buffers ll left state right)))))
+               
 (define (start-led dict args ll)
   (log "start-led " dict ", " args)
   (lets ((w h ll (get-terminal-size ll)))
@@ -1022,12 +1067,14 @@
             (put 'tab tab-node)
             (put 'tab-width 3)
             (put 'path (if (null? args) #false (car args)))))
-       (buff 
-        (if (= (length args) 1)
-          (make-file-state w h (car args) #empty)
-          (make-empty-state w h state))))
-      (output (update-screen buff))
-      (led-buffer ll buff (initial-undo buff) 'command))))
+       (buffers
+         (if (null? args)
+            (list (make-empty-state w h state))
+            (map (lambda (arg) (make-file-state w h arg #empty))
+               args)))
+       (states (map (lambda (x) (tuple x (initial-undo x) 'command)) buffers)))
+      (log "buffers are " buffers)
+      (led-buffers ll null (car states) (cdr states)))))
 
 (define usage-text 
   "Usage: led [flags] [file]")
@@ -1103,34 +1150,6 @@
   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
