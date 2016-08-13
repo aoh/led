@@ -714,10 +714,25 @@
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
+(define (command-find-next ll buff undo mode cont)
+	(lets ((buff (find-next buff)))
+		(output (update-screen buff))
+		(cont ll buff undo mode)))
+
+(define (command-mark-position ll buff undo mode cont)
+	(lets ((msg ll (uncons ll #false)))
+		(if (eq? (ref msg 1) 'key)
+			(let ((char (ref msg 2)))
+				(cont ll (mark-position buff char) undo mode))
+			(cont ll buff undo mode))))
+
 ;; key → (ll buff undo mode → ll' buff' undo' mode' tio)
 (define *command-mode-actions*
    (-> #empty
-      (put #\/ command-regex-search)))
+      (put #\/ command-regex-search)
+		(put #\n command-find-next)
+		(put #\m command-mark-position)
+))
    
 (define space-node (tuple 'key #\space))
 
@@ -770,16 +785,6 @@
                   (if action
                      (action ll buff undo mode led-buffer)
                      (cond 
-                        ((eq? k #\n)
-                           (lets ((buff (find-next buff)))
-                              (output (update-screen buff))
-                              (led-buffer ll buff undo mode)))
-                        ((eq? k #\m) ;; mark a position
-                           (lets ((msg ll (uncons ll #false)))
-                              (if (eq? (ref msg 1) 'key)
-                                 (let ((char (ref msg 2)))
-                                    (led-buffer ll (mark-position buff char) undo mode))
-                                 (led-buffer ll buff undo mode))))
                         ((eq? k #\h)
                            (lets ((buff out (move-arrow buff 'left)))
                               (output out)
