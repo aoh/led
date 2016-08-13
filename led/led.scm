@@ -325,14 +325,14 @@
             (loop (cdr line) pos (cons (car line) l))
             (values (cons (car line) l) (cdr line) pos)))))))
 
-;; lines → u line d
-(define (seek-line lines pos)
-   (let loop ((lines lines) (pos pos) (u null))
+;; lines → u line d y
+(define (seek-line lines end)
+   (let loop ((lines lines) (pos end) (u null))
       (cond
          ((null? lines)
-            (values u null lines))
+            (values u null lines (- end pos)))
          ((eq? pos 0)
-            (values u (car lines) (cdr lines)))
+            (values u (car lines) (cdr lines) end))
          (else
             (loop (cdr lines) (- pos 1) (cons (car lines) u))))))
 
@@ -428,7 +428,7 @@
    (log "buffer seek" x "," y ", y row at " screen-y)
    (lets ((u d l r old-x old-y w h off meta buff)
           (lines (append (reverse u) (list (append (reverse l) r)) d))
-          (u line d (seek-line lines y))
+          (u line d y (seek-line lines y))
           (step (>> w 1))
           (yp (or screen-y (if (< y h) (+ y 1) (>> h 1)))) ;; real or middle of screen
           (dy (- (+ y 1) yp))

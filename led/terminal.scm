@@ -22,14 +22,11 @@
       cursor-left          ;; lst n → lst'
       cursor-right         ;; lst n → lst'
 
-      draw-box 
-
       tio
       tio*
 
       output
-      terminal-server
-		terminal-input
+      terminal-input
       get-terminal-size
       readline
       port->readline-sexp-stream
@@ -109,7 +106,7 @@
             (values #false (cons x ll)))))
   
       (define (terminal-input . opt)
-			(let ((port (if (null? opt) stdin (car opt)))) 
+       (let ((port (if (null? opt) stdin (car opt)))) 
         (let loop ((ll (utf8-decoder (port->byte-stream port) (λ (loop line ll) (print-to stderr "Bad UTF-8 in terminal input") null))))
           (cond
             ((pair? ll)
@@ -451,7 +448,8 @@
                         (iota 0 1 (length right)))
                      hi left right cx off))
                 (else
-                  (values ll (tuple 'wat op))))))))
+                  ; (values ll (tuple 'wat op))
+                  (loop ll hi left right cx off)))))))
 
       (define (get-dimensions ll)
         (lets ((w h ll (get-terminal-size ll))  
@@ -503,104 +501,9 @@
               (pair res (loop (cons res history) ll))
               null))))
 
-      (define (terminal-server fd receiver)
-         (if (eq? fd stdin)
-				(set-terminal-rawness #true))
-         (let loop ((ll (terminal-input fd))
-                    (requested? #false))
-            (cond
-               ((null? ll)
-                  (mail receiver 'eof)
-						(if (eq? fd stdin)
-							(set-terminal-rawness #false)))
-               ((pair? ll)
-                  (mail receiver (car ll))
-                  (loop (cdr ll) requested?))
-               ((not requested?)
-                  (mail 'iomux (tuple 'read fd))
-                  (loop ll #true))
-               (else
-                  (tuple-case (wait-mail)
-                     ((iomux msg)
-                        (tuple-case msg
-                           ((read fd)
-                              (loop (ll) #false))
-                           (else
-                              (error "iomux responded with " msg))))
-                     (else is env
-                        (let ((msg (ref env 2)))
-                        (cond
-                           ((eq? 'get-terminal-size msg)
-                              (lets ((x y ll (get-terminal-size ll)))
-                                 (mail (ref env 1) (cons x y))
-                                 (loop ll requested?)))
-                           ((eq? 'get-cursor-position msg)
-                              (lets ((x y ll (get-cursor-position ll)))
-                                 (mail (ref env 1) (cons x y))
-                                 (loop ll requested?)))
-                           ((eq? 'get-input msg)
-                             ;; block while some thread uses the input stream
-                             (let ((ll (interact (ref env 1) ll)))
-                                (loop ll requested?)))
-                           ((pair? msg)
-                              (write-bytes stdout msg)
-                              (loop ll requested?))
-                           ((null? msg)
-                              (loop ll requested?))
-                           ((vector? msg)
-                              (write-byte-vector stdout msg)
-                              (loop ll requested?))
-                           ((tuple? msg)
-                              (tuple-case msg
-                                 ((set-cursor x y)
-                                    (cursor-pos (car msg) (cdr msg)))
-                                 (else
-                                    (print-to stdout "terminal: unknown message " msg)))
-                              (loop ll requested?))
-                           ((eq? msg 'stop)
-                             (loop null #false))
-                           (else
-                              (print-to stdout "terminal: unknown message " msg)
-                              (loop ll requested?))))))))))
-
-      (define (printer)
-         (let ((env (wait-mail)))
-            (display env)
-            (cond
-               ((equal? env (tuple 'terminal (tuple 'key #\h)))
-                  (print "hiding cursor"))
-               ((equal? env (tuple 'terminal (tuple 'key #\c)))
-                  (print "getting cursor position")
-                  (print "cursor is at " (interact 'terminal 'get-cursor-position)))
-               ((equal? env (tuple 'terminal (tuple 'key #\s)))
-                 42)
-               ((equal? env (tuple 'terminal (tuple 'key #\q)))
-                  (mail 'terminal 'stop)))
-            (printer)))
-
-      (define (internal-test)
-         '(lets/cc exit ()
-           (lfold
-             (λ (nth line) 
-               (print "\n" line " = " (string->list line))
-               (if (equal? line "quit") (exit nth) (+ nth 1)))
-             0 (port->readline-line-stream stdin "> ")))
-         '(set-terminal-rawness #false)
-         (write-bytes stdout (clear-screen null))
-         (fork-linked-server 'printer printer)
-         (fork-linked-server 'terminal
-            (λ () (terminal-server stdin 'printer)))
-         (let loop ()
-            (print "main: " (wait-mail))))
-      
-     ;(internal-test)
-
      (define (output lst val)
       (render val lst))
      
-     (define (output-bold lst val)
-      (font-bold (render val (font-normal lst))))
-
      (define-syntax tio
       (syntax-rules (raw)
          ((tio (raw lst) . rest)
@@ -620,45 +523,5 @@
             (op (tio* . rest) . args))
          ((tio*) '())
          ((tio* val . rest)
-            (render val (tio* . rest)))))
-
-    (define (vert-line tl chr x y h)
-      (fold
-        (λ (tl y)
-          (set-cursor (cons chr tl) x y))
-        tl
-        (iota y 1 (+ y h))))
-    
-    (define (horiz-line tl b l e x y w)
-      (set-cursor 
-        (cons b (fold (λ (tl _) (cons l tl)) (cons e tl) (iota 0 1 (- w 2))))
-        x y))
-
-    (define (draw-box tl xo yo w h)
-      (lets
-        ((tl (horiz-line tl #\. #\- #\. xo yo w))
-         (tl (horiz-line tl #\' #\- #\' xo (+ yo (- h 1)) w))
-         (tl (vert-line tl #\| xo (+ yo 1) (- h 2)))
-         (tl (vert-line tl #\| (+ xo (- w 1)) (+ yo 1) (- h 2))))
-        tl))
-
-     '(print "getting terminal size")
-     '(lets ((_ (set-terminal-rawness #true))
-            (ll (terminal-input))
-            (_ (print ll))
-            (xm ym ll (get-terminal-size ll)))
-       (let loop ((x 0) (y 0))
-        (if (< x 30)
-          (begin
-            (write-bytes stdout 
-              (tio
-                (clear-screen)
-                (draw-box x y 5 6)
-                (draw-box (- 30 x) (- 40 y) 7 5)
-                (set-cursor 1 1)))
-            (sleep 30)
-            (loop (+ x 1) (+ y 1)))
-          'done)))
-
-))
+            (render val (tio* . rest)))))))
 
