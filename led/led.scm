@@ -1,5 +1,8 @@
 #!/usr/bin/ol --run
 
+;; todo: fix line generation on seek past buffer end
+;; todo: allow count/range to be entered in command mode
+
 (import
   (led terminal)
   (only (owl unicode) encode-point)
@@ -33,11 +36,11 @@
 (define (buffer-x buff) (ref buff 5))
 (define (buffer-y buff) (ref buff 6))
 
-(define rp-unmatched-node
-   (tuple 'replace (list 41) 1 (tio (font-bold) (raw (list 41)) (font-normal))))
+(define rp-node
+   (tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal))))
 
-(define lp-unmatched-node
-   (tuple 'replace (list 40) 1 (tio (font-bold) (raw (list 40)) (font-normal))))
+(define lp-node
+   (tuple 'replace (list 40) 1 (tio (font-dim) (raw (list 40)) (font-normal))))
 
 (define tab-node 
   (tuple 'replace 
@@ -52,7 +55,14 @@
 (define (untab meta)
    (let ((tab (get meta 'tab tab-node)))
       (λ (line)
-         (map (λ (node) (if (eq? node #\tab) tab node)) line))))
+         (map 
+            (λ (node)   
+               (cond
+                  ;((eq? node #\() lp-node)
+                  ;((eq? node #\)) rp-node)
+                  ((eq? node #\tab) tab)
+                  (else node)))
+            line))))
 
 (define (make-file-state w h path meta)
   (let ((data (map (untab meta) (map string->list (force-ll (lines (open-input-file path)))))))
@@ -132,7 +142,7 @@
 
 (define empty-buffer-line
    (tio
-      (font-bold)
+      (font-dim)
       (raw (render "~" null))
       (font-normal)
       ))
@@ -213,8 +223,11 @@
       ((eq? k #\tab)
          tab-node)
       ((eq? k 40) ;; lp
-         ;lp-unmatched-node
-         k)
+         ;k
+         lp-node)
+      ((eq? k 41) ;; rp
+         ;k
+         rp-node)
       (else k)))
 
 (define (encode-node k tl)
@@ -236,7 +249,7 @@
          
 (define (find-matching-lp l u)
    (cond
-      ((replace-node l lp-unmatched-node 40) =>
+      ((replace-node l lp-node 40) =>
          (λ (l)
             (values l u #true)))
       (else
@@ -371,11 +384,11 @@
 
 (define (left-paren? x)
    (or (eq? x 40)
-       (equal? x lp-unmatched-node)))
+       (equal? x lp-node)))
 
 (define (right-paren? x)
    (or (eq? x 41)
-       (equal? x rp-unmatched-node)))
+       (equal? x rp-node)))
 
 ;; buff → (x . y) | #false
 (define (seek-matching-paren-back buff)
@@ -829,6 +842,10 @@
        ((equal? res "q")
          (log "exiting via command-enter-command")
          (values ll buff undo mode 'close))
+       ((equal? res "n")
+         (values ll buff undo mode 'right))
+       ((equal? res "p")
+         (values ll buff undo mode 'left))
        ((equal? res "vi")
          (cont ll buff undo 'insert))
        ((m/^w / res)
@@ -894,6 +911,13 @@
 ;;; Buffer handling loop
 ;;;
 
+(define (key->digit k)
+   (let ((n (- k #\0)))
+      (cond
+         ((< n 0) #false)
+         ((> n 9) #false)
+         (else n))))
+         
 (define space-node (tuple 'key #\space))
 
 ;; ll buff undo mode -> ll' buff' undo' mode' action
@@ -975,6 +999,10 @@
                                  (else
                                     (log "cannot delete " what " yet")
                                     (led-buffer ll buff undo mode)))))
+                        ((key->digit k) =>
+                           (lambda (n)
+                              (log "got n " n)
+                              (led-buffer ll buff undo mode)))
                         (else
                            (log "not handling command " msg)
                            (led-buffer ll buff undo mode))))))
@@ -1020,7 +1048,7 @@
          (tio
            (clear-screen)
            (set-cursor (- mw (>> (string-length version-str) 1)) mh)
-           (raw (font-bold (render version-str null)))
+           (raw (font-bright (render version-str null)))
            (font-normal)
            (set-cursor (max 1 (- mw 6)) (+ mh 2))
            (raw (render "esc + :q quits" null))
@@ -1150,6 +1178,3 @@
   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
-
-
-
