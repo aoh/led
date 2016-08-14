@@ -1134,10 +1134,14 @@
             (cond
                ((pair? left)
                   (led-buffers ll (cdr left) (car left) right))
-               ((pair? left)
+               ((pair? right)
                   (led-buffers ll left (car right) (cdr right)))
                (else
                   (log "all buffers closed")
+                  (output
+                     (tio
+                        (clear-screen)
+                        (set-cursor 1 1)))
                   0)))
          ((eq? action 'left)
             (if (null? left)
@@ -1186,7 +1190,10 @@
     (log "main: " env)
     (set-terminal-rawness #false)
     (if (and (eq? (ref env 1) 'led) (eq? (ref (ref env 2) 1) 'finished))
-      (halt 0)
+      (begin
+         (log "trampoline: finished")
+         (wait 10) ;; let other threads run if necessary (mainly send debug info before halt)
+         0)
       (begin
         (print "error: " env)
         (mail 'logger (list 'ERROR env))
