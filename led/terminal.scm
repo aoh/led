@@ -133,7 +133,7 @@
                   ((eq? hd 27) ;; decode escape sequence
                     (lets ((op ll (uncons ll #false)))
                       (cond
-                        ((eq? op 91)
+                        ((eq? op 91) ;; [
                           (lets ((op ll (uncons ll #false)))
                             (cond
                               ((eq? op 65) (cons (tuple 'arrow 'up) (loop ll)))
@@ -165,7 +165,9 @@
                                         ((and (eq? a 3) (eq? x #\~))
                                           (cons (tuple 'delete) (loop ll)))
                                         (else
-                                          (cons (tuple 'esc-unknown-unary-op a (list->string (list x))) ll))))
+                                          (cons 
+                                             (tuple 'esc-unknown-unary-op a (list->string (list x))) 
+                                             (loop ll)))))
                                     null))))))
                         ((eq? op 79)
                            (lets ((next ll (uncons ll #false)))
