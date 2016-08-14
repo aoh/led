@@ -158,19 +158,19 @@
                                         (else
                                           (cons (tuple 'esc-unknown-unary-op a (list->string (list x))) ll))))
                                     null))))))
-								((eq? op 79)
-									(lets ((next ll (uncons ll #false)))
-										(cond
-											((eq? next 68)
-												(cons (tuple 'ctrl 'arrow-left) (loop ll)))
-											((eq? next 67)
-												(cons (tuple 'ctrl 'arrow-right) (loop ll)))
-											((eq? next 65)
-												(cons (tuple 'ctrl 'arrow-up) (loop ll)))
-											((eq? next 66)
-												(cons (tuple 'ctrl 'arrow-down) (loop ll)))
-											(else
-												(cons (tuple 'esc) (loop (ilist 79 next ll)))))))
+                        ((eq? op 79)
+                           (lets ((next ll (uncons ll #false)))
+                              (cond
+                                 ((eq? next 68)
+                                    (cons (tuple 'ctrl 'arrow-left) (loop ll)))
+                                 ((eq? next 67)
+                                    (cons (tuple 'ctrl 'arrow-right) (loop ll)))
+                                 ((eq? next 65)
+                                    (cons (tuple 'ctrl 'arrow-up) (loop ll)))
+                                 ((eq? next 66)
+                                    (cons (tuple 'ctrl 'arrow-down) (loop ll)))
+                                 (else
+                                    (cons (tuple 'esc) (loop (ilist 79 next ll)))))))
                         (else
                           (cons (tuple 'esc) (loop (cons op ll)))))))
                   ((eq? hd 127) (cons (tuple 'backspace) (loop ll)))
@@ -186,6 +186,7 @@
                   ((eq? hd 6)  (cons (tuple 'ctrl #\f) (loop ll))) ;; switch to these
                   ((eq? hd 2)  (cons (tuple 'ctrl #\b) (loop ll)))
                   ((eq? hd 18)  (cons (tuple 'ctrl #\r) (loop ll))) ;; ^n
+                  ((eq? hd 12) (cons (tuple 'ctrl #\l) (loop ll)))
                   (else
                     (cons (tuple 'key hd) (loop ll))))))
             ((null? ll) ll)

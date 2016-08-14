@@ -958,6 +958,17 @@
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
+(define (command-update-screen ll buff undo mode r cont)
+   (lets ((u d l r x y old-w old-h off meta buff)
+          (y (+ (cdr off) (- y 1)))
+          (x (+ (car off) (- x 1)))
+          (w h ll (get-terminal-size ll))
+          (buff (buffer u d l r x y w h off meta))
+          (buff (buffer-seek buff x y #false)))
+      (log "updated screen from size " (cons old-w old-h) " to " (cons w h))
+      (output (update-screen buff))
+      (cont ll buff undo mode)))
+
 (define (command-previous-buffer ll buff undo mode r cont)
    (values ll buff undo mode 'left))
 
@@ -969,7 +980,8 @@
       (put #\f command-step-forward)
       (put #\b command-step-backward)
       (put 'arrow-left command-previous-buffer)
-      (put 'arrow-right command-next-buffer)))
+      (put 'arrow-right command-next-buffer)
+      (put #\l command-update-screen)))
 
 ;;;
 ;;; Insert mode actions
@@ -1045,9 +1057,10 @@
                      (led-buffer ll buff undo mode)))
                ((end-of-text) 
                   (led-buffer ll buff (push-undo undo buff) 'command))
-               ((esc)         
-                  (log "switching out of insert mode on esc")
-                  (led-buffer ll buff (push-undo undo buff) 'command))
+               ((esc)
+                  (log "switching out of insert mode on esc + moving cursor")
+                  (output (tio (cursor-left 1)))
+                  (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
                ((ctrl key)
                   (cond
                      ((eq? key 'arrow-left)
@@ -1213,4 +1226,5 @@
   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
+
 
