@@ -217,7 +217,19 @@
     ((u d l r x y w h off meta buff))
     ;(log "left " l ", right " r)
     (log "log: cursor at " (cons x y) " at offset " off ", line pos " (+ (car off) (- x 1)))))
-       
+
+(define (notify buff txt)
+   (lets ((u d l r x y w h off meta buff))
+      (output
+         (tio
+            (cursor-save)
+            (set-cursor 1 (+ h 1))
+            (clear-line)
+            (font-bright)
+            (raw (render txt null))
+            (font-normal)
+            (cursor-restore)))))
+      
 (define (key-node k)
    (cond
       ((eq? k #\tab)
@@ -717,11 +729,11 @@
 ;;;
 
 (define (command-regex-search ll buff undo mode r cont)
-   (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\/)))
+   (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\/)))
    (lets ((search-history 
             (get (buffer-meta buff) 'search-history null))
          (ll res (readline ll search-history
-                     2 (screen-height buff) (screen-width buff)))
+                     2 (+ 1 (screen-height buff)) (screen-width buff)))
          (buff 
             (if (equal? res "") buff
                (put-buffer-meta buff 'search-history 
@@ -902,13 +914,13 @@
                (cont ll buff undo mode))))))
 
 (define (command-enter-command ll buff undo mode r cont)
-   (output (tio* (set-cursor 1 (screen-height buff)) (clear-line) (list #\:)))
+   (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))
    (lets
      ((metadata (buffer-meta buff))
       (ll res 
        (readline ll 
          (get (buffer-meta buff) 'command-history null) 
-         2 (screen-height buff) (screen-width buff)))
+         2 (+ 1 (screen-height buff) 1) (screen-width buff)))
       (buff
          (set-buffer-meta buff
            (put metadata 'command-history
@@ -916,7 +928,7 @@
       (log (str "readline returned '" res "'"))
       (output
          (tio 
-            (set-cursor 1 (screen-height buff)) 
+            (set-cursor 1 (+ 1 (screen-height buff))) 
             (clear-line)
             (set-cursor (buffer-x buff) (buffer-y buff))
             ))
@@ -925,9 +937,7 @@
          (log "exiting via command-enter-command")
          (values ll buff undo mode 'close))
        ((equal? res "n")
-         (values ll buff undo mode 'right))
-       ((equal? res "p")
-         (values ll buff undo mode 'left))
+         (values ll buff undo mode 'new))
        ((equal? res "vi")
          (cont ll buff undo 'insert))
        ((m/^w / res)
@@ -937,7 +947,7 @@
                (output
                   (tio
                      (cursor-save)
-                     (set-cursor 1 (screen-height buff))
+                     (set-cursor 1 (+ 1 (screen-height buff)))
                      (raw write-tio)
                      (cursor-restore)))
                (cont ll 
@@ -950,7 +960,7 @@
                   (output
                      (tio
                         (cursor-save)
-                        (set-cursor 1 (screen-height buff))
+                        (set-cursor 1 (+ 1 (screen-height buff)))
                         (raw write-tio)
                         (cursor-restore)))
                   (cont ll buff undo mode))
@@ -1002,6 +1012,48 @@
 (define (command-no-op ll buff undo mode r cont)
    (cont ll buff undo mode))
 
+(define (command-step-forward ll buff undo mode r cont)
+   (lets ((u d l r x y w h off meta buff)
+          (y (+ (cdr off) (- y 1)))
+          (buff (buffer-seek buff (- x 1) (+ y (max 1 (- h 3))) 1)))
+      (log "buffer seeking to " (cons x (+ y (max 1 (- h 3)))) " with y at " y)
+      (output (update-screen buff))
+      (cont ll buff undo mode)))
+
+(define (command-step-backward ll buff undo mode r cont)
+   (lets ((u d l r x y w h off meta buff)
+          (y (+ (cdr off) (- y 1)))
+          (buff (buffer-seek buff (- x 1) (- y (min (- h 3) y)) 1)))
+      (output (update-screen buff))
+      (cont ll buff undo mode)))
+
+(define (command-update-screen ll buff undo mode r cont)
+   (lets ((u d l r x y old-w old-h off meta buff)
+          (y (+ (cdr off) (- y 1)))
+          (x (+ (car off) (- x 1)))
+          (w h ll (get-terminal-size ll))
+          (buff (buffer u d l r x y w (max 1 (- h 1)) off meta))
+          (buff (buffer-seek buff x y #false)))
+      (log "updated screen from size " (cons old-w old-h) " to " (cons w h))
+      (output (update-screen buff))
+      (cont ll buff undo mode)))
+
+(define (command-previous-buffer ll buff undo mode r cont)
+   (values ll buff undo mode 'left))
+
+(define (command-next-buffer ll buff undo mode r cont)
+   (values ll buff undo mode 'right))
+
+;;; Command mode key mapping
+
+(define *command-mode-control-actions*
+   (-> #empty
+      (put #\f command-step-forward)
+      (put #\b command-step-backward)
+      (put 'arrow-left command-previous-buffer)
+      (put 'arrow-right command-next-buffer)
+      (put #\l command-update-screen)))
+
 ;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
 (define *command-mode-actions*
    (-> #empty
@@ -1027,47 +1079,10 @@
       (put #\J command-join-lines)
       (put #\> command-indent)
       (put #\< command-unindent)
+      (put #\Q command-previous-buffer)
+      (put #\W command-next-buffer)
       (put #\% command-seek-matching-paren)))
 
-(define (command-step-forward ll buff undo mode r cont)
-   (lets ((u d l r x y w h off meta buff)
-          (y (+ (cdr off) (- y 1)))
-          (buff (buffer-seek buff (- x 1) (+ y (max 1 (- h 3))) 1)))
-      (log "buffer seeking to " (cons x (+ y (max 1 (- h 3)))) " with y at " y)
-      (output (update-screen buff))
-      (cont ll buff undo mode)))
-
-(define (command-step-backward ll buff undo mode r cont)
-   (lets ((u d l r x y w h off meta buff)
-          (y (+ (cdr off) (- y 1)))
-          (buff (buffer-seek buff (- x 1) (- y (min (- h 3) y)) 1)))
-      (output (update-screen buff))
-      (cont ll buff undo mode)))
-
-(define (command-update-screen ll buff undo mode r cont)
-   (lets ((u d l r x y old-w old-h off meta buff)
-          (y (+ (cdr off) (- y 1)))
-          (x (+ (car off) (- x 1)))
-          (w h ll (get-terminal-size ll))
-          (buff (buffer u d l r x y w h off meta))
-          (buff (buffer-seek buff x y #false)))
-      (log "updated screen from size " (cons old-w old-h) " to " (cons w h))
-      (output (update-screen buff))
-      (cont ll buff undo mode)))
-
-(define (command-previous-buffer ll buff undo mode r cont)
-   (values ll buff undo mode 'left))
-
-(define (command-next-buffer ll buff undo mode r cont)
-   (values ll buff undo mode 'right))
-
-(define *command-mode-control-actions*
-   (-> #empty
-      (put #\f command-step-forward)
-      (put #\b command-step-backward)
-      (put 'arrow-left command-previous-buffer)
-      (put 'arrow-right command-next-buffer)
-      (put #\l command-update-screen)))
 
 ;;;
 ;;; Insert mode actions
@@ -1188,9 +1203,16 @@
            (raw (render "esc + :q quits" null))
            (set-cursor 1 1)))))
 
+(define (make-new-state ll)
+   (lets ((w h ll (get-terminal-size ll))
+          (buff (make-empty-state w (- h 1) #empty)))
+      (values ll
+         (tuple buff (initial-undo buff) 'command))))
+
 (define (led-buffers ll left state right)
    (lets ((buff undo mode state)
           (_ (output (update-screen buff)))
+          (_ (notify buff (str (get-buffer-meta buff 'path "*scratch*"))))
           (ll buff undo mode action
             (led-buffer ll buff undo mode))
           (state (tuple buff undo mode)))
@@ -1219,13 +1241,18 @@
                (led-buffers ll left state right)
                (led-buffers ll (cons state left)
                   (car right) (cdr right))))
+         ((eq? action 'new)
+            (log "making new buffer")
+            (lets ((ll new-state (make-new-state ll)))
+               (led-buffers ll (cons state left) new-state right)))
          (else
             (log "unknown buffer action " action)
             (led-buffers ll left state right)))))
-               
+              
 (define (start-led dict args ll)
   (log "start-led " dict ", " args)
-  (lets ((w h ll (get-terminal-size ll)))
+  (lets ((w h ll (get-terminal-size ll))
+         (h (max (- h 1) 1)))
     (log "dimensions " (cons w h))
     (lets 
       ((state 
