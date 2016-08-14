@@ -799,6 +799,70 @@
       (output (update-screen buff))
       (cont ll buff undo 'insert)))
 
+(define (map-n op n lst)
+   (cond
+      ((null? lst) lst)
+      ((eq? n 0) lst)
+      (else
+         (cons (op (car lst))
+            (map-n op (- n 1) (cdr lst))))))
+
+;; todo: put to meta later (based on shiftwidth)
+(define shift-lst (list #\space #\space #\space))
+
+(define (keys ll key n)
+   (if (= n 0)
+      ll
+      (cons (tuple 'key key)
+         (keys ll key (- n 1)))))
+
+(define (command-indent ll buff undo mode n cont)
+   (lets ((range ll (uncons ll #false)))
+      (if (equal? range (tuple 'key #\>)) ;; only line-based indenting for now
+         (lets
+            ((undo (push-undo undo buff))
+             (u d l r x y w h off meta buff)
+             (l (append l shift-lst))
+             (n (if (number? n) n 1))
+             (d 
+               (map-n    
+                  (lambda (x) (append shift-lst x))
+                  (- n 1) d))
+             (buff (buffer u d l r x y w h off meta)))
+            (output (update-screen buff))
+            (cont (keys ll #\l 3) buff undo mode)) ;; move with shift
+         (begin
+            (log "No such shift range: " range)
+            (cont ll buff undo mode)))))
+
+;; drop prefix of lst, if there
+(define (drop-prefix lst prefix)
+   (cond
+      ((null? prefix) lst)
+      ((null? lst) #false)
+      ((eq? (car lst) (car prefix))
+         (drop-prefix (cdr lst) (cdr prefix)))
+      (else #false)))
+
+(define (unindent lst)
+   (or (drop-prefix lst shift-lst) lst))
+
+(define (command-unindent ll buff undo mode n cont)
+   (lets ((range ll (uncons ll #false)))
+      (if (equal? range (tuple 'key #\<)) ;; only line-based indenting for now
+         (lets
+            ((undo (push-undo undo buff))
+             (u d l r x y w h off meta buff)
+             (l (reverse (unindent (reverse l))))
+             (n (if (number? n) n 1))
+             (d (map-n unindent (- n 1) d))
+             (buff (buffer u d l r x y w h off meta)))
+            (output (update-screen buff))
+            (cont (keys ll #\h 3) buff undo mode)) ;; move with shift
+         (begin
+            (log "No such shift range: " range)
+            (cont ll buff undo mode)))))
+
 (define (command-delete-char ll buff undo mode r cont)
    (lets
       ((undo (push-undo undo buff))
@@ -961,6 +1025,8 @@
       (put #\a command-insert-after)
       (put #\d command-delete)
       (put #\J command-join-lines)
+      (put #\> command-indent)
+      (put #\< command-unindent)
       (put #\% command-seek-matching-paren)))
 
 (define (command-step-forward ll buff undo mode r cont)
