@@ -807,6 +807,20 @@
       (output (update-screen buff)) ;; todo: can refresh just current line
       (cont ll buff undo mode)))
 
+(define (command-join-lines ll buff undo mode n cont)
+   (lets
+      ((undo (push-undo undo buff))
+       (n (if (number? n) n 1)) ;; fixme: no interval handling
+       (u d l r x y w h off meta buff))
+      (let loop ((r r) (d d) (n n))
+         (cond
+            ((or (null? d) (eq? n 0))
+               (let ((buff (buffer u d l r x y w h off meta)))
+                  (output (update-screen buff))
+                  (cont ll buff undo mode)))
+            (else
+               (loop (append r (car d)) (cdr d) (- n 1)))))))
+
 (define (command-go-to-mark ll buff undo mode r cont)
    (log "marks is " (get-buffer-meta buff 'marks #empty))
    (lets ((msg ll (uncons ll #false)))
@@ -946,6 +960,7 @@
       (put #\i command-insert-before)
       (put #\a command-insert-after)
       (put #\d command-delete)
+      (put #\J command-join-lines)
       (put #\% command-seek-matching-paren)))
 
 (define (command-step-forward ll buff undo mode r cont)
