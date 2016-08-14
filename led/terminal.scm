@@ -113,10 +113,19 @@
             (values x ll)
             (values #false (cons x ll)))))
   
+      (define (logger ll)
+         (cond
+            ((null? ll) ll)
+            ((pair? ll)
+               (mail 'logger (tuple 'raw-in (car ll)))
+               (cons (car ll) (logger (cdr ll))))
+            (else
+               (lambda () (logger (ll))))))
+
       ;; convert this to a proper stream parser later
       (define (terminal-input . opt)
        (let ((port (if (null? opt) stdin (car opt)))) 
-        (let loop ((ll (utf8-decoder (port->byte-stream port) (λ (loop line ll) (print-to stderr "Bad UTF-8 in terminal input") null))))
+        (let loop ((ll (utf8-decoder (logger (port->byte-stream port)) (λ (loop line ll) (print-to stderr "Bad UTF-8 in terminal input") null))))
           (cond
             ((pair? ll)
               (lets ((hd ll ll))
