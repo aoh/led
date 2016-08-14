@@ -898,6 +898,9 @@
 (define (command-insert-before ll buff undo mode r cont)
    (cont ll buff undo 'insert))
 
+(define (command-insert-after ll buff undo mode r cont)
+   (cont (cons (tuple 'arrow 'right) ll) buff undo 'insert))
+
 (define (command-delete ll buff undo mode r cont)
    (log "would delete " r " of something")
    (lets
@@ -941,6 +944,7 @@
       (put #\r command-redo)
       (put #\u command-undo)
       (put #\i command-insert-before)
+      (put #\a command-insert-after)
       (put #\d command-delete)
       (put #\% command-seek-matching-paren)))
 
@@ -1060,7 +1064,6 @@
                   (led-buffer ll buff (push-undo undo buff) 'command))
                ((esc)
                   (log "switching out of insert mode on esc + moving cursor")
-                  (output (tio (cursor-left 1)))
                   (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
                ((ctrl key)
                   (cond
