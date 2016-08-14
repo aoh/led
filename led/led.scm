@@ -347,6 +347,8 @@
       (cond
          ((null? lines)
             (values u null lines (- end pos)))
+         ((null? (cdr lines))
+            (values u (car lines) (cdr lines) (- end pos)))
          ((eq? pos 0)
             (values u (car lines) (cdr lines) end))
          (else
@@ -919,7 +921,6 @@
 (define (command-no-op ll buff undo mode r cont)
    (cont ll buff undo mode))
 
-;; todo: add count/range parameter
 ;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
 (define *command-mode-actions*
    (-> #empty
@@ -1226,5 +1227,10 @@
   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
+
+
+
+
+
 
 
