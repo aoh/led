@@ -1,0 +1,1 @@
+[10;10R[10;10Ri(define (map f l)(if (null? l)null(cons (f (car l))(map f (cdr l))))); foo:w ai-1.io.out:q

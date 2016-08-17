@@ -1,14 +1,19 @@
 # git clone https://github.com/aoh/blab.git && cd blab && make && sudo make install
 
 # just make  file
-blab -l . -e 'led.prelude ":w hello.io.out" led.enter ":q" led.enter' > hello.io
+blab -l . -e 'led.prelude ":w hello.io.out\r:q\r"' > hello.io
 
 # write foo to a file
-blab -l . -e 'led.prelude "i" "foo" led.esc ":w foo.io.out" led.enter ":q" led.enter' > foo.io
+blab -l . -e 'led.prelude "i" "foo" led.esc ":w foo.io.out\r:q\r"' > foo.io
 
 # line-based copy and paste
-blab -l . -e 'led.prelude "i" "foo" led.enter "bar" led.esc ":1" led.enter "ddpp" led.esc ":w copy-1.io.out" led.enter ":q" led.enter' > copy-1.io
+blab -l . -e 'led.prelude "i" "foo\rbar" led.esc ":1\rddpp" led.esc ":w copy-1.io.out\r:q\r"' > copy-1.io
 
 # marks
-blab -l . -e 'led.prelude "mai" "foo" led.enter "bar" led.esc 39 "aiX" led.esc ":w mark-1.io.out" led.enter ":q" led.enter' > mark-1.io
+blab -l . -e 'led.prelude "mai" "foo\rbar" led.esc 39 "aiX" led.esc ":w mark-1.io.out\r:q\r"' > mark-1.io
 
+# regexp search
+blab -l . -e 'led.prelude "i foo foo " led.esc "ddppp:1\rdd:2\r/foo\rnnnnniX" led.esc ":w search-1.io.out\r:q\r"' > search-1.io
+
+# ai test
+blab -l . -e 'led.prelude "i(define (map f l)\r(if (null? l)\rnull\r(cons (f (car l))\r(map f (cdr l)))))\r; foo" led.esc ":w ai-1.io.out\r:q\r"' > ai-1.io

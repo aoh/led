@@ -1,7 +1,10 @@
 #!/usr/bin/ol --run
 
-;; todo: fix line generation on seek past buffer end
-;; todo: allow count/range to be entered in command mode
+;; bug: go to line start does not refresh screen if scroll is needed
+;; toadd: r = replace single char(s)
+;; toadd: C = replace rest of line (draw |------------| in bold over it?) 
+;; feature: add terminal scroll-by-n command and use it for scrolling
+;; feature: add abbreviations
 
 (import
   (led terminal)
@@ -21,7 +24,7 @@
 (define (buffer up down left right x y w h off meta)
    (tuple up down left right x y w h off meta))
 
-(define (make-empty-state w h meta)
+(define (make-empty-buffer w h meta)
    (buffer null null null null 1 1 w h (cons 0 0) meta))
 
 (define (buffer-meta buff) (ref buff 10))
@@ -52,6 +55,20 @@
    (list #\space #\▹ #\space)
    ))
 
+(define (whitespace? node)
+   (cond
+      ((eq? node #\space) #true)
+      ((eq? node 13) #true)
+      ((eq? node tab-node) #true)
+      (else #false)))
+
+(define (drop-leading-whitespace lst)
+   (cond
+      ((null? lst) lst)
+      ((whitespace? (car lst))
+         (drop-leading-whitespace (cdr lst)))
+      (else lst)))
+      
 (define (untab meta)
    (let ((tab (get meta 'tab tab-node)))
       (λ (line)
@@ -65,11 +82,24 @@
             line))))
 
 (define (make-file-state w h path meta)
-  (let ((data (map (untab meta) (map string->list (force-ll (lines (open-input-file path)))))))
-    (if (pair? data)
-      (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) 
-        (put meta 'path path))
-      (error "could not open " path))))
+   (log "making file state out out of " path)
+   (cond
+      ((open-input-file path) =>
+         (lambda (fd)
+            (log "opened fd " fd)
+            (let ((data (map (untab meta) (map string->list (force-ll (lines fd))))))
+               (if (pair? data)
+                  (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) (put meta 'path path))
+                  (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path))))))
+      ((open-output-file path) =>
+         (lambda (fd)
+            (log "opened new fd " fd)
+            (close-port fd) ;; now input succeeds
+            (log "created " path)
+            (make-file-state w h path meta)))
+      (else
+         (log "Could not open " path)
+         #false)))
 
 (define (screen-width buff) (ref buff 7))
 
@@ -212,11 +242,24 @@
     (values buff
       (update-screen buff))))
 
-(define (log-buff buff)
+(define (log-buff buff mode)
   (lets
-    ((u d l r x y w h off meta buff))
+    ((u d l r x y w h off meta buff)
+     (dx dy off)
+     (x (+ dx x))
+     (y (+ dy y))
+     (status (str "       " x "," y " " (if (eq? mode 'insert) "i" "c")))
+     (poss (render status null)))
     ;(log "left " l ", right " r)
-    (log "log: cursor at " (cons x y) " at offset " off ", line pos " (+ (car off) (- x 1)))))
+    ;(log "log: cursor at " (cons x y) " at offset " off ", line pos " (+ (car off) (- x 1)))
+    (output
+      (tio
+         (cursor-save)
+         (set-cursor (max 1 (- w (+ 1 (length poss)))) (+ h 1))
+         (font-dim)
+         (raw poss)
+         (font-normal)
+         (cursor-restore)))))
 
 (define (notify buff txt)
    (lets ((u d l r x y w h off meta buff))
@@ -225,7 +268,7 @@
             (cursor-save)
             (set-cursor 1 (+ h 1))
             (clear-line)
-            (font-bright)
+            (font-dim)
             (raw (render txt null))
             (font-normal)
             (cursor-restore)))))
@@ -387,16 +430,18 @@
    (lets ((u d l r x y w h off meta buff)
           (step (>> w 1))
           (dx dy off))
-      (let loop ((l l) (r r) (x x) (dx dx) (moved? #false))
-         (cond
-            ((null? r)
-               (let ((buff (buffer u d l r x y w h (cons dx dy) meta)))
-                  (values buff
-                     (if moved? (update-screen buff) (tio (set-cursor x y))))))
-            ((eq? x w)
-               (loop l r (- x step) (+ dx step) #true))
-            (else
-               (loop (cons (car r) l) (cdr r) (+ x (node-width (car r))) dx moved?))))))
+      (if (null? r)
+         (values buff null)
+         (let loop ((l l) (r r) (x x) (dx dx) (moved? #false))
+            (cond
+               ((null? (cdr r))
+                  (let ((buff (buffer u d l r x y w h (cons dx dy) meta)))
+                     (values buff
+                        (if moved? (update-screen buff) (tio (set-cursor x y))))))
+               ((eq? x w)
+                  (loop l r (- x step) (+ dx step) #true))
+               (else
+                  (loop (cons (car r) l) (cdr r) (+ x (node-width (car r))) dx moved?)))))))
 
 (define (left-paren? x)
    (or (eq? x 40)
@@ -529,8 +574,14 @@
           (mx my 
             (search-from rt d regex (+ x dx) (+ (- y 1) dy))))
          (if mx
-            (buffer-seek buff mx my #false)
-            buff)))
+            (values (buffer-seek buff mx my #false) #false)
+            (lets
+               ((this (append (reverse l) r))
+                (up (reverse (cons this u)))
+                (mx my (search-from (car up) (cdr up) regex 0 0)))
+               (if mx
+                  (values (buffer-seek buff mx my #false) "search wrapped")
+                  (values buff "no matches"))))))
 
 (define (move-arrow buff dir)
    (lets ((u d l r x y w h off meta buff))
@@ -608,6 +659,18 @@
                        ((buff scroll-tio (scroll-right buff))
                         (buff move-tio (move-arrow buff dir)))
                        (values buff (append scroll-tio move-tio)))))))
+         ((eq? dir 'command-right) ;; command mode
+            (if (or (null? r) (null? (cdr r)))
+               (values buff null)
+               (let ((step (node-width (car r))))
+                  (if (< (+ x step) w)
+                     (values 
+                        (buffer u d (cons (car r) l) (cdr r) (+ x step) y w h off meta)
+                        (tio (cursor-right step)))
+                     (lets
+                       ((buff scroll-tio (scroll-right buff))
+                        (buff move-tio (move-arrow buff dir)))
+                       (values buff (append scroll-tio move-tio)))))))
          (else
             (log "odd line move: " dir)
             (values buff null)))))
@@ -653,10 +716,21 @@
 
 (define (delete-line buff)
    (lets ((u d l r x y w h off meta buff)
-          (next d (uncons d null)))
-      (values
-         (buffer u d null next 1 y w h off meta)
-         (append (reverse l) r))))
+          (next d (uncons d #false)))
+      (cond
+         (next
+            (values
+               (buffer u d null next 1 y w h off meta)
+               (append (reverse l) r)))
+         ((null? u)
+            (values 
+               (buffer u d null null 1 y w h off meta)
+               (append (reverse l) r)))
+         (else
+            (values
+               (buffer (cdr u) d null (car u) 1 
+                  (min y (length u)) w h off meta)
+               (append (reverse l) r))))))
 
 (define (paste-yank buff)
    (lets ((u d l r x y w h off meta buff)
@@ -665,7 +739,7 @@
          ((not data)
             buff)
          ((eq? 'lines (ref data 1))
-            (log "appending " (ref data 2))
+            (log "appending lines from buffer")
             (lets ((buff (buffer u (append (ref data 2) d) l r x y w h off meta))
                    (buff tio (move-arrow buff 'down)))
                buff))
@@ -684,16 +758,22 @@
          (put marks char (cons mark-x mark-y)))))
 
 (define (write-buffer buff path)
-   (lets
-      ((port (open-output-file path))
-       (lst (buffer->bytes buff))
-       (n (length lst))
-       (res (byte-stream->port lst port)))
-      (if res
-         (foldr render null 
-            (list "Wrote " n " bytes to '" path "'"))
+   (log "writing to " path)
+   (if path
+      (lets
+         ((port (open-output-file path))
+          (lst (buffer->bytes buff))
+          (n (length lst))
+          (res (byte-stream->port lst port)))
+         (if res
+            (foldr render null 
+               (list "Wrote " n " bytes to '" path "'"))
+            (foldr render null
+               (list "Failed to write to '" path "'"))))
+      (begin
+         (log "no path")
          (foldr render null
-            (list "Failed to write to '" path "'")))))
+            (list "Give me a name for this")))))
 
 (define (maybe-seek-matching-paren buff)
    (lets 
@@ -744,14 +824,17 @@
             (if (equal? res "")
                buff
                (-> buff (put-buffer-meta 'search-regex regex))))
-         (buff 
+         (buff msg
             (find-next buff)))
       (output (update-screen buff))
+      (if msg (notify buff msg))
       (cont ll buff undo mode)))
 
 (define (command-find-next ll buff undo mode r cont)
-   (lets ((buff (find-next buff)))
+   (lets ((buff msg (find-next buff)))
       (output (update-screen buff))
+      (if msg
+         (notify buff msg))
       (cont ll buff undo mode)))
 
 (define (command-mark-position ll buff undo mode r cont)
@@ -782,7 +865,7 @@
       (cont ll buff undo mode)))
 
 (define (command-move-right ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'right))) 
+   (lets ((buff out (move-arrow buff 'command-right))) 
       (output out) 
       (cont ll buff undo mode)))
 
@@ -828,6 +911,18 @@
       (cons (tuple 'key key)
          (keys ll key (- n 1)))))
 
+(define (line-left l r n)
+   (cond
+      ((eq? l null) (values l r))
+      ((eq? n 0) (values l r))
+      (else (line-left (cdr l) (cons (car l) r) (- n 1)))))
+
+(define (line-right l r n)
+   (cond
+      ((eq? r null) (values l r))
+      ((eq? n 0) (values l r))
+      (else (line-right (cons (car r) l) (cdr r) (- n 1)))))
+
 (define (command-indent ll buff undo mode n cont)
    (lets ((range ll (uncons ll #false)))
       (if (equal? range (tuple 'key #\>)) ;; only line-based indenting for now
@@ -835,6 +930,7 @@
             ((undo (push-undo undo buff))
              (u d l r x y w h off meta buff)
              (l (append l shift-lst))
+             (l r (line-left l r 3))
              (n (if (number? n) n 1))
              (d 
                (map-n    
@@ -865,12 +961,16 @@
          (lets
             ((undo (push-undo undo buff))
              (u d l r x y w h off meta buff)
-             (l (reverse (unindent (reverse l))))
-             (n (if (number? n) n 1))
-             (d (map-n unindent (- n 1) d))
-             (buff (buffer u d l r x y w h off meta)))
-            (output (update-screen buff))
-            (cont (keys ll #\h 3) buff undo mode)) ;; move with shift
+             (rlp (drop-prefix (reverse l) shift-lst)))
+            (if rlp
+               (lets ((l (reverse rlp))
+                      (l r (line-right l r 3))
+                      (n (if (number? n) n 1))
+                      (d (map-n unindent (- n 1) d))
+                      (buff (buffer u d l r x y w h off meta)))
+                  (output (update-screen buff))
+                  (cont (keys ll #\h 3) buff undo mode))
+               (cont ll buff undo mode)))
          (begin
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
@@ -878,10 +978,16 @@
 (define (command-delete-char ll buff undo mode r cont)
    (lets
       ((undo (push-undo undo buff))
-       (u d l r x y w h off meta buff)
-       (buff (buffer u d l (if (null? r) r (cdr r)) x y w h off meta)))
-      (output (update-screen buff)) ;; todo: can refresh just current line
-      (cont ll buff undo mode)))
+       (u d l r x y w h off meta buff))
+      (if (null? r)
+         (if (null? l)
+            (cont ll buff undo mode)
+            (lets ((buff out (insert-backspace buff)))
+               (output out)
+               (cont ll buff undo mode)))
+         (lets ((buff (buffer u d l (cdr r) x y w h off meta)))
+            (output (update-screen buff)) ;; todo: can refresh just current line
+            (cont ll buff undo mode)))))
 
 (define (command-join-lines ll buff undo mode n cont)
    (lets
@@ -894,8 +1000,11 @@
                (let ((buff (buffer u d l r x y w h off meta)))
                   (output (update-screen buff))
                   (cont ll buff undo mode)))
-            (else
-               (loop (append r (car d)) (cdr d) (- n 1)))))))
+            (else   
+               (lets
+                  ((tail (drop-leading-whitespace (car d)))
+                   (tail (if (whitespace? (last r #\a)) tail (cons #\space tail))))
+                  (loop (append r tail) (cdr d) (- n 1))))))))
 
 (define (command-go-to-mark ll buff undo mode r cont)
    (log "marks is " (get-buffer-meta buff 'marks #empty))
@@ -912,6 +1021,14 @@
                   (output (update-screen buff))
                   (cont ll buff undo mode))
                (cont ll buff undo mode))))))
+
+(define (command-go-to-last-line ll buff undo mode r cont)
+   (lets 
+      ((u d l r x y w h off meta buff)
+       (last (+ 1 (+ (length u) (length d))))
+       (buff (buffer-seek buff 0 last #false)))
+      (output (update-screen buff))
+      (cont ll buff undo mode)))
 
 (define (command-enter-command ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))
@@ -933,22 +1050,29 @@
             (set-cursor (buffer-x buff) (buffer-y buff))
             ))
       (cond
+         ((equal? res "")
+            (notify buff "canceled")
+            (cont ll buff undo mode))
        ((equal? res "q")
          (log "exiting via command-enter-command")
          (values ll buff undo mode 'close))
        ((equal? res "n")
          (values ll buff undo mode 'new))
+       ((m/^n [^ ]+$/ res)
+         (values ll buff undo mode (tuple 'open (s/n +// res))))
        ((equal? res "vi")
          (cont ll buff undo 'insert))
        ((m/^w / res)
          (let ((path (s/^w +// res)))
             (log "saving buffer to " path)
-            (lets ((write-tio (write-buffer buff path)))
+            (lets ((write-msg (write-buffer buff path)))
                (output
                   (tio
                      (cursor-save)
+                     (font-dim)
                      (set-cursor 1 (+ 1 (screen-height buff)))
-                     (raw write-tio)
+                     (raw write-msg)
+                     (font-normal)
                      (cursor-restore)))
                (cont ll 
                   (put-buffer-meta buff 'path path)
@@ -970,18 +1094,24 @@
                 (buff (buffer-seek buff 0 line #false)))
             (output (update-screen buff))
             (cont ll buff undo mode)))
+       ((equal? res "$")
+         (command-go-to-last-line ll buff undo mode r cont))
        (else
          (cont ll buff undo mode)))))
 
 (define (command-redo ll buff undo mode r cont)
-  (lets ((undo buff (unpop-undo undo buff)))
-    (output (update-screen buff))
-    (cont ll buff undo mode)))
+  (lets ((undo buffp (unpop-undo undo buff)))
+    (if (eq? buff buffp)
+       (notify buffp "nothing left to redo")
+       (output (update-screen buffp)))
+    (cont ll buffp undo mode)))
 
 (define (command-undo ll buff undo mode r cont)
-   (lets ((undo buff (pop-undo undo buff)))
-      (output (update-screen buff))
-      (cont ll buff undo mode)))
+   (lets ((undo buffp (pop-undo undo buff)))
+      (if (eq? buff buffp)
+         (notify buff "nothing left to undo")
+         (output (update-screen buffp)))
+      (cont ll buffp undo mode)))
 
 (define (command-insert-before ll buff undo mode r cont)
    (cont ll buff undo 'insert))
@@ -1011,6 +1141,21 @@
 
 (define (command-no-op ll buff undo mode r cont)
    (cont ll buff undo mode))
+
+(define (command-change-rest-of-line ll buff undo mode r cont)
+   (lets ((u d l r x y w h off meta buff)
+          (undo (push-undo undo buff))
+          (buff (buffer u d l null x y w h off meta)))
+         (output
+            (tio 
+               (cursor-save)
+               (font-dim)
+               (raw   
+                  (repeat #\-
+                     (min (+ 1 (- w x)) (printable-length r))))
+               (font-normal)
+               (cursor-restore)))
+         (cont ll buff undo 'insert)))
 
 (define (command-step-forward ll buff undo mode r cont)
    (lets ((u d l r x y w h off meta buff)
@@ -1050,6 +1195,7 @@
    (-> #empty
       (put #\f command-step-forward)
       (put #\b command-step-backward)
+      (put #\r command-redo)
       (put 'arrow-left command-previous-buffer)
       (put 'arrow-right command-next-buffer)
       (put #\l command-update-screen)))
@@ -1071,7 +1217,6 @@
       (put #\' command-go-to-mark)
       (put #\x command-delete-char)
       (put #\: command-enter-command)
-      (put #\r command-redo)
       (put #\u command-undo)
       (put #\i command-insert-before)
       (put #\a command-insert-after)
@@ -1081,6 +1226,7 @@
       (put #\< command-unindent)
       (put #\Q command-previous-buffer)
       (put #\W command-next-buffer)
+      (put #\C command-change-rest-of-line)
       (put #\% command-seek-matching-paren)))
 
 
@@ -1088,6 +1234,62 @@
 ;;; Insert mode actions
 ;;;
 
+(define (open-paren? x)  (has? '(#\[ #\{ #\() x))
+(define (close-paren? x) (has? '(#\) #\} #\]) x))
+
+(define (paren-balance lst)
+   (fold + 0
+      (map 
+         (lambda (x) (if (open-paren? x) 1 (if (close-paren? x) -1 0)))
+         lst)))
+
+(define (unclosed-parens? lst)
+   (> (paren-balance lst) 0))
+
+(define (leading-whitespaces lst)
+   (cond
+      ((null? lst) null)
+      ((whitespace? (car lst))
+         (cons (car lst) (leading-whitespaces (cdr lst))))
+      (else null)))
+
+(define (drop-spaces lst n)
+   (cond
+      ((null? lst) lst)
+      ((eq? n 0) lst)
+      ((eq? (car lst) #\space)
+         (drop-spaces (cdr lst) (- n 1)))
+      (else lst))) ;; not touching other indents for now
+
+;; up -> l
+(define (artificial-intelligence u)
+   (if (null? u)
+      null
+      (lets
+         ((bal (paren-balance (car u)))
+          (lead (leading-whitespaces (car u))))
+         (log "lead is " lead ", paren balance " bal)
+         (cond
+            ((eq? bal 0)
+               lead)
+            ((> bal 0)
+               (ilist #\space #\space #\space lead))
+            (else
+               (drop-spaces lead (* bal -3)))))))
+
+;; ai hardcoded for now
+(define (insert-enter buff)
+   (lets 
+      ((u d l r x y w h off meta buff)
+       (ind (artificial-intelligence (cons (reverse l) u)))
+       (buff 
+         (buffer u (cons (append ind r) d) l null x y w h  off meta))
+       (draw-tio 
+         (update-screen buff))
+       (buff move-tio (move-arrow buff 'down)))
+      (values
+         buff
+         (append draw-tio move-tio))))
 
 ;;;
 ;;; Buffer handling loop
@@ -1121,7 +1323,7 @@
 
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
-   (log-buff buff)
+   (log-buff buff mode)
    (if (eq? mode 'insert)
       (lets 
          ((msg ll (uncons ll #false))
@@ -1135,18 +1337,8 @@
                         (output out)
                         (led-buffer ll buff undo mode))))
                ((enter)
-                  (lets 
-                     ((u d l r x y w h off meta buff)
-                      (buff 
-                        (buffer u (cons r d) null (reverse l) 1 
-                           y w h (cons 0 (cdr off)) meta))
-                      (draw-tio 
-                        (if (eq? (car off) 1) 
-                           (tio (clear-line-right)) 
-                           (update-screen buff)))
-                      (buff move-tio (move-arrow buff 'down)))
-                     (output
-                        (append draw-tio move-tio))
+                  (lets ((buff out (insert-enter buff)))
+                     (output out)
                      (led-buffer ll buff undo mode)))
                ((backspace)
                   (lets ((buff out (insert-backspace buff)))
@@ -1157,10 +1349,18 @@
                      (output out)
                      (led-buffer ll buff undo mode)))
                ((end-of-text) 
-                  (led-buffer ll buff (push-undo undo buff) 'command))
+                  (output (update-screen buff))
+                  (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
                ((esc)
                   (log "switching out of insert mode on esc + moving cursor")
+                  (output (update-screen buff))
                   (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
+               ((end-of-transmission)
+                  ;; ^D = 3 backspace (remove indent)
+                  ;; fixme: switch to unindent
+                  (led-buffer 
+                     (ilist (tuple 'backspace) (tuple 'backspace) (tuple 'backspace) ll)
+                     buff undo mode))
                ((ctrl key)
                   (cond
                      ((eq? key 'arrow-left)
@@ -1205,14 +1405,22 @@
 
 (define (make-new-state ll)
    (lets ((w h ll (get-terminal-size ll))
-          (buff (make-empty-state w (- h 1) #empty)))
+          (buff (make-empty-buffer w (- h 1) #empty)))
       (values ll
          (tuple buff (initial-undo buff) 'command))))
 
+(define (path->buffer-state ll path)
+   (lets ((w h ll (get-terminal-size ll))
+          (buff (make-file-state w h path #empty)))
+      (values ll
+         (if buff
+            (tuple buff (initial-undo buff) 'command)
+            #false))))
+                     
 (define (led-buffers ll left state right)
    (lets ((buff undo mode state)
           (_ (output (update-screen buff)))
-          (_ (notify buff (str (get-buffer-meta buff 'path "*scratch*"))))
+          (_ (notify buff (or (get-buffer-meta buff 'path #false) "*scratch*")))
           (ll buff undo mode action
             (led-buffer ll buff undo mode))
           (state (tuple buff undo mode)))
@@ -1245,28 +1453,55 @@
             (log "making new buffer")
             (lets ((ll new-state (make-new-state ll)))
                (led-buffers ll (cons state left) new-state right)))
+         ((tuple? action)
+            (tuple-case action
+               ((open path)
+                  (lets ((ll new (path->buffer-state ll path)))
+                     (if new
+                        (led-buffers ll (cons state left) new right)
+                        (begin
+                           (log "failed to open " path)
+                           (led-buffers ll left state right)))))
+               (else is unknown
+                  (log"unknown buffer action " action)
+                  (led-buffers ll left state right))))
          (else
             (log "unknown buffer action " action)
             (led-buffers ll left state right)))))
-              
+
+(define (open-all-files paths w h shared-meta)
+   (fold
+      (lambda (states path)
+         (log "loading " path)
+         (and states
+            (let ((buff (make-file-state w h path shared-meta)))
+               (if buff
+                  (cons (tuple buff (initial-undo buff) 'command)
+                     states)
+                  (begin
+                     (print-to stderr "Failed to open '" path "'")
+                     #false)))))
+      null
+      paths))
+
 (define (start-led dict args ll)
   (log "start-led " dict ", " args)
   (lets ((w h ll (get-terminal-size ll))
          (h (max (- h 1) 1)))
     (log "dimensions " (cons w h))
     (lets 
-      ((state 
+      ((meta 
          (-> #empty
             (put 'tab tab-node)
-            (put 'tab-width 3)
-            (put 'path (if (null? args) #false (car args)))))
-       (buffers
+            (put 'tab-width 3)))
+       (states
          (if (null? args)
-            (list (make-empty-state w h state))
-            (map (lambda (arg) (make-file-state w h arg #empty))
-               args)))
-       (states (map (lambda (x) (tuple x (initial-undo x) 'command)) buffers)))
-      (led-buffers ll null (car states) (cdr states)))))
+            (let ((buff (make-empty-buffer w h meta)))
+               (list (tuple buff (initial-undo buff) 'command)))
+            (open-all-files args w h meta))))
+      (if states
+         (led-buffers ll null (car states) (cdr states))
+         1))))
 
 (define usage-text 
   "Usage: led [flags] [file]")

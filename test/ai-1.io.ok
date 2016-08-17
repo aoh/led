@@ -1,0 +1,6 @@
+(define (map f l)
+   (if (null? l)
+      null
+      (cons (f (car l))
+         (map f (cdr l)))))
+; foo

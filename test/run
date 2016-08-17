@@ -1,12 +1,15 @@
 #!/bin/bash
 
+FAILURES=
 echo "Running tests"
 for foo in *.io
 do
 	echo " - $foo"
 	cat "$foo" | "$@" > /dev/null 2>&1
-	cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; exit 1; }
+	cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; FAILURES="$foo $FAILURES"; }
 	rm "$foo.out"
 done
+
+test -n "$FAILURES" && echo "Failed tests: $FAILURES" && exit 1
 
 echo "Tests OK"

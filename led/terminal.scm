@@ -198,6 +198,7 @@
                   ((eq? hd 2)  (cons (tuple 'ctrl #\b) (loop ll)))
                   ((eq? hd 18)  (cons (tuple 'ctrl #\r) (loop ll))) ;; ^n
                   ((eq? hd 12) (cons (tuple 'ctrl #\l) (loop ll)))
+                  ((eq? hd 24) (cons (tuple 'ctrl #\x) (loop ll)))
                   (else
                     (cons (tuple 'key hd) (loop ll))))))
             ((null? ll) ll)
