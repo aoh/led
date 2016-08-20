@@ -1115,6 +1115,22 @@
                    (tail (if (whitespace? (last r #\a)) tail (cons #\space tail))))
                   (loop (append r tail) (cdr d) (- n 1))))))))
 
+(define (command-maybe-save-and-close ll buff undo mode n cont)
+   (notify buff "press Z again to save and close")
+   (lets ((chr ll (uncons ll #false)))
+      (if (equal? chr (tuple 'key #\Z))
+         (lets ((path (getf (buffer-meta buff) 'path))
+                (ok? msg (write-buffer buff path)))
+            (if ok?
+               ;; exit to led-buffers
+               (values ll buff undo mode 'close)
+               (begin
+                  (notify buff msg)
+                  (cont ll buff undo mode))))
+         (begin
+            (notify buff "close aborted")
+            (cont ll buff undo mode)))))
+       
 (define (command-go-to-line ll buff undo mode n cont)
    (lets ((buff (buffer-seek buff 0 (if (number? n) (- n 1) 0) #false)))
       (output (update-screen buff))
@@ -1381,6 +1397,7 @@
       (put #\Q command-previous-buffer)
       (put #\W command-next-buffer)
       (put #\C command-change-rest-of-line)
+      (put #\Z command-maybe-save-and-close)
       (put #\% command-seek-matching-paren)))
 
 
