@@ -195,10 +195,18 @@
                   ((eq? hd 1)  (cons (tuple 'ctrl-a) (loop ll))) ;; ^n
                   ((eq? hd 5)  (cons (tuple 'ctrl-e) (loop ll))) ;; ^w
                   ((eq? hd 6)  (cons (tuple 'ctrl #\f) (loop ll))) ;; switch to these
+                  ((eq? hd 9)  (cons (tuple 'tab) (loop ll)))
                   ((eq? hd 2)  (cons (tuple 'ctrl #\b) (loop ll)))
                   ((eq? hd 18)  (cons (tuple 'ctrl #\r) (loop ll))) ;; ^n
                   ((eq? hd 12) (cons (tuple 'ctrl #\l) (loop ll)))
                   ((eq? hd 24) (cons (tuple 'ctrl #\x) (loop ll)))
+                  ((eq? hd 22)
+                     (lets ((val ll (uncons ll 0)))
+                        (cons
+                           (tuple 'key val) ;; force treatment as a key
+                           (loop ll)))
+                     ;(cons (tuple 'ctrl #\v) (loop ll))
+                     )
                   (else
                     (cons (tuple 'key hd) (loop ll))))))
             ((null? ll) ll)
