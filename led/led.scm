@@ -288,13 +288,13 @@
    (lets ((u d l r x y w h off meta buff))
       (output
          (tio
-            (cursor-save)
             (set-cursor 1 (+ h 1))
             (clear-line)
             (font-dim)
             (raw (if (string? txt) (render txt null) txt))
             (font-normal)
-            (cursor-restore)))))
+            (cursor-restore)
+            (set-cursor x y)))))
       
 (define (key-node k)
    (log "key-node " k)
@@ -325,24 +325,6 @@
       (else
          (foldr encode-node tl (node-screen-representation k)))))
 
-(define (replace-node lst old new)
-   (cond
-      ((null? lst)
-         #false)
-      ((eq? (car lst) old)
-         (cons new (cdr lst)))
-      ((replace-node (cdr lst) old new) =>
-         (λ (tl) (cons (car lst) tl)))
-      (else #false)))
-         
-(define (find-matching-lp l u)
-   (cond
-      ((replace-node l lp-node 40) =>
-         (λ (l)
-            (values l u #true)))
-      (else
-         (values l u #false))))
-
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
       (lets ((node (key-node k))
@@ -352,13 +334,6 @@
             (begin
                (log "insert of key " k " at " (cons x y) " = " node)
                (cond
-                  ;((eq? node 41) ; rp
-                  ;  (lets ((l u found? (find-matching-lp l u)))
-                  ;      (if found?
-                  ;         (let ((buff (buffer u d (cons node l) r (+ x 1) y w h off meta)))
-                  ;            (values buff (update-screen buff)))
-                  ;         (let ((buff (buffer u d (cons rp-unmatched-node l) r (+ x 1) y w h off meta)))
-                  ;            (values buff (update-screen buff))))))
                   (else
                      (values
                         (buffer u d (cons node l) r (+ x nw) y w h off meta)
@@ -921,23 +896,28 @@
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\/)))
    (lets ((search-history 
             (get (buffer-meta buff) 'search-history null))
-         (ll res (readline ll search-history
-                     2 (+ 1 (screen-height buff)) (screen-width buff)))
-         (buff 
-            (if (equal? res "") buff
-               (put-buffer-meta buff 'search-history 
-                  (cons res search-history))))
-         (regex ;; note: ^ and $ need special handling later
-            (string->regex (str "m/^" res "/")))
-         (buff 
-            (if (equal? res "")
-               buff
-               (-> buff (put-buffer-meta 'search-regex regex))))
-         (buff msg
-            (find-next buff)))
-      (output (update-screen buff))
-      (if msg (notify buff msg))
-      (cont ll buff undo mode)))
+          (ll res (readline ll search-history
+                     2 (+ 1 (screen-height buff)) (screen-width buff))))
+         (if res
+            (lets
+               ((buff 
+                  (if (equal? res "") buff
+                     (put-buffer-meta buff 'search-history 
+                        (cons res search-history))))
+                (regex ;; note: ^ and $ need special handling later
+                  (string->regex (str "m/^" res "/")))
+                (buff 
+                  (if (equal? res "")
+                     buff
+                     (-> buff (put-buffer-meta 'search-regex regex))))
+                (buff msg
+                  (find-next buff)))
+               (output (update-screen buff))
+               (if msg (notify buff msg))
+               (cont ll buff undo mode))
+            (begin
+               (notify buff "canceled")
+               (cont ll buff undo mode)))))
 
 (define (command-find-next ll buff undo mode r cont)
    (lets ((buff msg (find-next buff)))
@@ -1179,6 +1159,8 @@
             (clear-line)
             (set-cursor (buffer-x buff) (buffer-y buff))))
       (cond
+       ((not res)
+          (cont ll buff undo mode))
        ((equal? res "")
           (notify buff "canceled")
           (cont ll buff undo mode))
@@ -1255,6 +1237,9 @@
 
 (define (command-insert-after ll buff undo mode r cont)
    (cont (cons (tuple 'arrow 'right) ll) buff undo 'insert))
+
+(define (command-insert-after-line ll buff undo mode r cont)
+   (cont (ilist (tuple 'key #\$) (tuple 'key #\a) ll) buff undo mode))
 
 (define (command-delete ll buff undo mode r cont)
    (log "would delete " r " of something")
@@ -1389,6 +1374,7 @@
       (put #\u command-undo)
       (put #\i command-insert-before)
       (put #\a command-insert-after)
+      (put #\A command-insert-after-line)
       (put #\d command-delete)
       (put #\J command-join-lines)
       (put #\G command-go-to-line)
@@ -1552,6 +1538,7 @@
                (else
                   (led-buffer ll buff undo mode))))
       ;; command mode
+      ;; [number] [command] [text object]
       (lets ((range ll (maybe-get-range ll))
              (msg ll (uncons ll space-node)))
          (tuple-case msg

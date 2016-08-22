@@ -372,7 +372,8 @@
                 ((backspace)
                   (if (= cx x) ;; beginning
                     (if (= off 0) ;; no scroll, do nothing
-                      (loop ll hi left right cx off)
+                      (values ll #false) ;; exit on backspace of empty
+                      ; (loop ll hi left right cx off) or continue
                       (lets ;; update, share
                         ((off (- off offset-delta))
                          (visible-left (list->string (drop (reverse left) off)))
@@ -468,7 +469,7 @@
                 ((end-of-text)
                   (values null #false))
                 ((end-of-transmission)
-                  (values null #false))
+                  (values ll #false))
                 ((data-link-escape) ;; ^p -> up
                    (loop (cons (tuple 'arrow 'up) ll) hi left right cx off))
                 ((shift-out) ;; ^n -> down
@@ -490,6 +491,8 @@
                      (fold (λ (ll x) (cons (tuple 'arrow 'right) ll)) ll
                         (iota 0 1 (length right)))
                      hi left right cx off))
+                ((esc)
+                  (values ll #false))
                 (else
                   ; (values ll (tuple 'wat op))
                   (loop ll hi left right cx off)))))))
