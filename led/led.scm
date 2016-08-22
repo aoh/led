@@ -975,13 +975,10 @@
       (cont ll buff undo mode)))
 
 (define (command-add-line-below ll buff undo mode r cont)
-   (lets
-      ((undo (push-undo undo buff))
-       (u d l r x y w h off meta buff)
-       (buff (buffer u (cons null d) l r x y w h off meta))
-       (buff tio (move-arrow buff 'down)))
-      (output (update-screen buff))
-      (cont ll buff undo 'insert)))
+   (cont (ilist (tuple 'key #\A) (tuple 'enter) ll) buff undo mode))
+
+(define (command-add-line-above ll buff undo mode r cont)
+   (cont (ilist (tuple 'key #\k) (tuple 'key #\o) ll) buff undo mode))
 
 (define (map-n op n lst)
    (cond
@@ -1241,6 +1238,10 @@
 (define (command-insert-after-line ll buff undo mode r cont)
    (cont (ilist (tuple 'key #\$) (tuple 'key #\a) ll) buff undo mode))
 
+;; should also w to first non-space later
+(define (command-insert-at-line-start ll buff undo mode r cont)
+   (cont (ilist (tuple 'key #\0) (tuple 'key #\i) ll) buff undo mode))
+
 (define (command-delete ll buff undo mode r cont)
    (log "would delete " r " of something")
    (lets
@@ -1368,11 +1369,13 @@
       (put #\h command-move-left)
       (put #\p command-paste)
       (put #\o command-add-line-below)
+      (put #\O command-add-line-above)
       (put #\' command-go-to-mark)
       (put #\x command-delete-char)
       (put #\: command-enter-command)
       (put #\u command-undo)
       (put #\i command-insert-before)
+      (put #\I command-insert-at-line-start)
       (put #\a command-insert-after)
       (put #\A command-insert-after-line)
       (put #\d command-delete)
