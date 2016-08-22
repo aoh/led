@@ -1229,6 +1229,12 @@
          (output (update-screen buffp)))
       (cont ll buffp undo mode)))
 
+(define (command-substitute-line ll buff undo mode r cont)
+   (cont (ilist (tuple 'key #\0) (tuple 'key #\C) ll) buff undo mode))
+
+(define (command-substitute-char ll buff undo mode r cont)
+   (cont (ilist (tuple 'key #\x) (tuple 'key #\i) ll) buff undo mode))
+
 (define (command-insert-before ll buff undo mode r cont)
    (cont ll buff undo 'insert))
 
@@ -1374,6 +1380,8 @@
       (put #\x command-delete-char)
       (put #\: command-enter-command)
       (put #\u command-undo)
+      (put #\s command-substitute-char)
+      (put #\S command-substitute-line)
       (put #\i command-insert-before)
       (put #\I command-insert-at-line-start)
       (put #\a command-insert-after)
