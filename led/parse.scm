@@ -5,6 +5,7 @@
 
    (import
       (owl base)
+      (led terminal)
       (owl parse))
    
    (begin
@@ -47,11 +48,37 @@
              (as (get-greedy* get-digit)))
             (fold (lambda (x a) (+ (* x 10) (- a #\0))) 0 (cons a as))))
 
-      (define get-movement
+      (define (key-value key value)
          (let-parses
-            ((a (get-key #\w)))
-            'word))
-
+            ((x (get-key key)))
+            value))
+      
+      (define get-movement
+         (get-any-of
+            (key-value #\w 'word)
+            (key-value #\b 'word-back)
+            (key-value #\c 'char)
+            (key-value #\h 'left)
+            ;(key-value #\j 'down)
+            ;(key-value #\k 'up)
+            ;(key-value #\l 'right)
+            ;(key-value #\( 'sentence-back)
+            ;(key-value #\) 'sentence)
+            ;(key-value #\} 'paragraph)
+            ;(key-value #\{ 'paragraph-back)
+            ;(key-value #\0 'line-first)
+            ;(key-value #\^ 'line-first-character) ;; non-whitespace
+            ;(key-value #\+ 'next-line-first-character)
+            ;(key-value #\+ 'previous-line-first-character)
+            ;(key-value #\$ 'line-end)
+            ;(key-value #\H 'screen-first)
+            ;(key-value #\M 'screen-middle)
+            ;(key-value #\L 'screen-last)
+            ;(let-parses ((n get-integer) (skip (get-key #\|))) (tuple 'char-at n))
+            ;(let-parses ((n get-integer) (skip (get-key #\H))) (tuple 'screen-first-plus n))
+            ;(let-parses ((n get-integer) (skip (get-key #\L))) (tuple 'screen-last-minus n))
+            ))
+      
       (define (optional parser default)
          (get-either parser (get-epsilon default)))
       
@@ -64,8 +91,9 @@
             (tuple 'delete buff rep move)))
      
       (define get-command 
-         (get-any-of
-            get-delete))
+         ;(get-any-of get-delete)
+         get-movement
+         )
 
       (define (parse-command ll)
          (print "parsing " ll)
@@ -81,4 +109,20 @@
          (lets ((res ll (parse-command (map (lambda (x) (tuple 'key x)) (string->list str)))))
             (print "'" str "' -> " res " + " ll)))
 
-      (try "\"x42dw***")))
+      (define (try-terminal)
+         (set-terminal-rawness #true)
+         (let loop ((ll (terminal-input)) (row 1))
+            (lets ((res ll (parse-command ll)))
+               (write-bytes stdout
+                  (tio
+                     (set-cursor 1 row)
+                     (clear-line)
+                     (output res)
+                     (set-cursor 1 (+ row 1))))
+               (if res
+                  (loop ll (+ 1 (modulo row 10)))
+                  (set-terminal-rawness #false)))))
+                  
+      ;(try "\"x42dw***")
+
+      (try-terminal)))
