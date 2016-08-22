@@ -887,7 +887,6 @@
             (log "seek-matching-paren: current is " (car r))
             (values buff null)))))
 
-
 ;;;
 ;;; Command mode actions
 ;;;
@@ -1165,6 +1164,8 @@
          (values ll buff undo mode 'close))
        ((equal? res "q!")
          (values ll buff undo mode 'close))
+       ((equal? res "Q!")
+         (values ll buff undo mode 'close-all))
        ((equal? res "n")
          (values ll buff undo mode 'new))
        ((m/^n [^ ]+$/ res)
@@ -1471,10 +1472,10 @@
          
 (define space-node (tuple 'key #\space))
 
-(define (maybe-get-range ll)
+(define (maybe-get-count ll)
    (lets ((k ll (uncons ll space-node))
           (n (key->digit k)))
-      (log "maybe-get-range: " k " -> " n)
+      (log "maybe-get-count: " k " -> " n)
       (cond
          ((not n) (values #false (cons k ll)))
          ((eq? n 0) (values #false (cons k ll)))
@@ -1485,6 +1486,9 @@
                   (if m
                      (loop (+ (* 10 n) m) ll)
                      (values n (cons x ll)))))))))
+
+(define (maybe-get-buffer ll)
+   (values #false ll))
 
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
@@ -1549,16 +1553,17 @@
                (else
                   (led-buffer ll buff undo mode))))
       ;; command mode
-      ;; [number] [command] [text object]
-      (lets ((range ll (maybe-get-range ll))
+      ;; [number] [command] [text object] ;; "x42yy, yank next 42 lines
+      ;;                                     "bd0, cut beginning of line to b
+      (lets ((count ll (maybe-get-count ll))
              (msg ll (uncons ll space-node)))
          (tuple-case msg
            ((key k)
                ((get *command-mode-actions* k command-no-op)
-                  ll buff undo mode range led-buffer))
+                  ll buff undo mode count led-buffer))
            ((ctrl key)
                ((get *command-mode-control-actions* key command-no-op)
-                  ll buff undo mode range led-buffer))
+                  ll buff undo mode count led-buffer))
            (else
                (log "not handling command " msg)
                (led-buffer ll buff undo mode))))))
@@ -1593,16 +1598,46 @@
          (if buff
             (tuple buff (initial-undo buff) 'command)
             #false))))
-                     
+
+(define (notify-buffer-source left buff right)
+   (lets ((source (or (get-buffer-meta buff 'path #false) "*scratch*"))
+          (nth (+ 1 (length left)))
+          (total (+ nth (length right)))
+          (slider 
+             (map 
+                (lambda (x) (if (eq? x nth) #\x #\space)) 
+                (iota 1 1 (+ total 1))))
+          (msg
+             (cond
+                ((= total 1) "")
+                ((< total 6) 
+                   (list->string (append (cons #\[ slider) (list #\] #\space))))
+                (else
+                   (str "[" nth "/" total "] ")))))
+         (log "total is " total)
+         (notify buff 
+            (string-append msg source))))
+
+(define (exit-led n)
+   (output
+      (tio 
+         (clear-screen) 
+         (set-cursor 1 1)))
+   (set-terminal-rawness #false)
+   n)
+      
 (define (led-buffers ll left state right)
    (lets ((buff undo mode state)
           (_ (output (update-screen buff)))
-          (_ (notify buff (or (get-buffer-meta buff 'path #false) "*scratch*")))
+          (_ (notify-buffer-source left buff right))
           (ll buff undo mode action
             (led-buffer ll buff undo mode))
           (state (tuple buff undo mode)))
       (log "led-buffers: action " action)
       (cond
+         ((eq? action 'close-all)
+            (log "close-all")
+            (exit-led 0))
          ((eq? action 'close)
             (cond
                ((pair? left)
@@ -1611,11 +1646,7 @@
                   (led-buffers ll left (car right) (cdr right)))
                (else
                   (log "all buffers closed")
-                  (output
-                     (tio
-                        (clear-screen)
-                        (set-cursor 1 1)))
-                  0)))
+                  (exit-led 0))))
          ((eq? action 'left)
             (if (null? left)
                (led-buffers ll left state right)
