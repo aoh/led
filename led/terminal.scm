@@ -29,6 +29,10 @@
 
       enable-line-wrap     ;; lst n → lst'
       disable-line-wrap    ;; lst n → lst'
+
+      set-scroll-range     ;; lst y1 y2 → lst'
+      scroll-up            ;; lst → lst'
+      scroll-down          ;; lst → lst'
       
       tio
       tio*
@@ -101,8 +105,16 @@
       (define (enable-line-wrap lst)     (ilist 27 #\[ #\7 #\h lst))
       (define (disable-line-wrap lst)    (ilist 27 #\[ #\7 #\l lst))
       
+      ;;; Scrolling
+      
+      (define (set-scroll-range lst a b)  
+         (ilist 27 #\[ (render a (cons #\; (render b (cons #\r lst))))))
+      
+      (define (scroll-up   lst) (ilist 27 #\[ #\M lst))
+      (define (scroll-down lst) (ilist 27 #\[ #\D lst))
+      
       ;;; Terminal input stream
-
+      
       (define (get-natural ll def)
         (let loop ((n 0) (first? #true) (ll ll))
           (lets ((x ll (uncons ll #false)))

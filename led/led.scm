@@ -312,7 +312,8 @@
 (define (scroll-down buff)
    (lets 
     ((u d l r x y w h off meta buff)
-     (step (+ 1 (* 2 (div h 3))))
+     ;(step (+ 1 (* 2 (div h 3))))
+     (step 1)
      (dx dy off)
      (buff 
       (buffer u d l r x (- y step) w h (cons dx (+ dy step)) meta)))
@@ -323,7 +324,8 @@
    (lets 
     ((u d l r x y w h off meta buff)
      (dx dy off)
-     (step (min dy (+ 1 (* 2 (div h 3)))))
+     ;(step (min dy (+ 1 (* 2 (div h 3)))))
+     (step (min dy 1))
      (buff 
       (buffer u d l r x (+ y step) w h (cons dx (- dy step)) meta)))
     (values buff
