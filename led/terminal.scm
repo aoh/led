@@ -27,6 +27,9 @@
       cursor-left          ;; lst n → lst'
       cursor-right         ;; lst n → lst'
 
+      enable-line-wrap     ;; lst n → lst'
+      disable-line-wrap    ;; lst n → lst'
+      
       tio
       tio*
 
@@ -93,6 +96,11 @@
       (define (clear-screen-top lst) (ilist 27 #\[ #\1 #\J lst))
       (define (clear-screen-bottom lst) (ilist 27 #\[ #\J lst))
 
+      ;;; Wrapping
+      
+      (define (enable-line-wrap lst)     (ilist 27 #\[ #\7 #\h lst))
+      (define (disable-line-wrap lst)    (ilist 27 #\[ #\7 #\l lst))
+      
       ;;; Terminal input stream
 
       (define (get-natural ll def)

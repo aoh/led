@@ -565,7 +565,7 @@
           (buffp 
             (buffer u d null (append (reverse l) r) 1 y w h (cons 0 dy) meta)))
          (values buffp
-            (if (eq? dy 0)
+            (if (eq? dx 0)
                (tio (set-cursor 1 y))
                (delta-update-screen buff buffp)))))
 
@@ -1776,11 +1776,17 @@
       null
       paths))
 
+(define (initial-terminal-setup)
+   (output
+      (tio
+         (disable-line-wrap))))
+
 (define (start-led dict args ll)
   (log "start-led " dict ", " args)
   (lets ((w h ll (get-terminal-size ll))
          (h (max (- h 1) 1)))
     (log "dimensions " (cons w h))
+    (initial-terminal-setup)
     (lets
       ((meta
          (-> #empty
