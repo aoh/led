@@ -30,6 +30,12 @@
 (define (get-buffer-meta buff key def)
    (get (buffer-meta buff) key def))
 
+(define (buffer-path buff default)
+   (get-buffer-meta buff 'path default))
+
+(define (buffer-path-str buff)
+   (get-buffer-meta buff 'path "*scratch*"))
+
 (define (buffer-x buff) (ref buff 5))
 (define (buffer-y buff) (ref buff 6))
 
@@ -206,6 +212,8 @@
          (draw-lines-at-offset tl w dx y dy end
             (list empty-buffer-line)))
       ((eq? y end) tl)
+      ((not (car lines)) ;; not drawn, leave on screen
+         (draw-lines-at-offset tl w dx (+ y dy) dy end (cdr lines)))
       (else
          (let ((these (drop-printable (car lines) dx)))
             ;(log "printable after " dx " of " (car lines) " is " (drop-printable (car lines) dx))
@@ -217,6 +225,7 @@
                tl)))))
                   
 (define (update-screen buff)
+   (log "FULL UPDATE SCREEN")
    (lets 
       ((u d l r x y w h off meta buff)
        (this (append (reverse l) r)))
@@ -226,6 +235,61 @@
           (draw-lines-at-offset w (car off) (+ y 1) +1 (+ h 1) d)
           (set-cursor x y))))
 
+(define (maybe-car lst) (if (pair? lst) (car lst) #false))
+(define (maybe-cdr lst) (if (pair? lst) (cdr lst) null))
+
+(define (maybe-draw-lines-at-offset tl w dx y dy end lines old-lines)
+   (cond
+      ((null? lines) 
+         (maybe-draw-lines-at-offset tl w dx y dy end
+            (list empty-buffer-line) old-lines))
+      ((eq? y end) tl)
+      ((equal? (car lines) (maybe-car old-lines))
+         ;(log "not redrawing shared line at " y)
+         (maybe-draw-lines-at-offset tl w dx (+ y dy) dy end (cdr lines) (maybe-cdr old-lines)))
+      (else
+         ;(log " - delta updating line " y " having '" (list->string (car lines)) "' vs '" (list->string (or null (maybe-car old-lines))) "'")
+         (let ((these (drop-printable (car lines) dx)))
+            (tio*
+               (set-cursor 1 y)
+               (clear-line-right)
+               (raw (take-printable these w))
+               (maybe-draw-lines-at-offset w dx (+ y dy) dy end (cdr lines) (maybe-cdr old-lines))
+               tl)))))
+
+(define (same-line u d dy)
+   (cond
+      ((eq? dy 0) (values u d))
+      ((> dy 0)
+         (lets ((x u (uncons u null)))
+            (same-line u (cons x d) (- dy 1))))
+      (else
+         (lets ((x d (uncons d null)))
+            (same-line (cons x u) d (+ dy 1))))))
+
+(define (delta-update-screen old new)
+   (if (eq? old new)
+      (begin
+         (log " - full share")
+         null)
+      (lets 
+         ((ou od ol or ox oy ow oh ooff meta old)
+          (nu nd nl nr nx ny w h noff meta new)
+          (old-this (append (reverse ol) or))
+          (new-this (append (reverse nl) nr))
+          (nu (cons new-this nu))
+          (ou (cons old-this ou))
+          (ou od (same-line ou od (- oy ny))))
+         (if (equal? ooff noff)
+            ;; no offset changes, so old lines may be intact
+            (begin
+               (log "doing delta update")
+               (tio
+                  (maybe-draw-lines-at-offset w (car noff) ny -1 0 nu ou)
+                  (maybe-draw-lines-at-offset w (car noff) (+ ny 1) +1 (+ h 1) nd od)
+                  (set-cursor nx ny)))
+            (update-screen new)))))
+    
 (define (scroll-right buff)
    (lets 
       ((u d l r x y w h off meta buff)
@@ -364,11 +428,11 @@
                    (line-len (printable-length line))
                    (q x (quotrem (+ line-len 1) w))
                    (xp (* q w))
-                   (buff
+                   (buffp
                      (buffer u d (reverse line) r x (- y 1) w h (cons xp (cdr off)) meta)))
                   (log "backspace")
-                  (values buff
-                     (update-screen buff)))))
+                  (values buffp
+                     (delta-update-screen buff buffp)))))
          (let ((cw (node-width (car l))))
            (if (> x cw)
              (values
@@ -442,9 +506,9 @@
          (let loop ((l l) (r r) (x x) (dx dx) (moved? #false))
             (cond
                ((null? (cdr r))
-                  (let ((buff (buffer u d l r x y w h (cons dx dy) meta)))
-                     (values buff
-                        (if moved? (update-screen buff) (tio (set-cursor x y))))))
+                  (let ((buffp (buffer u d l r x y w h (cons dx dy) meta)))
+                     (values buffp
+                        (if moved? (delta-update-screen buff buffp) (tio (set-cursor x y))))))
                ((eq? x w)
                   (loop l r (- x step) (+ dx step) #true))
                (else
@@ -498,12 +562,12 @@
 (define (seek-line-start buff)
    (lets ((u d l r x y w h off meta buff)
           (dx dy off)
-          (buff 
+          (buffp 
             (buffer u d null (append (reverse l) r) 1 y w h (cons 0 dy) meta)))
-         (values buff
+         (values buffp
             (if (eq? dy 0)
                (tio (set-cursor 1 y))
-               (update-screen buff)))))
+               (delta-update-screen buff buffp)))))
 
 ;; row+1 = y + dy, dy = row + 1 - y
 (define (buffer-seek buff x y screen-y)
@@ -870,18 +934,18 @@
                (log "matching open paren result " match)
                (if match
                   (lets ((mx my match)
-                         (buff (buffer-seek buff mx my (maybe-keep-y yp y my h))))
-                     (values buff 
-                        (update-screen buff)))
+                         (buffp (buffer-seek buff mx my (maybe-keep-y yp y my h))))
+                     (values buffp 
+                        (delta-update-screen buff buffp)))
                   (values buff null))))
          ((left-paren? (car r))
             (lets ((match (seek-matching-paren-forward buff)))
                (log "matching close paren result " match)
                (if match
                   (lets ((mx my match)
-                         (buff (buffer-seek buff mx my (maybe-keep-y yp y my h))))
-                     (values buff 
-                        (update-screen buff)))
+                         (buffp (buffer-seek buff mx my (maybe-keep-y yp y my h))))
+                     (values buffp 
+                        (delta-update-screen buff buffp)))
                   (values buff null))))
          (else
             (log "seek-matching-paren: current is " (car r))
@@ -909,21 +973,21 @@
                   (if (equal? res "")
                      buff
                      (-> buff (put-buffer-meta 'search-regex regex))))
-                (buff msg
+                (buffp msg
                   (find-next buff)))
-               (output (update-screen buff))
-               (if msg (notify buff msg))
-               (cont ll buff undo mode))
+               (output (delta-update-screen buff buffp))
+               (if msg (notify buffp msg))
+               (cont ll buffp undo mode))
             (begin
                (notify buff "canceled")
                (cont ll buff undo mode)))))
 
 (define (command-find-next ll buff undo mode r cont)
-   (lets ((buff msg (find-next buff)))
-      (output (update-screen buff))
+   (lets ((buffp msg (find-next buff)))
+      (output (delta-update-screen buff buffp))
       (if msg
-         (notify buff msg))
-      (cont ll buff undo mode)))
+         (notify buffp msg))
+      (cont ll buffp undo mode)))
 
 (define (command-mark-position ll buff undo mode r cont)
    (lets ((msg ll (uncons ll #false)))
@@ -969,9 +1033,9 @@
 
 (define (command-paste ll buff undo mode r cont)
    (lets ((undo (push-undo undo buff))
-          (buff (paste-yank buff)))
-      (output (update-screen buff))
-      (cont ll buff undo mode)))
+          (buffp (paste-yank buff)))
+      (output (delta-update-screen buff buffp))
+      (cont ll buffp undo mode)))
 
 (define (command-add-line-below ll buff undo mode r cont)
    (cont (ilist (tuple 'key #\A) (tuple 'enter) ll) buff undo mode))
@@ -1021,9 +1085,9 @@
                (map-n    
                   (lambda (x) (append shift-lst x))
                   (- n 1) d))
-             (buff (buffer u d l r x y w h off meta)))
-            (output (update-screen buff))
-            (cont (keys ll #\l 3) buff undo mode)) ;; move with shift
+             (buffp (buffer u d l r x y w h off meta)))
+            (output (delta-update-screen buff buffp))
+            (cont (keys ll #\l 3) buffp undo mode)) ;; move with shift
          (begin
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
@@ -1052,9 +1116,9 @@
                       (l r (line-right l r 3))
                       (n (if (number? n) n 1))
                       (d (map-n unindent (- n 1) d))
-                      (buff (buffer u d l r x y w h off meta)))
-                  (output (update-screen buff))
-                  (cont (keys ll #\h 3) buff undo mode))
+                      (buffp (buffer u d l r x y w h off meta)))
+                  (output (delta-update-screen buff buffp))
+                  (cont (keys ll #\h 3) buffp undo mode))
                (cont ll buff undo mode)))
          (begin
             (log "No such shift range: " range)
@@ -1070,9 +1134,9 @@
             (lets ((buff out (insert-backspace buff)))
                (output out)
                (cont ll buff undo mode)))
-         (lets ((buff (buffer u d l (cdr r) x y w h off meta)))
-            (output (update-screen buff)) ;; todo: can refresh just current line
-            (cont ll buff undo mode)))))
+         (lets ((buffp (buffer u d l (cdr r) x y w h off meta)))
+            (output (delta-update-screen buff buffp)) ;; todo: can refresh just current line
+            (cont ll buffp undo mode)))))
 
 (define (command-join-lines ll buff undo mode n cont)
    (lets
@@ -1082,9 +1146,9 @@
       (let loop ((r r) (d d) (n n))
          (cond
             ((or (null? d) (eq? n 0))
-               (let ((buff (buffer u d l r x y w h off meta)))
-                  (output (update-screen buff))
-                  (cont ll buff undo mode)))
+               (let ((buffp (buffer u d l r x y w h off meta)))
+                  (output (delta-update-screen buff buffp))
+                  (cont ll buffp undo mode)))
             (else   
                (lets
                   ((tail (drop-leading-whitespace (car d)))
@@ -1095,7 +1159,7 @@
    (notify buff "press Z again to save and close")
    (lets ((chr ll (uncons ll #false)))
       (if (equal? chr (tuple 'key #\Z))
-         (lets ((path (getf (buffer-meta buff) 'path))
+         (lets ((path (buffer-path buff #false))
                 (ok? msg (write-buffer buff path)))
             (if ok?
                ;; exit to led-buffers
@@ -1191,14 +1255,14 @@
                    (notify buff (str "Failed to read '" path "'"))
                    (cont ll buff undo mode)))))
        ((m/^w$/ res)
-         (let ((path (getf (buffer-meta buff) 'path)))
+         (let ((path (buffer-path buff #false)))
             (if path
                (lets ((ok? write-tio (write-buffer buff path)))
                   (notify buff write-tio)
                   (cont ll buff undo mode))
                (cont ll buff undo mode))))
        ((m/^x$/ res)
-          (lets ((path (getf (buffer-meta buff) 'path))
+          (lets ((path (buffer-path buff #false))
                  (ok? msg (write-buffer buff path)))
              (if ok?
                 ;; exit to led-buffers
@@ -1220,14 +1284,14 @@
   (lets ((undo buffp (unpop-undo undo buff)))
     (if (eq? buff buffp)
        (notify buffp "nothing left to redo")
-       (output (update-screen buffp)))
+       (output (delta-update-screen buff buffp)))
     (cont ll buffp undo mode)))
 
 (define (command-undo ll buff undo mode r cont)
    (lets ((undo buffp (pop-undo undo buff)))
       (if (eq? buff buffp)
          (notify buff "nothing left to undo")
-         (output (update-screen buffp)))
+         (output (delta-update-screen buff buffp)))
       (cont ll buffp undo mode)))
 
 (define (command-substitute-line ll buff undo mode r cont)
@@ -1259,17 +1323,17 @@
             (let loop ((new buff) (lines null) (r r))
                (if (= r 0)
                   (begin
-                     (output (update-screen new))
+                     (output (delta-update-screen buff new))
                      (cont ll
                         (put-buffer-meta new 'yank (tuple 'lines lines))
                         (push-undo undo buff) mode))
                   (lets ((new this (delete-line new)))
                      (loop new (append lines (list this)) (- r 1))))))
          ((equal? what (tuple 'key #\%))
-            (lets ((buff msg (buffer-cut-sexp buff)))
-               (output (update-screen buff))
-               (notify buff msg)
-               (cont ll buff undo mode)))
+            (lets ((buffp msg (buffer-cut-sexp buff)))
+               (output (delta-update-screen buff buffp))
+               (notify buffp msg)
+               (cont ll buffp undo mode)))
          (else
             (log "cannot delete " what " yet")
             (cont ll buff undo mode)))))
@@ -1281,15 +1345,15 @@
    (lets ((u d l r x y w h off meta buff)
           (undo (push-undo undo buff))
           (buff (buffer u d l null x y w h off meta)))
-         (output
-            (tio 
-               (cursor-save)
-               (font-dim)
-               (raw   
-                  (repeat #\-
-                     (min (+ 1 (- w x)) (printable-length r))))
-               (font-normal)
-               (cursor-restore)))
+         ;; not having to repaint over these when switching modes reduces flicker for now
+         ;(output
+         ;   (tio 
+         ;      (cursor-save)
+         ;      (font-dim)
+         ;      (raw   (repeat #\- (min (+ 1 (- w x)) (printable-length r))))
+         ;      (font-normal)
+         ;      (cursor-restore)))
+         (output (tio (clear-line-right)))
          (cont ll buff undo 'insert)))
 
 (define (command-step-forward ll buff undo mode r cont)
@@ -1326,7 +1390,7 @@
    (if (and (tuple? event) (eq? (ref event 1) 'key))
       (ref event 2)
       #false))
-         
+
 (define (command-replace-char ll buff undo mode ran cont)
    (lets ((val ll (uncons ll #false))
           (k (key-value val)))
@@ -1334,14 +1398,14 @@
          (lets ((u d l r x y w h off meta buff))
             (if (null? r)
                (cont ll buff undo mode)
-               (lets 
+               (lets
                   ((ran (if (number? ran) ran 1))
                    (r (map-n (lambda (x) k) ran r))
                    (undo (push-undo undo buff))
-                   (buff 
+                   (buffp
                       (buffer u d l r x y w h off meta)))
-                  (output (update-screen buff))
-                  (cont ll buff undo mode))))
+                  (output (delta-update-screen buff buffp))
+                  (cont ll buffp undo mode))))
          (cont ll buff undo mode))))
 
 (define (command-previous-buffer ll buff undo mode r cont)
@@ -1405,7 +1469,7 @@
 
 (define (paren-balance lst)
    (fold + 0
-      (map 
+      (map
          (lambda (x) (if (left-paren? x) 1 (if (right-paren? x) -1 0)))
          lst)))
 
@@ -1445,16 +1509,16 @@
 
 ;; ai hardcoded for now
 (define (insert-enter buff)
-   (lets 
+   (lets
       ((u d l r x y w h off meta buff)
        (ind (artificial-intelligence (cons (reverse l) u)))
-       (buff 
+       (buffp
          (buffer u (cons (append ind r) d) l null x y w h  off meta))
-       (draw-tio 
-         (update-screen buff))
-       (buff move-tio (move-arrow buff 'down)))
+       (draw-tio
+         (delta-update-screen buff buffp))
+       (buffp move-tio (move-arrow buffp 'down)))
       (values
-         buff
+         buffp
          (append draw-tio move-tio))))
 
 ;;;
@@ -1469,7 +1533,7 @@
             ((> n 9) #false)
             (else n)))
       #false))
-         
+
 (define space-node (tuple 'key #\space))
 
 (define (maybe-get-count ll)
@@ -1494,7 +1558,7 @@
 (define (led-buffer ll buff undo mode)
    (log-buff buff mode)
    (if (eq? mode 'insert)
-      (lets 
+      (lets
          ((msg ll (uncons ll #false))
           (u d l r x y w h off meta buff))
          (log "cursor " (cons x y) ", offset " off ", event " msg)
@@ -1503,8 +1567,8 @@
                   (lets ((buff out (insert-handle-key buff x)))
                      (output out)
                      (if (eq? x 41) ;; close paren, highlight the match for a while (hack)
-                        (led-buffer 
-                           (ilist (tuple 'esc) 
+                        (led-buffer
+                           (ilist (tuple 'esc)
                                   (tuple 'key #\%)
                                   (lambda ()
                                      (sleep 150)
@@ -1528,17 +1592,17 @@
                   (lets ((buff out (move-arrow buff dir)))
                      (output out)
                      (led-buffer ll buff undo mode)))
-               ((end-of-text) 
-                  (output (update-screen buff))
+               ((end-of-text)
+                  ; (output (update-screen buff)) ;; would clear overstrike
                   (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
                ((esc)
                   (log "switching out of insert mode on esc + moving cursor")
-                  (output (update-screen buff))
+                  ;(output (update-screen buff)) ;; would clear overstrike
                   (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
                ((end-of-transmission)
                   ;; ^D = 3 backspace (remove indent)
                   ;; fixme: switch to unindent
-                  (led-buffer 
+                  (led-buffer
                      (ilist (tuple 'backspace) (tuple 'backspace) (tuple 'backspace) ll)
                      buff undo mode))
                ((ctrl key)
@@ -1569,7 +1633,7 @@
                (led-buffer ll buff undo mode))))))
 
 
-;;; Program startup 
+;;; Program startup
 
 (define (splash w h)
    (lets
@@ -1600,36 +1664,42 @@
             #false))))
 
 (define (notify-buffer-source left buff right)
-   (lets ((source (or (get-buffer-meta buff 'path #false) "*scratch*"))
+   (lets ((source (buffer-path-str buff))
           (nth (+ 1 (length left)))
           (total (+ nth (length right)))
-          (slider 
-             (map 
-                (lambda (x) (if (eq? x nth) #\x #\space)) 
+          (slider
+             (map
+                (lambda (x) (if (eq? x nth) #\x #\space))
                 (iota 1 1 (+ total 1))))
           (msg
              (cond
                 ((= total 1) "")
-                ((< total 6) 
+                ((< total 6)
                    (list->string (append (cons #\[ slider) (list #\] #\space))))
                 (else
                    (str "[" nth "/" total "] ")))))
          (log "total is " total)
-         (notify buff 
+         (notify buff
             (string-append msg source))))
 
 (define (exit-led n)
    (output
-      (tio 
-         (clear-screen) 
+      (tio
+         (clear-screen)
          (set-cursor 1 1)))
    (set-terminal-rawness #false)
    n)
-      
-(define (led-buffers ll left state right)
+
+(define (already-open? l s r path)
+   (first
+      (lambda (st) (equal? path (get-buffer-meta (ref st 1) 'path #false)))
+      (append l (cons s r))
+      #false))
+
+(define (led-buffers ll left state right msg)
    (lets ((buff undo mode state)
           (_ (output (update-screen buff)))
-          (_ (notify-buffer-source left buff right))
+          (_ (if msg (notify buff msg) (notify-buffer-source left buff right)))
           (ll buff undo mode action
             (led-buffer ll buff undo mode))
           (state (tuple buff undo mode)))
@@ -1641,41 +1711,55 @@
          ((eq? action 'close)
             (cond
                ((pair? left)
-                  (led-buffers ll (cdr left) (car left) right))
+                  (led-buffers ll (cdr left) (car left) right 
+                     (str "Closed " (buffer-path-str buff))))
                ((pair? right)
-                  (led-buffers ll left (car right) (cdr right)))
+                  (led-buffers ll left (car right) (cdr right) 
+                     (str "Closed " (buffer-path-str buff))))
                (else
                   (log "all buffers closed")
                   (exit-led 0))))
          ((eq? action 'left)
             (if (null? left)
-               (led-buffers ll left state right)
+               (led-buffers ll left state right 
+                  (if (null? right)
+                     (str "You only have " (buffer-path-str buff) " open.")
+                     "already at first buffer"))
                (led-buffers ll (cdr left) (car left)
-                  (cons state right))))
+                  (cons state right) #false)))
          ((eq? action 'right)
             (if (null? right)
-               (led-buffers ll left state right)
+               (led-buffers ll left state right 
+                  (if (null? left)
+                     (str "You only have " (buffer-path-str buff) " open.")
+                     "already at last buffer"))
                (led-buffers ll (cons state left)
-                  (car right) (cdr right))))
+                  (car right) (cdr right) #false)))
          ((eq? action 'new)
             (log "making new buffer")
             (lets ((ll new-state (make-new-state ll)))
-               (led-buffers ll (cons state left) new-state right)))
+               (led-buffers ll (cons state left) new-state right "new scratch buffer")))
          ((tuple? action)
             (tuple-case action
                ((open path)
-                  (lets ((ll new (path->buffer-state ll path)))
-                     (if new
-                        (led-buffers ll (cons state left) new right)
-                        (begin
-                           (log "failed to open " path)
-                           (led-buffers ll left state right)))))
+                  (if (already-open? left state right path)
+                     (begin
+                        (notify (ref state 1) "buffer is already open")
+                        (log "buffer is already open")
+                        (led-buffers ll left state right 
+                           (str "'" path "' is already open")))
+                     (lets ((ll new (path->buffer-state ll path)))
+                        (if new
+                           (led-buffers ll (cons state left) new right #false)
+                           (begin
+                              (log "failed to open " path)
+                              (led-buffers ll left state right #false))))))
                (else is unknown
-                  (log"unknown buffer action " action)
-                  (led-buffers ll left state right))))
+                  (log "unknown buffer action " action)
+                  (led-buffers ll left state right #false))))
          (else
             (log "unknown buffer action " action)
-            (led-buffers ll left state right)))))
+            (led-buffers ll left state right #false)))))
 
 (define (open-all-files paths w h shared-meta)
    (fold
@@ -1697,8 +1781,8 @@
   (lets ((w h ll (get-terminal-size ll))
          (h (max (- h 1) 1)))
     (log "dimensions " (cons w h))
-    (lets 
-      ((meta 
+    (lets
+      ((meta
          (-> #empty
             (put 'tab tab-node)
             (put 'tab-width 3)))
@@ -1708,10 +1792,10 @@
                (list (tuple buff (initial-undo buff) 'command)))
             (open-all-files args w h meta))))
       (if states
-         (led-buffers ll null (car states) (cdr states))
+         (led-buffers ll null (car states) (cdr states) #false)
          1))))
 
-(define usage-text 
+(define usage-text
   "Usage: led [flags] [file]")
 
 (define command-line-rules
@@ -1760,7 +1844,7 @@
    (let ((path (getf dict 'faketerm)))
       (if path
          (let ((port (open-input-file path)))
-            (if port   
+            (if port
                (terminal-input port)
                null))
          (begin
@@ -1779,7 +1863,7 @@
     (else
       (log "started " dict ", " args)
       (fork-linked-server 'logger (λ () (logger dict)))
-      (fork-linked-server 'led 
+      (fork-linked-server 'led
          (λ () (start-led dict args (led-input-stream dict))))
       (log "started")
       (trampoline))))
