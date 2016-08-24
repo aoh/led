@@ -8,7 +8,25 @@
       font-dim             ;; lst → lst'
       font-standard        ;; lst → lst'
       font-reverse         ;; lst → lst'
+      font-attrs           ;; lst a b c → lst'
       
+      font-fg-black
+      font-fg-red
+      font-fg-green
+      font-fg-yellow
+      font-fg-blue
+      font-fg-magenta
+      font-fg-cyan
+      font-fg-white
+      font-bg-black
+      font-bg-red
+      font-bg-green
+      font-bg-yellow
+      font-bg-blue
+      font-bg-magenta
+      font-bg-cyan
+      font-bg-white
+
       clear-screen         ;; lst → lst'
       clear-screen-top     ;; lst → lst'
       clear-screen-bottom  ;; lst → lst'
@@ -84,12 +102,34 @@
 
       ;;; Text mode
 
+      ;; attributes
       (define (font-normal lst)    (ilist 27 #\[     #\m lst))
       (define (font-bright lst)    (ilist 27 #\[ #\1 #\m lst))
       (define (font-dim lst)       (ilist 27 #\[ #\2 #\m lst))
       (define (font-standard lst)  (ilist 27 #\[ #\3 #\m lst))
       (define (font-reverse lst)   (ilist 27 #\[ #\7 #\m lst))
 
+      (define (font-fg-black lst)   (ilist 27 #\[ #\3 #\0 #\m lst))
+      (define (font-fg-red lst)     (ilist 27 #\[ #\3 #\1 #\m lst))
+      (define (font-fg-green lst)   (ilist 27 #\[ #\3 #\2 #\m lst))
+      (define (font-fg-yellow lst)  (ilist 27 #\[ #\3 #\3 #\m lst))
+      (define (font-fg-blue lst)    (ilist 27 #\[ #\3 #\4 #\m lst))
+      (define (font-fg-magenta lst) (ilist 27 #\[ #\3 #\5 #\m lst))
+      (define (font-fg-cyan lst)    (ilist 27 #\[ #\3 #\6 #\m lst))
+      (define (font-fg-white lst)   (ilist 27 #\[ #\3 #\7 #\m lst))
+   
+      (define (font-bg-black lst)   (ilist 27 #\[ #\4 #\0 #\m lst))
+      (define (font-bg-red lst)     (ilist 27 #\[ #\4 #\1 #\m lst))
+      (define (font-bg-green lst)   (ilist 27 #\[ #\4 #\2 #\m lst))
+      (define (font-bg-yellow lst)  (ilist 27 #\[ #\4 #\3 #\m lst))
+      (define (font-bg-blue lst)    (ilist 27 #\[ #\4 #\4 #\m lst))
+      (define (font-bg-magenta lst) (ilist 27 #\[ #\4 #\5 #\m lst))
+      (define (font-bg-cyan lst)    (ilist 27 #\[ #\4 #\6 #\m lst))
+      (define (font-bg-white lst)   (ilist 27 #\[ #\4 #\7 #\m lst))
+
+      (define (font-attrs lst a b c)
+         (ilist 27 #\[ (render a (cons #\; (render b (cons #\; (render c (cons #\m lst))))))))
+      
       ;;; Clearing content
 
       (define (clear-line lst)       (ilist 27 #\[ #\2 #\K lst))

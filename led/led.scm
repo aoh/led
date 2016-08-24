@@ -1781,6 +1781,29 @@
 (define (initial-terminal-setup)
    (output
       (tio
+         (clear-screen)
+         (set-cursor 1 1)))
+   '(output
+      (fold
+         (lambda (out bg)
+            (fold
+               (lambda (out fg)
+                  (fold
+                     (lambda (out att)
+                        (tio*
+                           (font-attrs att fg bg)
+                           (raw (string->list (str att ";" fg ";" bg " ")))
+                           (font-attrs 0 0 0)
+                           out))
+                     out 
+                        ;(list 0 1 2 3 4 5 6 7)
+                        (list 2 0 4 1)
+                        ))
+               out (list 30 31 32 33 34 35 36 37)))
+         null (list 40 41 42 43 44 45 46 47)))
+   '(sleep 100000)
+   (output
+      (tio
          (disable-line-wrap))))
 
 (define (start-led dict args ll)
