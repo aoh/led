@@ -524,6 +524,21 @@
    (or (eq? x 41)
        (equal? x rp-node)))
 
+;; buff movement-exp -> n | (dx . dy)
+(define (movement buff n type)
+   (lets ((u d l r x y w h off meta buff))
+      (cond
+         ((eq? type 'end-of-line)
+            (if (eq? n 1)
+               (length r)
+               #false))
+         ((eq? type 'beginning-of-line)
+            (if (eq? n 1)
+               (- 0 (length l))
+               #false))
+         (else
+            (log "unknown movement type " type)))))
+   
 ;; buff → (x . y) | #false
 (define (seek-matching-paren-back buff)
    (lets ((u d l r x y w h off meta buff))
@@ -1320,29 +1335,87 @@
 (define (command-insert-at-line-start ll buff undo mode r cont)
    (cont (ilist (tuple 'key #\0) (tuple 'key #\i) ll) buff undo mode))
 
-(define (command-delete ll buff undo mode r cont)
-   (log "would delete " r " of something")
-   (lets
-      ((what ll (uncons ll #\d))
-       (r (if (number? r) r 1))) ;; fixme, also supports ranges
+(define eof (tuple 'eof))
+
+(define space-node (tuple 'key #\space))
+
+(define (key->digit k)
+   (if (eq? (ref k 1) 'key)
+      (let ((n (- (ref k 2) #\0)))
+         (cond
+            ((< n 0) #false)
+            ((> n 9) #false)
+            (else n)))
+      #false))
+
+(define (maybe-get-count ll)
+   (lets ((k ll (uncons ll space-node))
+          (n (key->digit k)))
+      (log "maybe-get-count: " k " -> " n)
       (cond
-         ((equal? what (tuple 'key #\d))
-            (let loop ((new buff) (lines null) (r r))
-               (if (= r 0)
+         ((not n) (values #false (cons k ll)))
+         ((eq? n 0) (values #false (cons k ll)))
+         (else
+            (let loop ((n n) (ll ll))
+               (lets ((x ll (uncons ll 0))
+                      (m (key->digit x)))
+                  (if m
+                     (loop (+ (* 10 n) m) ll)
+                     (values n (cons x ll)))))))))
+
+(define (get-movement ll self)
+   (log "getting movement of " self)
+   (lets ((np ll (maybe-get-count ll))
+          (_ (log " - np is " np ", ll " ll))
+          (n (if np np 1))
+          (op ll (uncons ll eof)))
+      (log "op is " op)
+      (tuple-case op
+         ((key k)
+            (cond
+               ((eq? self k) ;; same key shortcut, like dd or yy
+                  (values n 'line ll))
+               ((eq? k #\w) (values n 'word ll))
+               ((eq? k #\h) (values n 'left ll))
+               ((eq? k #\j) (values n 'down ll))
+               ((eq? k #\k) (values n 'up ll))
+               ((eq? k #\l) (values n 'right ll))
+               ((eq? k #\%) (values n 'sexp ll))
+               ((eq? op k) ;; same key shortcut, like dd or yy
+                  (values n 'line ll))
+               (else
+                  (log "get-movement confused: " n ", " k ", op was " k)
+                  (values #false #false ll))))
+         (else
+            (log "get-movement confused: " op)
+            (values #f #f ll)))))
+         
+(define (command-delete ll buff undo mode r cont)
+   (log "delete left rep is " r)
+   (lets
+      ((r (if (number? r) r 1)) ;; fixme, default to 1
+       (n step ll (get-movement ll #\d))
+       (_ (log "right rep is " n))
+       (n (* r n))) ;; left and right repetitions are equal
+      (log "delete movement is " (list 'n n 'step step))
+      (cond
+         ((equal? step 'line)
+            (let loop ((new buff) (lines null) (n n))
+               (if (= n 0)
                   (begin
                      (output (delta-update-screen buff new))
                      (cont ll
                         (put-buffer-meta new 'yank (tuple 'lines lines))
                         (push-undo undo buff) mode))
                   (lets ((new this (delete-line new)))
-                     (loop new (append lines (list this)) (- r 1))))))
-         ((equal? what (tuple 'key #\%))
+                     (loop new (append lines (list this)) (- n 1))))))
+         ((equal? step 'sexp)
             (lets ((buffp msg (buffer-cut-sexp buff)))
                (output (delta-update-screen buff buffp))
                (notify buffp msg)
                (cont ll buffp undo mode)))
          (else
-            (log "cannot delete " what " yet")
+            (log "cannot delete " step " yet")
             (cont ll buff undo mode)))))
 
 (define (command-no-op ll buff undo mode r cont)
@@ -1532,31 +1605,7 @@
 ;;; Buffer handling loop
 ;;;
 
-(define (key->digit k)
-   (if (eq? (ref k 1) 'key)
-      (let ((n (- (ref k 2) #\0)))
-         (cond
-            ((< n 0) #false)
-            ((> n 9) #false)
-            (else n)))
-      #false))
 
-(define space-node (tuple 'key #\space))
-
-(define (maybe-get-count ll)
-   (lets ((k ll (uncons ll space-node))
-          (n (key->digit k)))
-      (log "maybe-get-count: " k " -> " n)
-      (cond
-         ((not n) (values #false (cons k ll)))
-         ((eq? n 0) (values #false (cons k ll)))
-         (else
-            (let loop ((n n) (ll ll))
-               (lets ((x ll (uncons ll 0))
-                      (m (key->digit x)))
-                  (if m
-                     (loop (+ (* 10 n) m) ll)
-                     (values n (cons x ll)))))))))
 
 (define (maybe-get-buffer ll)
    (values #false ll))
