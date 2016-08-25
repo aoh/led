@@ -970,16 +970,21 @@
                      (put-buffer-meta buff 'search-history 
                         (cons res search-history))))
                 (regex ;; note: ^ and $ need special handling later
-                  (string->regex (str "m/^" res "/")))
-                (buff 
-                  (if (equal? res "")
-                     buff
-                     (-> buff (put-buffer-meta 'search-regex regex))))
-                (buffp msg
-                  (find-next buff)))
-               (output (delta-update-screen buff buffp))
-               (if msg (notify buffp msg))
-               (cont ll buffp undo mode))
+                  (string->regex (str "m/^" res "/"))))
+               (if regex
+                  (lets
+                     ((buff 
+                        (if (equal? res "")
+                           buff
+                           (-> buff (put-buffer-meta 'search-regex regex))))
+                      (buffp msg
+                        (find-next buff)))
+                     (output (delta-update-screen buff buffp))
+                     (if msg (notify buffp msg))
+                     (cont ll buffp undo mode))
+                  (begin
+                     (notify buff "Invalid extended regexp")
+                     (cont ll buff undo mode))))
             (begin
                (notify buff "canceled")
                (cont ll buff undo mode)))))
