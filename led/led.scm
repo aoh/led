@@ -1364,12 +1364,9 @@
                      (values n (cons x ll)))))))))
 
 (define (get-movement ll self)
-   (log "getting movement of " self)
    (lets ((np ll (maybe-get-count ll))
-          (_ (log " - np is " np ", ll " ll))
           (n (if np np 1))
           (op ll (uncons ll eof)))
-      (log "op is " op)
       (tuple-case op
          ((key k)
             (cond
@@ -1414,6 +1411,31 @@
                (output (delta-update-screen buff buffp))
                (notify buffp msg)
                (cont ll buffp undo mode)))
+         (else
+            (log "cannot delete " step " yet")
+            (cont ll buff undo mode)))))
+
+(define (command-yank ll buff undo mode r cont)
+   (lets
+      ((r (if (number? r) r 1))
+       (n step ll (get-movement ll #\y))
+       (n (* r n))) ;; left and right repetitions are equal
+      (cond
+         ((equal? step 'line)
+            (let loop ((new buff) (lines null) (n n))
+               (if (= n 0)
+                  (cont ll
+                     (put-buffer-meta buff 'yank (tuple 'lines lines))
+                     (push-undo undo buff) mode)
+                  (lets ((new this (delete-line new)))
+                     (loop new (append lines (list this)) (- n 1))))))
+         ((equal? step 'sexp)
+            (lets ((buffp msg (buffer-cut-sexp buff)))
+               (notify buff msg)
+               (cont ll 
+                  (put-buffer-meta buff 'yank
+                     (get-buffer-meta buffp 'yank ""))
+                  undo mode)))
          (else
             (log "cannot delete " step " yet")
             (cont ll buff undo mode)))))
@@ -1532,6 +1554,7 @@
       (put #\a command-insert-after)
       (put #\A command-insert-after-line)
       (put #\d command-delete)
+      (put #\y command-yank)
       (put #\J command-join-lines)
       (put #\G command-go-to-line)
       (put #\> command-indent)
