@@ -203,8 +203,7 @@
    (tio
       (font-dim)
       (raw (render "~" null))
-      (font-normal)
-      ))
+      (font-normal)))
 
 (define (draw-lines-at-offset tl w dx y dy end lines)
    (cond
@@ -469,6 +468,16 @@
             (loop (cdr line) pos (cons (car line) l))
             (values (cons (car line) l) (cdr line) pos)))))))
 
+(define (seek-in-list line pos)
+   (let loop ((line line) (pos pos) (l null))
+      (cond
+         ((eq? pos 0)
+            (values l line))
+         ((null? line)
+            (values l line))
+         (else
+            (loop (cdr line) (- pos 1) (cons (car line) l))))))
+
 ;; lines → u line d y
 (define (seek-line lines end)
    (let loop ((lines lines) (pos end) (u null))
@@ -524,21 +533,46 @@
    (or (eq? x 41)
        (equal? x rp-node)))
 
-;; buff movement-exp -> n | (dx . dy)
+(define (space-char? x)
+   (or (eq? x #\space) (eq? x 9)))
+
+;; r d -> r' d' n-down n-from-left
+(define (next-word r d)
+   (let loop ((r r) (d d) (y 0) (x 0) (space? #false))
+      (cond
+         ((null? r)
+            (if (null? d)
+               (values null null y x)
+               (loop (car d) (cdr d) (+ y 1) 0 #t))) ;; nl is a space
+         ((space-char? (car r))
+            (loop (cdr r) d y (+ x 1) #t))
+         (space?
+            (values r d y x))
+         (else
+            (loop (cdr r) d y (+ x 1) #f)))))
+
+;; r d n -> dy dx r' d'
+(define (next-words r d n)
+   (let loop((y 0) (x 0) (r r) (d d) (n n))
+      (if (eq? n 0)
+         (values y x r d)
+         (lets ((r d dy dx (next-word r d)))
+            (loop (+ y dy) (+ x dx) r d (- n 1))))))
+
+;; buff movement-exp -> n | dy dx
 (define (movement buff n type)
    (lets ((u d l r x y w h off meta buff))
       (cond
          ((eq? type 'end-of-line)
-            (if (eq? n 1)
-               (length r)
-               #false))
+            (values (- n 1) (length r)))
          ((eq? type 'beginning-of-line)
-            (if (eq? n 1)
-               (- 0 (length l))
-               #false))
+            (values (- n 1) (- 0 (length l))))
+         ((eq? type 'word)
+            (lets ((y x r d (next-words r d n)))
+               (values y x)))
          (else
             (log "unknown movement type " type)))))
-   
+
 ;; buff → (x . y) | #false
 (define (seek-matching-paren-back buff)
    (lets ((u d l r x y w h off meta buff))
@@ -609,14 +643,14 @@
                   (loop (+ xp (node-width (car r))) (- pos 1) (cons (car r) l) (cdr r) dx))))))
 
 ;; move line down within the same screen preserving cursor position if possible
-(define (line-down buff)
+(define (line-down buff ip)
    (lets ((u d l r x y w h off meta buff)
           (dx dy off)
           (line (append (reverse l) r))
           (u (cons line u))
           (y (+ y 1))
           (line d (uncons d null))
-          (x (min x (+ 1 (- (printable-length line) (car off)))))
+          (x (min x (+ (if ip 1 0) (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
           (l r offset (seek-in-line line line-pos)))
         ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "', offset " offset) 
@@ -625,14 +659,14 @@
           (- x offset) y)))
 
 ;; move line up within the same screen preserving cursor position if possible
-(define (line-up buff)
+(define (line-up buff ip)
    (lets ((u d l r x y w h off meta buff)
           (dx dy off)
           (line (append (reverse l) r))
           (d (cons line d))
           (y (- y 1))
           (line u (uncons u null))
-          (x (min x (+ 1 (- (printable-length line) (car off)))))
+          (x (min x (+ (if ip 1 0) (- (printable-length line) (car off)))))
           (line-pos (+ (- x 1) (car off)))
           (l r offset (seek-in-line line line-pos)))
         ;(log "line-up went to (x . y) " (cons x y))
@@ -671,7 +705,7 @@
                   (values (buffer-seek buff mx my #false) "search wrapped")
                   (values buff "no matches"))))))
 
-(define (move-arrow buff dir)
+(define (move-arrow buff dir ip)
    (lets ((u d l r x y w h off meta buff))
       (log "arrow " dir " from " (cons x y) ", dim " (cons w h))
       (cond
@@ -682,21 +716,21 @@
                ((eq? y 1)
                   (lets
                     ((buff tio-scroll (scroll-up buff))
-                     (buff tio-move (move-arrow buff dir)))
+                     (buff tio-move (move-arrow buff dir ip)))
                     (values buff
                       (append tio-scroll tio-move))))
               ((not (eq? 0 (car off))) ;; there is x-offset
                 (let ((next-len (printable-length (car u))))
                   (if (< next-len (car off)) ;; next line start not visible
                     (lets ;; dummy version
-                      ((buff tio (move-arrow buff 'left))
-                       (buff tio-this (move-arrow buff dir)))
+                      ((buff tio (move-arrow buff 'left ip))
+                       (buff tio-this (move-arrow buff dir ip)))
                       (values buff (append tio tio-this)))
-                    (lets ((buff x y (line-up buff)))
+                    (lets ((buff x y (line-up buff ip)))
                       (values buff
                         (tio (set-cursor x y)))))))
                (else
-                 (lets ((buff x y (line-up buff)))
+                 (lets ((buff x y (line-up buff ip)))
                    (values buff
                      (tio (set-cursor x y)))))))
          ((eq? dir 'down)
@@ -706,21 +740,21 @@
               ((>= y h)
                 (lets
                   ((buff tio-scroll (scroll-down buff))
-                   (buff tio-move (move-arrow buff dir)))
+                   (buff tio-move (move-arrow buff dir ip)))
                   (values buff
                     (append tio-scroll tio-move))))
               ((not (eq? 0 (car off))) ;; there is x-offset
                 (let ((next-len (printable-length (car d))))
                   (if (< next-len (car off)) ;; next line start not visible
                     (lets ;; dummy version
-                      ((buff tio (move-arrow buff 'left))
-                       (buff tio-this (move-arrow buff dir)))
+                      ((buff tio (move-arrow buff 'left ip))
+                       (buff tio-this (move-arrow buff dir ip)))
                       (values buff (append tio tio-this)))
-                    (lets ((buff x y (line-down buff)))
+                    (lets ((buff x y (line-down buff ip)))
                       (values buff
                         (tio (set-cursor x y)))))))
               (else
-                (lets ((buff x y (line-down buff)))
+                (lets ((buff x y (line-down buff ip)))
                   (values buff (tio (set-cursor x y)))))))
          ((eq? dir 'left)
             (if (null? l)
@@ -729,7 +763,7 @@
                   (if (<= x step)
                      (lets
                        ((buff scroll-tio (scroll-left buff))
-                        (buff move-tio (move-arrow buff dir)))
+                        (buff move-tio (move-arrow buff dir ip)))
                        (values buff (append scroll-tio move-tio)))
                      (values
                         (buffer u d (cdr l) (cons (car l) r) (- x step) y w h off meta)
@@ -745,7 +779,7 @@
                         (tio (cursor-right step)))
                      (lets
                        ((buff scroll-tio (scroll-right buff))
-                        (buff move-tio (move-arrow buff dir)))
+                        (buff move-tio (move-arrow buff dir ip)))
                        (values buff (append scroll-tio move-tio)))))))
          ((eq? dir 'command-right) ;; command mode
             (if (or (null? r) (null? (cdr r)))
@@ -757,7 +791,7 @@
                         (tio (cursor-right step)))
                      (lets
                        ((buff scroll-tio (scroll-right buff))
-                        (buff move-tio (move-arrow buff dir)))
+                        (buff move-tio (move-arrow buff dir ip)))
                        (values buff (append scroll-tio move-tio)))))))
          (else
             (log "odd line move: " dir)
@@ -890,7 +924,7 @@
          ((eq? 'lines (ref data 1))
             (log "appending lines from buffer")
             (lets ((buff (paste-lines-below buff (ref data 2)))
-                   (buff tio (move-arrow buff 'down)))
+                   (buff tio (move-arrow buff 'down #f)))
                buff))
          ((eq? 'sequence (ref data 1))
             (log "appending sequence from buffer")
@@ -1029,22 +1063,22 @@
       (cont ll buff undo mode)))
 
 (define (command-move-down ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'down))) 
+   (lets ((buff out (move-arrow buff 'down #f))) 
       (output out) 
       (cont ll buff undo mode)))
 
 (define (command-move-up ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'up))) 
+   (lets ((buff out (move-arrow buff 'up #f))) 
       (output out) 
       (cont ll buff undo mode)))
 
 (define (command-move-right ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'command-right))) 
+   (lets ((buff out (move-arrow buff 'command-right #f))) 
       (output out) 
       (cont ll buff undo mode)))
 
 (define (command-move-left ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'left))) 
+   (lets ((buff out (move-arrow buff 'left #f))) 
       (output out) 
       (cont ll buff undo mode)))
 
@@ -1297,6 +1331,9 @@
                 (buff (buffer-seek buff 0 line #false)))
             (output (update-screen buff))
             (cont ll buff undo mode)))
+       ((m/^move +[0-9]+$/ res)
+          (let ((n (string->number (s/^move +// res))))
+             (values ll buff undo mode (tuple 'move n))))
        ((equal? res "$")
          (command-go-to-last-line ll buff undo mode r cont))
        (else
@@ -1386,14 +1423,14 @@
          (else
             (log "get-movement confused: " op)
             (values #f #f ll)))))
-         
+       
+;; todo: put the deleted text object to a buffer
 (define (command-delete ll buff undo mode r cont)
-   (log "delete left rep is " r)
    (lets
       ((r (if (number? r) r 1)) ;; fixme, default to 1
-       (n step ll (get-movement ll #\d))
-       (_ (log "right rep is " n))
-       (n (* r n))) ;; left and right repetitions are equal
+       (m step ll (get-movement ll #\d))
+       (undop (push-undo undo buff))
+       (n (* r (or m 1)))) ;; left and right repetitions are equal
       (log "delete movement is " (list 'n n 'step step))
       (cond
          ((equal? step 'line)
@@ -1403,24 +1440,44 @@
                      (output (delta-update-screen buff new))
                      (cont ll
                         (put-buffer-meta new 'yank (tuple 'lines lines))
-                        (push-undo undo buff) mode))
+                        undop mode))
                   (lets ((new this (delete-line new)))
                      (loop new (append lines (list this)) (- n 1))))))
          ((equal? step 'sexp)
             (lets ((buffp msg (buffer-cut-sexp buff)))
                (output (delta-update-screen buff buffp))
                (notify buffp msg)
-               (cont ll buffp undo mode)))
+               (cont ll buffp undop mode)))
+         ((equal? step 'word) 
+            (lets ((u d l r x y w h off meta buff)
+                   (dy dx r d (next-words r d n))
+                   (buffp (buffer u d l r x y w h off meta)))
+               (output (delta-update-screen buff buffp))
+               (cont ll buffp undop mode)))
          (else
             (log "cannot delete " step " yet")
             (cont ll buff undo mode)))))
 
+(define (command-change ll buff undo mode r cont)
+   (command-delete ll buff undo mode r
+      (lambda (ll buff undo mode)
+         (cont ll buff undo 'insert))))
+
+(define (command-move-words ll buff undo mode r cont)
+   (lets ((dy dx (movement buff (or r 1) 'word)))
+      (log "moving" r "words gives dy" dy ", dx" dx)
+      (if (eq? dy 0)
+         (cont (keys ll #\l dx) buff undo mode) ;; use repetitions later
+         (cont (-> ll (keys #\l dx) (keys #\j dy) (keys #\0 1) ) buff undo mode))))
+   
 (define (command-yank ll buff undo mode r cont)
    (lets
       ((r (if (number? r) r 1))
-       (n step ll (get-movement ll #\y))
-       (n (* r n))) ;; left and right repetitions are equal
+       (m step ll (get-movement ll #\y))
+       (n (* r (or m 1)))) ;; left and right repetitions are equal
       (cond
+         ((not m)
+            (cont ll buff undo mode))
          ((equal? step 'line)
             (let loop ((new buff) (lines null) (n n))
                (if (= n 0)
@@ -1437,7 +1494,7 @@
                      (get-buffer-meta buffp 'yank ""))
                   undo mode)))
          (else
-            (log "cannot delete " step " yet")
+            (log "cannot yank " step " yet")
             (cont ll buff undo mode)))))
 
 (define (command-no-op ll buff undo mode r cont)
@@ -1533,6 +1590,7 @@
       (put #\/ command-regex-search)
       (put #\n command-find-next)
       (put #\m command-mark-position)
+      (put #\w command-move-words)
       (put #\$ command-line-end)
       (put #\0 command-line-start)
       (put #\j command-move-down)
@@ -1554,6 +1612,7 @@
       (put #\a command-insert-after)
       (put #\A command-insert-after-line)
       (put #\d command-delete)
+      (put #\c command-change)
       (put #\y command-yank)
       (put #\J command-join-lines)
       (put #\G command-go-to-line)
@@ -1619,7 +1678,7 @@
          (buffer u (cons (append ind r) d) l null x y w h  off meta))
        (draw-tio
          (delta-update-screen buff buffp))
-       (buffp move-tio (move-arrow buffp 'down)))
+       (buffp move-tio (move-arrow buffp 'down #t)))
       (values
          buffp
          (append draw-tio move-tio))))
@@ -1668,7 +1727,7 @@
                      (output out)
                      (led-buffer ll buff undo mode)))
                ((arrow dir)
-                  (lets ((buff out (move-arrow buff dir)))
+                  (lets ((buff out (move-arrow buff dir #t)))
                      (output out)
                      (led-buffer ll buff undo mode)))
                ((end-of-text)
@@ -1833,6 +1892,11 @@
                            (begin
                               (log "failed to open " path)
                               (led-buffers ll left state right #false))))))
+               ((move n)
+                  (log "moving buffer to" n)
+                  (lets ((left right (seek-in-list (append (reverse left) right) (max 0 (- n 1)))))
+                     (log "lens " (cons (length left) (length right)))
+                     (led-buffers ll left state right (str "moved to " (+ 1 (length left))))))
                (else is unknown
                   (log "unknown buffer action " action)
                   (led-buffers ll left state right #false))))
@@ -1878,7 +1942,7 @@
                         ))
                out (list 30 31 32 33 34 35 36 37)))
          null (list 40 41 42 43 44 45 46 47)))
-   '(sleep 100000)
+   '(sleep 10000)
    (output
       (tio
          (disable-line-wrap))))
@@ -1895,10 +1959,11 @@
             (put 'tab tab-node)
             (put 'tab-width 3)))
        (states
-         (if (null? args)
-            (let ((buff (make-empty-buffer w h meta)))
-               (list (tuple buff (initial-undo buff) 'command)))
-            (open-all-files args w h meta))))
+         (reverse
+            (if (null? args)
+               (let ((buff (make-empty-buffer w h meta)))
+                  (list (tuple buff (initial-undo buff) 'command)))
+               (open-all-files args w h meta)))))
       (if states
          (led-buffers ll null (car states) (cdr states) #false)
          1))))
