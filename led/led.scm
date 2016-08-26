@@ -1459,9 +1459,13 @@
             (cont ll buff undo mode)))))
 
 (define (command-change ll buff undo mode r cont)
-   (command-delete ll buff undo mode r
-      (lambda (ll buff undo mode)
-         (cont ll buff undo 'insert))))
+   ;; convert possible next c of [c]c to d, 
+   (lets 
+      ((next ll (uncons ll eof))
+       (ll (cons (if (equal? next (tuple 'key #\c)) (tuple 'key #\d) next) ll)))
+      (command-delete ll buff undo mode r
+         (lambda (ll buff undo mode)
+            (cont ll buff undo 'insert)))))
 
 (define (command-move-words ll buff undo mode r cont)
    (lets ((dy dx (movement buff (or r 1) 'word)))
