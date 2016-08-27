@@ -5,173 +5,16 @@
   (led log)
   (led buffer)
   (led undo)
-  (owl args)
-  (only (owl unicode) encode-point))
+  (led node)
+  (owl args))
 
 (define version-str "led v0.1a")
-
 
 (define (output lst)
    (write-bytes stdout lst))
 
 ;;; Movement and insert mode edit operation
-   
-(define rp-node
-   (tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal))))
-   
-(define lp-node
-   (tuple 'replace (list 40) 1 (tio (font-dim) (raw (list 40)) (font-normal))))
-   
-(define tab-node 
-  (tuple 'replace 
-   (list #\tab) 
-   3 
-   (tio
-      (font-dim)
-      ;(raw (list #\space #\▹ #\space))
-   (raw (list #\_ #\_ #\_))
-   (font-normal))))
-
-(define (num->hex n)
-   (lets ((n (number->string n 16))
-          (l (string-length n)))
-      (cond
-         ((eq? l 1)
-            (ilist #\0 #\x #\0 (string->list n)))
-         ((eq? l 2)
-            (ilist #\0 #\x (string->list n)))
-         (else
-            (error "num->hex: " n)))))
-
-(define (hex-node n)
-   (let ((node
-      (tuple 'replace 
-         (list n) 
-         4 
-         (tio
-            (font-dim)
-            (raw (num->hex n))
-            (font-normal)))))
-      (log "hex node of " n " is " node)
-      node))
-
-(define (whitespace? node)
-   (cond
-      ((eq? node #\space) #true)
-      ((eq? node 13) #true)
-      ((eq? node tab-node) #true)
-      (else #false)))
-
-(define (drop-leading-whitespace lst)
-   (cond
-      ((null? lst) lst)
-      ((whitespace? (car lst))
-         (drop-leading-whitespace (cdr lst)))
-      (else lst)))
-      
-(define (untab meta)
-   (let ((tab (get meta 'tab tab-node)))
-      (λ (line)
-         (map 
-            (λ (node)   
-               (cond
-                  ((eq? node #\() lp-node)
-                  ((eq? node #\)) rp-node)
-                  ((eq? node #\tab) tab)
-                  (else node)))
-            line))))
-      
-(define (path->lines path meta)
-   (let ((fd (open-input-file path)))
-      (if fd
-         (map (untab meta) (map string->list (force-ll (lines fd))))
-         #false)))
-
-(define (make-file-state w h path meta)
-   (log "making file state out out of " path)
-   (cond
-      ((path->lines path meta) =>
-         (lambda (data)
-            (if (pair? data)
-               (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) (put meta 'path path))
-               (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
-      ((open-output-file path) =>
-         (lambda (fd)
-            (log "opened new fd " fd)
-            (close-port fd) ;; now input succeeds
-            (log "created " path)
-            (make-file-state w h path meta)))
-      (else
-         (log "Could not open " path)
-         #false)))
-
-(define (node-screen-width x) (ref x 3))
-
-(define (node-screen-representation x) (ref x 4))
-
-(define (node-width x)
-   (cond
-      ((eq? (type x) type-fix+) 1)
-      ((tuple? x) (node-screen-width x))
-      (else (error "node-width: " x))))
-
-(define (take-printable line n)
-  (cond
-    ((eq? n 0) null)
-    ((pair? line)
-      (lets ((x line line))
-        (cond
-          ((eq? (type x) type-fix+)
-            ;; a printable unicode code point
-            (if (eq? 0 (fxband x #x80))
-              ;; a printable ascii range thingie (usual suspect)
-              (cons x (take-printable line (- n 1)))
-              (encode-point x
-                (take-printable line (- n 1)))))
-          ((tuple? x)
-            ;; #(type actual-codepoints width-on-screen screen-codepoints)
-            (lets ((type cps width output x))
-              (cond
-                ((eq? type 'replace)
-                    (append output
-                       (take-printable line (- n width))))
-                (else
-                  (error "take-printable: what is " x)))))
-          (else
-            (error "take-printable: what is " x)))))
-    (else
-      null)))
-
-(define (render-node node tl)
-   (cond
-      ((eq? (type node) type-fix+)
-         (encode-point node tl))
-      ((and (tuple? node) (eq? (ref node 1) 'replace))
-         (foldr render-node tl (ref node 2)))
-      (else
-         (error "render-node: what is " node))))
-
-(define (drop-printable line n)
-  (cond
-    ((eq? n 0) line)
-    ((pair? line)
-      (lets ((x line line))
-        (cond
-          ((eq? (type x) type-fix+)
-            (drop-printable line (- n 1)))
-          ((tuple? x)
-            ;; #(type actual-codepoints width-on-screen screen-codepoints)
-            (lets ((type cps width output x))
-               ;(drop-printable (append output line) n)
-               (drop-printable line (- n width))))
-          (else
-            (error "drop-printable: what is " x)))))
-    (else
-      null)))
-
-(define (printable-length line)
-   (fold (λ (n x) (+ n (node-width x))) 0 line))
-
+  
 (define empty-buffer-line
    (tio
       (font-dim)
@@ -238,6 +81,8 @@
       (else
          (lets ((x d (uncons d null)))
             (same-line (cons x u) d (+ dy 1))))))
+
+;; note: delta updates could be used to work around lack of clear-line-upto and allow
 
 (define (delta-update-screen old new)
    (if (eq? old new)
@@ -333,39 +178,12 @@
             (font-normal)
             (cursor-restore)
             (set-cursor x y)))))
-      
-(define (key-node k)
-   (log "key-node " k)
-   (cond
-      ((eq? k #\tab)
-         tab-node)
-      ((eq? k 40) ;; lp
-         ;k
-         lp-node
-         )
-      ((eq? k 41) ;; rp
-         ;k
-         rp-node
-         )
-      ((< 31 k 127) ;; ascii range char
-         k)
-      ((eq? k 127)
-         (hex-node k))
-      ((< k 32)
-         (hex-node k))
-      (else
-         k)))
-
-(define (encode-node k tl)
-   (cond 
-      ((eq? (type k) type-fix+)
-         (encode-point k tl))
-      (else
-         (foldr encode-node tl (node-screen-representation k)))))
 
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
+      (log "getting node of " k)
       (lets ((node (key-node k))
+             (_ (log "XXXXXXXXXXXXXXXXXXXXXx node " node))
              (nw (node-width node)))
          (log "adding node " node)
          (if (< (+ x nw) w)
@@ -498,16 +316,6 @@
                (else
                   (loop (cons (car r) l) (cdr r) (+ x (node-width (car r))) dx moved?)))))))
 
-(define (left-paren? x)
-   (or (eq? x 40)
-       (equal? x lp-node)))
-
-(define (right-paren? x)
-   (or (eq? x 41)
-       (equal? x rp-node)))
-
-(define (space-char? x)
-   (or (eq? x #\space) (eq? x 9)))
 
 ;; r d -> r' d' n-down n-from-left
 (define (next-word r d)
@@ -1201,6 +1009,24 @@
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
+(define (untab meta)
+   (let ((tab (get meta 'tab tab-node)))
+      (λ (line)
+         (map 
+            (λ (node)   
+               (cond
+                  ((eq? node #\() lp-node)
+                  ((eq? node #\)) rp-node)
+                  ((eq? node #\tab) tab)
+                  (else node)))
+            line))))
+      
+(define (path->lines path meta)
+   (let ((fd (open-input-file path)))
+      (if fd
+         (map (untab meta) (map string->list (force-ll (lines fd))))
+         #false)))
+
 (define (command-enter-command ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))
    (lets
@@ -1319,8 +1145,6 @@
 
 (define eof (tuple 'eof))
 
-(define space-node (tuple 'key #\space))
-
 (define (key->digit k)
    (if (eq? (ref k 1) 'key)
       (let ((n (- (ref k 2) #\0)))
@@ -1330,8 +1154,10 @@
             (else n)))
       #false))
 
+(define space-key (tuple 'key #\space))
+      
 (define (maybe-get-count ll)
-   (lets ((k ll (uncons ll space-node))
+   (lets ((k ll (uncons ll space-key))
           (n (key->digit k)))
       (log "maybe-get-count: " k " -> " n)
       (cond
@@ -1636,8 +1462,6 @@
 ;;; Buffer handling loop
 ;;;
 
-
-
 (define (maybe-get-buffer ll)
    (values #false ll))
 
@@ -1666,7 +1490,7 @@
                              buff undo mode)
                         (led-buffer ll buff undo mode))))
                ((tab)
-                  (led-buffer (ilist space-node space-node space-node ll) buff undo mode))
+                  (led-buffer (ilist space-key space-key space-key ll) buff undo mode))
                ((enter)
                   (lets ((buff out (insert-enter buff)))
                      (output out)
@@ -1707,7 +1531,7 @@
       ;; [number] [command] [text object] ;; "x42yy, yank next 42 lines
       ;;                                     "bd0, cut beginning of line to b
       (lets ((count ll (maybe-get-count ll))
-             (msg ll (uncons ll space-node)))
+             (msg ll (uncons ll space-key)))
          (tuple-case msg
            ((key k)
                ((get *command-mode-actions* k command-no-op)
@@ -1741,6 +1565,24 @@
           (buff (make-empty-buffer w (- h 1) #empty)))
       (values ll
          (tuple buff (initial-undo buff) 'command))))
+
+(define (make-file-state w h path meta)
+   (log "making file state out out of " path)
+   (cond
+      ((path->lines path meta) =>
+         (lambda (data)
+            (if (pair? data)
+               (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) (put meta 'path path))
+               (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
+      ((open-output-file path) =>
+         (lambda (fd)
+            (log "opened new fd " fd)
+            (close-port fd) ;; now input succeeds
+            (log "created " path)
+            (make-file-state w h path meta)))
+      (else
+         (log "Could not open " path)
+         #false)))
 
 (define (path->buffer-state ll path)
    (lets ((w h ll (get-terminal-size ll))
@@ -1918,7 +1760,7 @@
          1))))
 
 (define usage-text
-  "Usage: led [flags] [file]")
+  "Usage: led [flags] [file] ...")
 
 (define command-line-rules
   (cl-rules
@@ -1973,10 +1815,4 @@
   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
-
-
-
-
-
-
 
