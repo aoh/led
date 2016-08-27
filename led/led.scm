@@ -7,44 +7,81 @@
 
 (define version-str "led v0.1a")
 
-(define (log . what)
-   (mail 'logger what))
+(define-library (led log)
+   
+   (export
+      log)
+   
+   (import
+      (owl base))
+   
+   (begin
+      (define (log . what)
+         (mail 'logger what))))
+
+(import (led log))
 
 (define (output lst)
    (write-bytes stdout lst))
 
 ;;; Movement and insert mode edit operation
 
-(define (buffer up down left right x y w h off meta)
-   (tuple up down left right x y w h off meta))
+(define-library (led buffer)
 
-(define (make-empty-buffer w h meta)
-   (buffer null null null null 1 1 w h (cons 0 0) meta))
+   (import
+      (owl base))
+   
+   (export
+      buffer
+      make-empty-buffer
+      buffer-meta
+      set-buffer-meta
+      put-buffer-meta
+      get-buffer-meta
+      buffer-path
+      buffer-path-str
+      buffer-x
+      screen-width
+      screen-height
+      buffer-y)
 
-(define (buffer-meta buff) (ref buff 10))
-(define (set-buffer-meta buff meta) (set buff 10 meta))
+   (begin      
 
-(define (put-buffer-meta buff key val)
-   (set-buffer-meta buff (put (buffer-meta buff) key val)))
+      (define (buffer up down left right x y w h off meta)
+         (tuple up down left right x y w h off meta))
+   
+      (define (make-empty-buffer w h meta)
+         (buffer null null null null 1 1 w h (cons 0 0) meta))
+   
+      (define (buffer-meta buff) (ref buff 10))
+      (define (set-buffer-meta buff meta) (set buff 10 meta))
+      (define (screen-width buff) (ref buff 7))
+      (define (screen-height buff) (ref buff 8))
 
-(define (get-buffer-meta buff key def)
-   (get (buffer-meta buff) key def))
-
-(define (buffer-path buff default)
-   (get-buffer-meta buff 'path default))
-
-(define (buffer-path-str buff)
-   (get-buffer-meta buff 'path "*scratch*"))
-
-(define (buffer-x buff) (ref buff 5))
-(define (buffer-y buff) (ref buff 6))
-
+   
+      (define (put-buffer-meta buff key val)
+         (set-buffer-meta buff (put (buffer-meta buff) key val)))
+   
+      (define (get-buffer-meta buff key def)
+         (get (buffer-meta buff) key def))
+   
+      (define (buffer-path buff default)
+         (get-buffer-meta buff 'path default))
+   
+      (define (buffer-path-str buff)
+         (get-buffer-meta buff 'path "*scratch*"))
+   
+      (define (buffer-x buff) (ref buff 5))
+      (define (buffer-y buff) (ref buff 6))))
+   
+(import (led buffer))
+   
 (define rp-node
    (tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal))))
-
+   
 (define lp-node
    (tuple 'replace (list 40) 1 (tio (font-dim) (raw (list 40)) (font-normal))))
-
+   
 (define tab-node 
   (tuple 'replace 
    (list #\tab) 
@@ -52,8 +89,8 @@
    (tio
       (font-dim)
       ;(raw (list #\space #\▹ #\space))
-      (raw (list #\_ #\_ #\_))
-      (font-normal))))
+   (raw (list #\_ #\_ #\_))
+   (font-normal))))
 
 (define (num->hex n)
    (lets ((n (number->string n 16))
@@ -127,10 +164,6 @@
       (else
          (log "Could not open " path)
          #false)))
-
-(define (screen-width buff) (ref buff 7))
-
-(define (screen-height buff) (ref buff 8))
 
 (define (node-screen-width x) (ref x 3))
 
@@ -797,33 +830,46 @@
             (log "odd line move: " dir)
             (values buff null)))))
 
-;;; Undo
+(define-library (led undo)
+   
+   (export
+      initial-undo
+      push-undo
+      pop-undo
+      unpop-undo)
+      
+   (import
+      (owl base)
+      (led log))
+   
+   (begin
+      (define (initial-undo buff)
+         (cons (list buff) null))
+      
+      ;; fixme - should have current at head of undo for dirtiness, or keep track otherwise
+      (define (push-undo undo buff)
+         (log "pushing new version")
+         (lets ((prev new undo))
+            ;; no way to return to future after changing the past
+            (cons (cons buff prev) null)))
+      
+      (define (pop-undo undo buff)
+         (log "popping undo")
+         (lets ((prev new undo))
+            (if (null? prev)
+               (values undo buff)
+               (values
+                  (cons (cdr prev) (cons buff new))
+                  (car prev)))))
+      
+      (define (unpop-undo undo buff)
+         (log "unpopping undo")
+         (lets ((prev new undo))
+            (if (null? new)
+               (values undo buff)
+               (values (cons (cons buff prev) (cdr new)) (car new)))))))
 
-(define (initial-undo buff)
-   (cons (list buff) null))
-
-;; fixme - should have current at head of undo for dirtiness, or keep track otherwise
-(define (push-undo undo buff)
-   (log "pushing new version")
-   (lets ((prev new undo))
-      ;; no way to return to future after changing the past
-      (cons (cons buff prev) null)))
-
-(define (pop-undo undo buff)
-   (log "popping undo")
-   (lets ((prev new undo))
-      (if (null? prev)
-         (values undo buff)
-         (values
-            (cons (cdr prev) (cons buff new))
-            (car prev)))))
-
-(define (unpop-undo undo buff)
-   (log "unpopping undo")
-   (lets ((prev new undo))
-      (if (null? new)
-         (values undo buff)
-         (values (cons (cons buff prev) (cdr new)) (car new)))))
+(import (led undo))
 
 ;; special case of input not having a terminal newline can be handled 
 ;; in buffer metadata if necessary
