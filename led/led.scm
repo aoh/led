@@ -2,79 +2,19 @@
 
 (import
   (led terminal)
-  (only (owl unicode) encode-point)
-  (owl args))
+  (led log)
+  (led buffer)
+  (led undo)
+  (owl args)
+  (only (owl unicode) encode-point))
 
 (define version-str "led v0.1a")
 
-(define-library (led log)
-   
-   (export
-      log)
-   
-   (import
-      (owl base))
-   
-   (begin
-      (define (log . what)
-         (mail 'logger what))))
-
-(import (led log))
 
 (define (output lst)
    (write-bytes stdout lst))
 
 ;;; Movement and insert mode edit operation
-
-(define-library (led buffer)
-
-   (import
-      (owl base))
-   
-   (export
-      buffer
-      make-empty-buffer
-      buffer-meta
-      set-buffer-meta
-      put-buffer-meta
-      get-buffer-meta
-      buffer-path
-      buffer-path-str
-      buffer-x
-      screen-width
-      screen-height
-      buffer-y)
-
-   (begin      
-
-      (define (buffer up down left right x y w h off meta)
-         (tuple up down left right x y w h off meta))
-   
-      (define (make-empty-buffer w h meta)
-         (buffer null null null null 1 1 w h (cons 0 0) meta))
-   
-      (define (buffer-meta buff) (ref buff 10))
-      (define (set-buffer-meta buff meta) (set buff 10 meta))
-      (define (screen-width buff) (ref buff 7))
-      (define (screen-height buff) (ref buff 8))
-
-   
-      (define (put-buffer-meta buff key val)
-         (set-buffer-meta buff (put (buffer-meta buff) key val)))
-   
-      (define (get-buffer-meta buff key def)
-         (get (buffer-meta buff) key def))
-   
-      (define (buffer-path buff default)
-         (get-buffer-meta buff 'path default))
-   
-      (define (buffer-path-str buff)
-         (get-buffer-meta buff 'path "*scratch*"))
-   
-      (define (buffer-x buff) (ref buff 5))
-      (define (buffer-y buff) (ref buff 6))))
-   
-(import (led buffer))
    
 (define rp-node
    (tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal))))
@@ -829,47 +769,6 @@
          (else
             (log "odd line move: " dir)
             (values buff null)))))
-
-(define-library (led undo)
-   
-   (export
-      initial-undo
-      push-undo
-      pop-undo
-      unpop-undo)
-      
-   (import
-      (owl base)
-      (led log))
-   
-   (begin
-      (define (initial-undo buff)
-         (cons (list buff) null))
-      
-      ;; fixme - should have current at head of undo for dirtiness, or keep track otherwise
-      (define (push-undo undo buff)
-         (log "pushing new version")
-         (lets ((prev new undo))
-            ;; no way to return to future after changing the past
-            (cons (cons buff prev) null)))
-      
-      (define (pop-undo undo buff)
-         (log "popping undo")
-         (lets ((prev new undo))
-            (if (null? prev)
-               (values undo buff)
-               (values
-                  (cons (cdr prev) (cons buff new))
-                  (car prev)))))
-      
-      (define (unpop-undo undo buff)
-         (log "unpopping undo")
-         (lets ((prev new undo))
-            (if (null? new)
-               (values undo buff)
-               (values (cons (cons buff prev) (cdr new)) (car new)))))))
-
-(import (led undo))
 
 ;; special case of input not having a terminal newline can be handled 
 ;; in buffer metadata if necessary
@@ -2043,26 +1942,6 @@
         (wait 100)
         (halt 1)))))
 
-(define (sink arg)
-   (sink (wait-mail)))
-
-(define (log-to port)
-   (print-to port (ref (wait-mail) 2))
-   (log-to port))
-
-(define (logger meta)
-   (let ((log-path (getf meta 'log)))
-      (if log-path
-         (let ((port (open-output-file log-path)))
-            (if port
-               (begin
-                  (print-to port "Started logging")
-                  (log-to port))
-               (begin
-                  (print-to stderr "could not open log file " log-path)
-                  (halt 1))))
-         (sink #f))))
-
 (define (led-input-stream dict)
    (let ((path (getf dict 'faketerm)))
       (if path
@@ -2085,9 +1964,8 @@
       0)
     (else
       (log "started " dict ", " args)
-      (fork-linked-server 'logger (λ () (logger dict)))
-      (fork-linked-server 'led
-         (λ () (start-led dict args (led-input-stream dict))))
+      (fork-linked-server 'logger (λ () (start-log dict)))
+      (fork-linked-server 'led (λ () (start-led dict args (led-input-stream dict))))
       (log "started")
       (trampoline))))
 
