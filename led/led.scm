@@ -106,6 +106,11 @@
                   (maybe-draw-lines-at-offset w (car noff) (+ ny 1) +1 (+ h 1) nd od)
                   (set-cursor nx ny)))
             (update-screen new)))))
+
+
+;;;
+;;; Screen movement
+;;;
     
 (define (scroll-right buff)
    (lets 
@@ -167,23 +172,11 @@
          (font-normal)
          (cursor-restore)))))
 
-(define (notify buff txt)
-   (lets ((u d l r x y w h off meta buff))
-      (output
-         (tio
-            (set-cursor 1 (+ h 1))
-            (clear-line)
-            (font-dim)
-            (raw (if (string? txt) (render txt null) txt))
-            (font-normal)
-            (cursor-restore)
-            (set-cursor x y)))))
+
 
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
-      (log "getting node of " k)
       (lets ((node (key-node k))
-             (_ (log "XXXXXXXXXXXXXXXXXXXXXx node " node))
              (nw (node-width node)))
          (log "adding node " node)
          (if (< (+ x nw) w)
@@ -317,6 +310,11 @@
                   (loop (cons (car r) l) (cdr r) (+ x (node-width (car r))) dx moved?)))))))
 
 
+
+;;;
+;;; Text range operations
+;;;
+
 ;; r d -> r' d' n-down n-from-left
 (define (next-word r d)
    (let loop ((r r) (d d) (y 0) (x 0) (space? #false))
@@ -354,6 +352,52 @@
          (else
             (log "unknown movement type " type)))))
 
+(define (cut-forward r d dy dx)
+   (if (eq? dy 0)
+      (lets ((cutd r (split r dx)))
+         (values r d (tuple 'sequence cutd)))
+      (lets ((next-lines d (split d dy)))
+         (if (eq? dx 0)
+            (lets ((new-r d (uncons d null)))
+               (values new-r d (tuple 'lines (cons r next-lines))))
+            (lets ((new-r d (uncons d null))
+                   (last-partial new-r (split new-r dx)))
+                (values new-r d 
+                   (tuple 'lines 
+                      (cons r (append next-lines (list last-partial))))))))))
+      
+;; u d l r dy dx -> u' d' l' r' cut-data
+(define (cut-movement buff dy dx)
+   (lets ((u d l r x y w h off meta buff))
+      (cond
+         ((< dy 0)
+            (log "no backward cut yet")
+            (values u d l r null))
+         ((< dx 0)
+            (log "no trailing cut yet")
+            (values u d l r null))
+         (else
+            (lets ((r d cut (cut-forward r d dy dx)))
+               (values u d l r cut))))))
+
+;; buff -> dy dx | #f #f, use new movement deltas
+(define (movement-matching-paren-forward buff)
+   (lets ((u d l r x y w h off meta buff))
+      (let loop ((x 0) (y 0) (r r) (d d) (depth 0))
+         (cond
+            ((null? r)
+               (if (null? d)
+                  (values #f #f)
+                  (loop 0 (+ y 1) (car d) (cdr d) depth)))
+            ((right-paren? (car r))
+               (if (eq? depth 1)
+                  (values y (+ x 1))
+                  (loop (+ x 1) y (cdr r) d (- depth 1))))
+            ((left-paren? (car r))
+               (loop (+ x 1) y (cdr r) d (+ depth 1)))
+            (else
+               (loop (+ x 1) y (cdr r) d depth))))))
+
 ;; buff → (x . y) | #false
 (define (seek-matching-paren-back buff)
    (lets ((u d l r x y w h off meta buff))
@@ -390,6 +434,8 @@
                (loop (+ x 1) y (cdr r) d (+ depth 1)))
             (else
                (loop (+ x 1) y (cdr r) d depth))))))
+
+
 
 (define (seek-line-start buff)
    (lets ((u d l r x y w h off meta buff)
@@ -758,6 +804,18 @@
 ;;;
 ;;; Command mode actions
 ;;;
+
+(define (notify buff txt)
+   (lets ((u d l r x y w h off meta buff))
+      (output
+         (tio
+            (set-cursor 1 (+ h 1))
+            (clear-line)
+            (font-dim)
+            (raw (if (string? txt) (render txt null) txt))
+            (font-normal)
+            (cursor-restore)
+            (set-cursor x y)))))
 
 (define (command-regex-search ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\/)))
@@ -1244,7 +1302,8 @@
       (if (eq? dy 0)
          (cont (keys ll #\l dx) buff undo mode) ;; use repetitions later
          (cont (-> ll (keys #\l dx) (keys #\j dy) (keys #\0 1) ) buff undo mode))))
-   
+
+;; todo: separate text object processing from commands and get just the object here
 (define (command-yank ll buff undo mode r cont)
    (lets
       ((r (if (number? r) r 1))
@@ -1262,12 +1321,13 @@
                   (lets ((new this (delete-line new)))
                      (loop new (append lines (list this)) (- n 1))))))
          ((equal? step 'sexp)
-            (lets ((buffp msg (buffer-cut-sexp buff)))
-               (notify buff msg)
-               (cont ll 
-                  (put-buffer-meta buff 'yank
-                     (get-buffer-meta buffp 'yank ""))
-                  undo mode)))
+            (lets ((dy dx (movement-matching-paren-forward buff)))
+               (if dy
+                  (lets ((up dp lp rp data (cut-movement buff dy dx)))
+                     (cont ll (put-buffer-meta buff 'yank data) undo mode))
+                  (begin
+                     (log "Range failed")
+                     (cont ll buff undo mode)))))
          (else
             (log "cannot yank " step " yet")
             (cont ll buff undo mode)))))
