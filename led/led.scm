@@ -351,11 +351,10 @@
             (log "unknown movement type " type)))))
 
 (define (cut-forward r d dy dx)
-   (log "cut-forward " (list dy dx))
    (if (eq? dy 0)
       (lets ((cutd r (split r dx)))
          (values r d (tuple 'sequence cutd)))
-      (lets ((next-lines d (split d dy)))
+      (lets ((next-lines d (split d (- dy 1))))
          (if (eq? dx 0)
             (lets ((new-r d (uncons d null)))
                (values new-r d (tuple 'lines (cons r next-lines))))
@@ -380,7 +379,7 @@
 (define (maybe-get-count ll def)
    (lets ((k ll (uncons ll space-key))
           (n (key->digit k)))
-      (log "maybe-get-count: " k " -> " n)
+      ;(log "maybe-get-count: " k " -> " n)
       (cond
          ((not n) (values def (cons k ll)))
          ((eq? k space-key) (values def ll))
@@ -435,7 +434,7 @@
                         (values ll #f #f))))
                (else
                   (log "get-movement confused: " n ", " k ", op was " k)
-                  (values #false #false ll))))
+                  (values ll #false #false))))
          (else
             (log "get-movement confused: " op)
             (values ll #f #f)))))
@@ -469,10 +468,12 @@
                    (cut-lines ll buff n))
                 (else
                    (lets ((ll dy dx (get-movement (cons op ll) buff r self)))
+                      (log "relative movement for cut is " (cons dy dx))
                       (cond
                          ((not dy)
                             (values ll buff #false))
                          (else
+                            (log "cutting relative")
                             (cut-relative-movement ll buff dy dx)))))))
           (else
              (values ll buff #false)))))
@@ -1288,7 +1289,7 @@
    
 (define (command-delete ll buff undo mode r t cont)
    (lets ((undop (push-undo undo buff))
-          (ll buffp tob (cut-movement ll buff r #\y)))
+          (ll buffp tob (cut-movement ll buff r #\d)))
        (if tob
           (begin
              (output (delta-update-screen buff buffp))
