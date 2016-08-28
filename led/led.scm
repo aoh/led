@@ -1271,7 +1271,7 @@
           (let ((n (string->number (s/^move +// res))))
              (values ll buff undo mode (tuple 'move n))))
        ((equal? res "$")
-         (command-go-to-last-line ll buff undo mode r cont))
+         (command-go-to-last-line ll buff undo mode r #f cont))
        (else
          (cont ll buff undo mode)))))
 
