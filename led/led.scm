@@ -314,13 +314,18 @@
 ;;;
 
 ;; r d -> r' d' n-down n-from-left
-(define (next-word r d)
-   (let loop ((r r) (d d) (y 0) (x 0) (space? #false))
+(define (next-word start d)
+   (let loop ((r start) (d d) (y 0) (x 0) (space? #false))
+      (log "loop " r "," y "," x "," space?)
       (cond
          ((null? r)
-            (if (null? d)
-               (values null null y x)
-               (loop (car d) (cdr d) (+ y 1) 0 #t))) ;; nl is a space
+            (cond
+               ((null? d)
+                  (values null null y x))
+               ;(space?
+               ;   (loop (car d) (cdr d) (+ y 1) 0 #t))
+               (else
+                  (loop (car d) (cdr d) (+ y 1) 0 #t))))
          ((space-char? (car r))
             (loop (cdr r) d y (+ x 1) #t))
          (space?
@@ -334,7 +339,9 @@
       (if (eq? n 0)
          (values y x r d)
          (lets ((r d dy dx (next-word r d)))
-            (loop (+ y dy) (+ x dx) r d (- n 1))))))
+            (if (eq? dy 0)
+               (loop y (+ x dx) r d (- n 1))
+               (loop (+ y dy) dx r d (- n 1)))))))
 
 ;; buff movement-exp -> n | dy dx
 (define (movement buff n type)
@@ -348,7 +355,8 @@
             (lets ((y x r d (next-words r d n)))
                (values y x)))
          (else
-            (log "unknown movement type " type)))))
+            (log "unknown movement type " type)
+            (values #f #f)))))
 
 (define (cut-forward r d dy dx)
    (if (eq? dy 0)
@@ -412,14 +420,13 @@
 
 (define eof (tuple 'eof))
 
-(define (get-movement ll buff r self)
+(define (get-relative-movement ll buff r self)
    (lets ((np ll (maybe-get-count ll 1))
           (n (* np r)) ;; 6dw = d6w = 3d2w
           (op ll (uncons ll eof)))
       (tuple-case op
          ((key k)
             (cond
-               ;((eq? k #\w) (values n 'word ll))
                ;((eq? k #\h) (values n 'left ll))
                ;((eq? k #\j) (values n 'down ll))
                ;((eq? k #\k) (values n 'up ll))
@@ -427,16 +434,20 @@
                ;((eq? self k) ;; same key shortcut, like dd or yy -> select line(s)
                ;   (log "self move rep " n)
                ;   (select-lines ll buff n))
+               ((eq? k #\w) 
+                  (lets ((u d l r x y w h off meta buff)
+                         (dy dx rp dp (next-words r d n)))
+                      (values ll dy dx)))
                ((eq? k #\%) 
                   (lets ((dy dx (movement-matching-paren-forward buff)))
                      (if dy
                         (values ll dy dx)
                         (values ll #f #f))))
                (else
-                  (log "get-movement confused: " n ", " k ", op was " k)
+                  (log "get-relative-movement confused: " n ", " k ", op was " k)
                   (values ll #false #false))))
          (else
-            (log "get-movement confused: " op)
+            (log "get-relative-movement confused: " op)
             (values ll #f #f)))))
 
 (define (cut-relative-movement ll buff dy dx)
@@ -467,7 +478,7 @@
                    ;; cut lines via shortcut
                    (cut-lines ll buff n))
                 (else
-                   (lets ((ll dy dx (get-movement (cons op ll) buff r self)))
+                   (lets ((ll dy dx (get-relative-movement (cons op ll) buff r self)))
                       (log "relative movement for cut is " (cons dy dx))
                       (cond
                          ((not dy)
