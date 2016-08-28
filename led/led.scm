@@ -1,5 +1,8 @@
 #!/usr/bin/ol --run
 
+;; todo: operations return a promiscuously updated buffer, and led-buffer fixes it with proper x and y if necessary
+;; todo: operations return a notification message
+
 (import
   (led terminal)
   (led log)
@@ -427,13 +430,16 @@
       (tuple-case op
          ((key k)
             (cond
-               ;((eq? k #\h) (values n 'left ll))
-               ;((eq? k #\j) (values n 'down ll))
                ;((eq? k #\k) (values n 'up ll))
-               ;((eq? k #\l) (values n 'right ll))
-               ;((eq? self k) ;; same key shortcut, like dd or yy -> select line(s)
-               ;   (log "self move rep " n)
-               ;   (select-lines ll buff n))
+               ((eq? k #\h) 
+                  (values ll 0 (- 0 n)))
+               ((eq? k #\j) 
+                  (values ll n 0))
+               ((eq? k #\l) 
+                  (values ll 0 n))
+               ((eq? k #\$)
+                  (lets ((u d l r x y w h off meta buff))
+                     (values ll 0 (length r))))
                ((eq? k #\w) 
                   (lets ((u d l r x y w h off meta buff)
                          (dy dx rp dp (next-words r d n)))
@@ -452,8 +458,18 @@
 
 (define (cut-relative-movement ll buff dy dx)
    (lets ((u d l r x y w h off meta buff))
-      (lets ((r d cut (cut-forward r d dy dx)))
-         (values ll (buffer u d l r x y w h off meta) cut))))
+      (cond
+         ((eq? dy 0)
+            (if (< dx 0)
+               (lets ((rcut l (split l (* dx -1))))
+                  (values ll
+                     (buffer u d l r (- x (printable-length rcut)) y w h off meta)
+                     (tuple 'sequence (reverse rcut))))
+               (lets ((r d cut (cut-forward r d dy dx)))
+                  (values ll (buffer u d l r x y w h off meta) cut))))
+         (else
+            (lets ((r d cut (cut-forward r d dy dx)))
+               (values ll (buffer u d l r x y w h off meta) cut))))))
 
 (define (cut-lines ll buff n)
    (lets 
@@ -478,7 +494,7 @@
                    ;; cut lines via shortcut
                    (cut-lines ll buff n))
                 (else
-                   (lets ((ll dy dx (get-relative-movement (cons op ll) buff r self)))
+                   (lets ((ll dy dx (get-relative-movement (cons op ll) buff n self)))
                       (log "relative movement for cut is " (cons dy dx))
                       (cond
                          ((not dy)
