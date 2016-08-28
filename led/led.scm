@@ -172,8 +172,6 @@
          (font-normal)
          (cursor-restore)))))
 
-
-
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
       (lets ((node (key-node k))
@@ -353,6 +351,7 @@
             (log "unknown movement type " type)))))
 
 (define (cut-forward r d dy dx)
+   (log "cut-forward " (list dy dx))
    (if (eq? dy 0)
       (lets ((cutd r (split r dx)))
          (values r d (tuple 'sequence cutd)))
@@ -366,19 +365,33 @@
                    (tuple 'lines 
                       (cons r (append next-lines (list last-partial))))))))))
       
-;; u d l r dy dx -> u' d' l' r' cut-data
-(define (cut-movement buff dy dx)
-   (lets ((u d l r x y w h off meta buff))
+(define space-key (tuple 'key #\space))
+     
+(define (key->digit k)
+   (if (eq? (ref k 1) 'key)
+      (let ((n (- (ref k 2) #\0)))
+         (cond
+            ((< n 0) #false)
+            ((> n 9) #false)
+            (else n)))
+      #false))
+
+;; ll def -> n ll' | def ll
+(define (maybe-get-count ll def)
+   (lets ((k ll (uncons ll space-key))
+          (n (key->digit k)))
+      (log "maybe-get-count: " k " -> " n)
       (cond
-         ((< dy 0)
-            (log "no backward cut yet")
-            (values u d l r null))
-         ((< dx 0)
-            (log "no trailing cut yet")
-            (values u d l r null))
+         ((not n) (values def (cons k ll)))
+         ((eq? k space-key) (values def ll))
+         ((eq? n 0) (values def (cons k ll)))
          (else
-            (lets ((r d cut (cut-forward r d dy dx)))
-               (values u d l r cut))))))
+            (let loop ((n n) (ll ll))
+               (lets ((x ll (uncons ll 0))
+                      (m (key->digit x)))
+                  (if m
+                     (loop (+ (* 10 n) m) ll)
+                     (values n (cons x ll)))))))))
 
 ;; buff -> dy dx | #f #f, use new movement deltas
 (define (movement-matching-paren-forward buff)
@@ -397,6 +410,72 @@
                (loop (+ x 1) y (cdr r) d (+ depth 1)))
             (else
                (loop (+ x 1) y (cdr r) d depth))))))
+
+(define eof (tuple 'eof))
+
+(define (get-movement ll buff r self)
+   (lets ((np ll (maybe-get-count ll 1))
+          (n (* np r)) ;; 6dw = d6w = 3d2w
+          (op ll (uncons ll eof)))
+      (tuple-case op
+         ((key k)
+            (cond
+               ;((eq? k #\w) (values n 'word ll))
+               ;((eq? k #\h) (values n 'left ll))
+               ;((eq? k #\j) (values n 'down ll))
+               ;((eq? k #\k) (values n 'up ll))
+               ;((eq? k #\l) (values n 'right ll))
+               ;((eq? self k) ;; same key shortcut, like dd or yy -> select line(s)
+               ;   (log "self move rep " n)
+               ;   (select-lines ll buff n))
+               ((eq? k #\%) 
+                  (lets ((dy dx (movement-matching-paren-forward buff)))
+                     (if dy
+                        (values ll dy dx)
+                        (values ll #f #f))))
+               (else
+                  (log "get-movement confused: " n ", " k ", op was " k)
+                  (values #false #false ll))))
+         (else
+            (log "get-movement confused: " op)
+            (values ll #f #f)))))
+
+(define (cut-relative-movement ll buff dy dx)
+   (lets ((u d l r x y w h off meta buff))
+      (lets ((r d cut (cut-forward r d dy dx)))
+         (values ll (buffer u d l r x y w h off meta) cut))))
+
+(define (cut-lines ll buff n)
+   (lets 
+      ((u d l r x y w h off meta buff)
+       (d (cons (append (reverse l) r) d))
+       (taken d (split d n))
+       (l null)
+       (r d (uncons d null))) ;; bug, but ok for now
+      (values ll
+         (buffer u d l r x y w h off meta)
+         (tuple 'lines taken))))
+   
+;; ll buff rep self -> ll' buff' tob|#false
+(define (cut-movement ll buff r self)
+   (lets ((np ll (maybe-get-count ll 1))
+          (n (* np r))
+          (op ll (uncons ll eof)))
+       (tuple-case op
+          ((key k)
+             (cond
+                ((eq? self k)
+                   ;; cut lines via shortcut
+                   (cut-lines ll buff n))
+                (else
+                   (lets ((ll dy dx (get-movement (cons op ll) buff r self)))
+                      (cond
+                         ((not dy)
+                            (values ll buff #false))
+                         (else
+                            (cut-relative-movement ll buff dy dx)))))))
+          (else
+             (values ll buff #false)))))
 
 ;; buff → (x . y) | #false
 (define (seek-matching-paren-back buff)
@@ -817,7 +896,7 @@
             (cursor-restore)
             (set-cursor x y)))))
 
-(define (command-regex-search ll buff undo mode r cont)
+(define (command-regex-search ll buff undo mode r t cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\/)))
    (lets ((search-history 
             (get (buffer-meta buff) 'search-history null))
@@ -849,65 +928,65 @@
                (notify buff "canceled")
                (cont ll buff undo mode)))))
 
-(define (command-find-next ll buff undo mode r cont)
+(define (command-find-next ll buff undo mode r t cont)
    (lets ((buffp msg (find-next buff)))
       (output (delta-update-screen buff buffp))
       (if msg
          (notify buffp msg))
       (cont ll buffp undo mode)))
 
-(define (command-mark-position ll buff undo mode r cont)
+(define (command-mark-position ll buff undo mode r t cont)
    (lets ((msg ll (uncons ll #false)))
       (if (eq? (ref msg 1) 'key)
          (let ((char (ref msg 2)))
             (cont ll (mark-position buff char) undo mode))
          (cont ll buff undo mode))))
 
-(define (command-line-end ll buff undo mode r cont)
+(define (command-line-end ll buff undo mode r t cont)
    (lets ((buff out (seek-line-end buff)))
       (output out)
       (cont ll buff undo mode)))
 
-(define (command-line-start ll buff undo mode r cont)
+(define (command-line-start ll buff undo mode r t cont)
    (lets ((buff out (seek-line-start buff)))
       (output out)
       (cont ll buff undo mode)))
 
-(define (command-move-down ll buff undo mode r cont)
+(define (command-move-down ll buff undo mode r t cont)
    (lets ((buff out (move-arrow buff 'down #f))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-move-up ll buff undo mode r cont)
+(define (command-move-up ll buff undo mode r t cont)
    (lets ((buff out (move-arrow buff 'up #f))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-move-right ll buff undo mode r cont)
+(define (command-move-right ll buff undo mode r t cont)
    (lets ((buff out (move-arrow buff 'command-right #f))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-move-left ll buff undo mode r cont)
+(define (command-move-left ll buff undo mode r t cont)
    (lets ((buff out (move-arrow buff 'left #f))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-seek-matching-paren ll buff undo mode r cont)
+(define (command-seek-matching-paren ll buff undo mode r t cont)
    (lets ((buff out (maybe-seek-matching-paren buff))) 
       (output out) 
       (cont ll buff undo mode)))
 
-(define (command-paste ll buff undo mode r cont)
+(define (command-paste ll buff undo mode r t cont)
    (lets ((undo (push-undo undo buff))
           (buffp (paste-yank buff)))
       (output (delta-update-screen buff buffp))
       (cont ll buffp undo mode)))
 
-(define (command-add-line-below ll buff undo mode r cont)
+(define (command-add-line-below ll buff undo mode r t cont)
    (cont (ilist (tuple 'key #\A) (tuple 'enter) ll) buff undo mode))
 
-(define (command-add-line-above ll buff undo mode r cont)
+(define (command-add-line-above ll buff undo mode r t cont)
    (cont (ilist (tuple 'key #\k) (tuple 'key #\o) ll) buff undo mode))
 
 (define (map-n op n lst)
@@ -939,7 +1018,7 @@
       ((eq? n 0) (values l r))
       (else (line-right (cons (car r) l) (cdr r) (- n 1)))))
 
-(define (command-indent ll buff undo mode n cont)
+(define (command-indent ll buff undo mode n t cont)
    (lets ((range ll (uncons ll #false)))
       (if (equal? range (tuple 'key #\>)) ;; only line-based indenting for now
          (lets
@@ -971,7 +1050,7 @@
 (define (unindent lst)
    (or (drop-prefix lst shift-lst) lst))
 
-(define (command-unindent ll buff undo mode n cont)
+(define (command-unindent ll buff undo mode n t cont)
    (lets ((range ll (uncons ll #false)))
       (if (equal? range (tuple 'key #\<)) ;; only line-based indenting for now
          (lets
@@ -991,7 +1070,7 @@
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
 
-(define (command-delete-char ll buff undo mode r cont)
+(define (command-delete-char ll buff undo mode r t cont)
    (lets
       ((undo (push-undo undo buff))
        (u d l r x y w h off meta buff))
@@ -1005,7 +1084,7 @@
             (output (delta-update-screen buff buffp)) ;; todo: can refresh just current line
             (cont ll buffp undo mode)))))
 
-(define (command-join-lines ll buff undo mode n cont)
+(define (command-join-lines ll buff undo mode n t cont)
    (lets
       ((undo (push-undo undo buff))
        (n (if (number? n) n 1)) ;; fixme: no interval handling
@@ -1022,7 +1101,7 @@
                    (tail (if (whitespace? (last r #\a)) tail (cons #\space tail))))
                   (loop (append r tail) (cdr d) (- n 1))))))))
 
-(define (command-maybe-save-and-close ll buff undo mode n cont)
+(define (command-maybe-save-and-close ll buff undo mode n t cont)
    (notify buff "press Z again to save and close")
    (lets ((chr ll (uncons ll #false)))
       (if (equal? chr (tuple 'key #\Z))
@@ -1038,12 +1117,12 @@
             (notify buff "close aborted")
             (cont ll buff undo mode)))))
        
-(define (command-go-to-line ll buff undo mode n cont)
+(define (command-go-to-line ll buff undo mode n t cont)
    (lets ((buff (buffer-seek buff 0 (if (number? n) (- n 1) 0) #false)))
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-go-to-mark ll buff undo mode r cont)
+(define (command-go-to-mark ll buff undo mode r t cont)
    (log "marks is " (get-buffer-meta buff 'marks #empty))
    (lets ((msg ll (uncons ll #false)))
       (if (eq? (ref msg 1) 'key)
@@ -1059,7 +1138,7 @@
                   (cont ll buff undo mode))
                (cont ll buff undo mode))))))
 
-(define (command-go-to-last-line ll buff undo mode r cont)
+(define (command-go-to-last-line ll buff undo mode r t cont)
    (lets 
       ((u d l r x y w h off meta buff)
        (last (+ 1 (+ (length u) (length d))))
@@ -1085,7 +1164,7 @@
          (map (untab meta) (map string->list (force-ll (lines fd))))
          #false)))
 
-(define (command-enter-command ll buff undo mode r cont)
+(define (command-enter-command ll buff undo mode r t cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))
    (lets
       ((metadata (buffer-meta buff))
@@ -1168,174 +1247,84 @@
        (else
          (cont ll buff undo mode)))))
 
-(define (command-redo ll buff undo mode r cont)
+(define (command-redo ll buff undo mode r t cont)
   (lets ((undo buffp (unpop-undo undo buff)))
     (if (eq? buff buffp)
        (notify buffp "nothing left to redo")
        (output (delta-update-screen buff buffp)))
     (cont ll buffp undo mode)))
 
-(define (command-undo ll buff undo mode r cont)
+(define (command-undo ll buff undo mode r t cont)
    (lets ((undo buffp (pop-undo undo buff)))
       (if (eq? buff buffp)
          (notify buff "nothing left to undo")
          (output (delta-update-screen buff buffp)))
       (cont ll buffp undo mode)))
 
-(define (command-substitute-line ll buff undo mode r cont)
+(define (command-substitute-line ll buff undo mode r t cont)
    (cont (ilist (tuple 'key #\0) (tuple 'key #\C) ll) buff undo mode))
 
-(define (command-substitute-char ll buff undo mode r cont)
+(define (command-substitute-char ll buff undo mode r t cont)
    (cont (ilist (tuple 'key #\x) (tuple 'key #\i) ll) buff undo mode))
 
-(define (command-insert-before ll buff undo mode r cont)
+(define (command-insert-before ll buff undo mode r t cont)
    (cont ll buff undo 'insert))
 
-(define (command-insert-after ll buff undo mode r cont)
+(define (command-insert-after ll buff undo mode r t cont)
    (cont (cons (tuple 'arrow 'right) ll) buff undo 'insert))
 
-(define (command-insert-after-line ll buff undo mode r cont)
+(define (command-insert-after-line ll buff undo mode r t cont)
    (cont (ilist (tuple 'key #\$) (tuple 'key #\a) ll) buff undo mode))
 
 ;; should also w to first non-space later
-(define (command-insert-at-line-start ll buff undo mode r cont)
+(define (command-insert-at-line-start ll buff undo mode r t cont)
    (cont (ilist (tuple 'key #\0) (tuple 'key #\i) ll) buff undo mode))
 
-(define eof (tuple 'eof))
-
-(define (key->digit k)
-   (if (eq? (ref k 1) 'key)
-      (let ((n (- (ref k 2) #\0)))
-         (cond
-            ((< n 0) #false)
-            ((> n 9) #false)
-            (else n)))
-      #false))
-
-(define space-key (tuple 'key #\space))
-      
-(define (maybe-get-count ll)
-   (lets ((k ll (uncons ll space-key))
-          (n (key->digit k)))
-      (log "maybe-get-count: " k " -> " n)
-      (cond
-         ((not n) (values #false (cons k ll)))
-         ((eq? n 0) (values #false (cons k ll)))
-         (else
-            (let loop ((n n) (ll ll))
-               (lets ((x ll (uncons ll 0))
-                      (m (key->digit x)))
-                  (if m
-                     (loop (+ (* 10 n) m) ll)
-                     (values n (cons x ll)))))))))
-
-(define (get-movement ll self)
-   (lets ((np ll (maybe-get-count ll))
-          (n (if np np 1))
-          (op ll (uncons ll eof)))
-      (tuple-case op
-         ((key k)
-            (cond
-               ((eq? self k) ;; same key shortcut, like dd or yy
-                  (values n 'line ll))
-               ((eq? k #\w) (values n 'word ll))
-               ((eq? k #\h) (values n 'left ll))
-               ((eq? k #\j) (values n 'down ll))
-               ((eq? k #\k) (values n 'up ll))
-               ((eq? k #\l) (values n 'right ll))
-               ((eq? k #\%) (values n 'sexp ll))
-               ((eq? op k) ;; same key shortcut, like dd or yy
-                  (values n 'line ll))
-               (else
-                  (log "get-movement confused: " n ", " k ", op was " k)
-                  (values #false #false ll))))
-         (else
-            (log "get-movement confused: " op)
-            (values #f #f ll)))))
-       
-;; todo: put the deleted text object to a buffer
-(define (command-delete ll buff undo mode r cont)
-   (lets
-      ((r (if (number? r) r 1)) ;; fixme, default to 1
-       (m step ll (get-movement ll #\d))
-       (undop (push-undo undo buff))
-       (n (* r (or m 1)))) ;; left and right repetitions are equal
-      (log "delete movement is " (list 'n n 'step step))
-      (cond
-         ((equal? step 'line)
-            (let loop ((new buff) (lines null) (n n))
-               (if (= n 0)
-                  (begin
-                     (output (delta-update-screen buff new))
-                     (cont ll
-                        (put-buffer-meta new 'yank (tuple 'lines lines))
-                        undop mode))
-                  (lets ((new this (delete-line new)))
-                     (loop new (append lines (list this)) (- n 1))))))
-         ((equal? step 'sexp)
-            (lets ((buffp msg (buffer-cut-sexp buff)))
-               (output (delta-update-screen buff buffp))
-               (notify buffp msg)
-               (cont ll buffp undop mode)))
-         ((equal? step 'word) 
-            (lets ((u d l r x y w h off meta buff)
-                   (dy dx r d (next-words r d n))
-                   (buffp (buffer u d l r x y w h off meta)))
-               (output (delta-update-screen buff buffp))
-               (cont ll buffp undop mode)))
-         (else
-            (log "cannot delete " step " yet")
-            (cont ll buff undo mode)))))
-
-(define (command-change ll buff undo mode r cont)
+(define (select-lines ll buff n)
+   (lets ((u d l r x y w h off meta buff))
+      (if (eq? n 1)
+         (values ll (length l) 0 (length r) 0)
+         (values ll (length l) 0 (- n 1) 0))))
+   
+(define (command-delete ll buff undo mode r t cont)
+   (lets ((undop (push-undo undo buff))
+          (ll buffp tob (cut-movement ll buff r #\y)))
+       (if tob
+          (begin
+             (output (delta-update-screen buff buffp))
+             (cont ll (put-buffer-meta buffp 'yank tob) undop mode))
+          (cont ll buff undo mode))))
+ 
+(define (command-change ll buff undo mode r t cont)
    ;; convert possible next c of [c]c to d, 
    (lets 
       ((next ll (uncons ll eof))
        (ll (cons (if (equal? next (tuple 'key #\c)) (tuple 'key #\d) next) ll)))
-      (command-delete ll buff undo mode r
+      (command-delete ll buff undo mode r t
          (lambda (ll buff undo mode)
             (cont ll buff undo 'insert)))))
 
-(define (command-move-words ll buff undo mode r cont)
+(define (command-move-words ll buff undo mode r t cont)
    (lets ((dy dx (movement buff (or r 1) 'word)))
       (log "moving" r "words gives dy" dy ", dx" dx)
       (if (eq? dy 0)
          (cont (keys ll #\l dx) buff undo mode) ;; use repetitions later
          (cont (-> ll (keys #\l dx) (keys #\j dy) (keys #\0 1) ) buff undo mode))))
 
-;; todo: separate text object processing from commands and get just the object here
-(define (command-yank ll buff undo mode r cont)
-   (lets
-      ((r (if (number? r) r 1))
-       (m step ll (get-movement ll #\y))
-       (n (* r (or m 1)))) ;; left and right repetitions are equal
-      (cond
-         ((not m)
-            (cont ll buff undo mode))
-         ((equal? step 'line)
-            (let loop ((new buff) (lines null) (n n))
-               (if (= n 0)
-                  (cont ll
-                     (put-buffer-meta buff 'yank (tuple 'lines lines))
-                     (push-undo undo buff) mode)
-                  (lets ((new this (delete-line new)))
-                     (loop new (append lines (list this)) (- n 1))))))
-         ((equal? step 'sexp)
-            (lets ((dy dx (movement-matching-paren-forward buff)))
-               (if dy
-                  (lets ((up dp lp rp data (cut-movement buff dy dx)))
-                     (cont ll (put-buffer-meta buff 'yank data) undo mode))
-                  (begin
-                     (log "Range failed")
-                     (cont ll buff undo mode)))))
-         (else
-            (log "cannot yank " step " yet")
-            (cont ll buff undo mode)))))
-
-(define (command-no-op ll buff undo mode r cont)
+(define (command-yank ll buff undo mode r t cont)
+   (lets ((undop (push-undo undo buff))
+          (ll buffp tob (cut-movement ll buff r #\y)))
+       (if tob
+          (begin
+             (log "cut data " tob)
+             (log "target is " t)
+             (cont ll (put-buffer-meta buff 'yank tob) undop mode))
+          (cont ll buff undo mode))))
+ 
+(define (command-no-op ll buff undo mode r t cont)
    (cont ll buff undo mode))
 
-(define (command-change-rest-of-line ll buff undo mode r cont)
+(define (command-change-rest-of-line ll buff undo mode r t cont)
    (lets ((u d l r x y w h off meta buff)
           (undo (push-undo undo buff))
           (buff (buffer u d l null x y w h off meta)))
@@ -1350,7 +1339,7 @@
          (output (tio (clear-line-right)))
          (cont ll buff undo 'insert)))
 
-(define (command-step-forward ll buff undo mode r cont)
+(define (command-step-forward ll buff undo mode r t cont)
    (lets ((u d l r x y w h off meta buff)
           (y (+ (cdr off) (- y 1)))
           (buff (buffer-seek buff (- x 1) (+ y (max 1 (- h 3))) 1)))
@@ -1358,14 +1347,14 @@
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-step-backward ll buff undo mode r cont)
+(define (command-step-backward ll buff undo mode r t cont)
    (lets ((u d l r x y w h off meta buff)
           (y (+ (cdr off) (- y 1)))
           (buff (buffer-seek buff (- x 1) (- y (min (- h 3) y)) 1)))
       (output (update-screen buff))
       (cont ll buff undo mode)))
 
-(define (command-update-screen ll buff undo mode r cont)
+(define (command-update-screen ll buff undo mode r t cont)
    (lets ((u d l r x y old-w old-h off meta buff)
           (y (+ (cdr off) (- y 1)))
           (x (+ (car off) (- x 1)))
@@ -1385,7 +1374,7 @@
       (ref event 2)
       #false))
 
-(define (command-replace-char ll buff undo mode ran cont)
+(define (command-replace-char ll buff undo mode ran t cont)
    (lets ((val ll (uncons ll #false))
           (k (key-value val)))
       (if k
@@ -1393,8 +1382,7 @@
             (if (null? r)
                (cont ll buff undo mode)
                (lets
-                  ((ran (if (number? ran) ran 1))
-                   (r (map-n (lambda (x) k) ran r))
+                  ((r (map-n (lambda (x) k) ran r))
                    (undo (push-undo undo buff))
                    (buffp
                       (buffer u d l r x y w h off meta)))
@@ -1402,10 +1390,10 @@
                   (cont ll buffp undo mode))))
          (cont ll buff undo mode))))
 
-(define (command-previous-buffer ll buff undo mode r cont)
+(define (command-previous-buffer ll buff undo mode r t cont)
    (values ll buff undo mode 'left))
 
-(define (command-next-buffer ll buff undo mode r cont)
+(define (command-next-buffer ll buff undo mode r t cont)
    (values ll buff undo mode 'right))
 
 ;;; Command mode key mapping
@@ -1522,7 +1510,7 @@
 ;;; Buffer handling loop
 ;;;
 
-(define (maybe-get-buffer ll)
+(define (maybe-get-target ll)
    (values #false ll))
 
 ;; ll buff undo mode -> ll' buff' undo' mode' action
@@ -1587,18 +1575,16 @@
                         (led-buffer ll buff undo mode))))
                (else
                   (led-buffer ll buff undo mode))))
-      ;; command mode
-      ;; [number] [command] [text object] ;; "x42yy, yank next 42 lines
-      ;;                                     "bd0, cut beginning of line to b
-      (lets ((count ll (maybe-get-count ll))
+      (lets ((target ll (maybe-get-target ll))
+             (count ll (maybe-get-count ll 1))
              (msg ll (uncons ll space-key)))
          (tuple-case msg
            ((key k)
                ((get *command-mode-actions* k command-no-op)
-                  ll buff undo mode count led-buffer))
+                  ll buff undo mode count target led-buffer))
            ((ctrl key)
                ((get *command-mode-control-actions* key command-no-op)
-                  ll buff undo mode count led-buffer))
+                  ll buff undo mode count target led-buffer))
            (else
                (log "not handling command " msg)
                (led-buffer ll buff undo mode))))))
