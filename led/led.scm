@@ -1046,23 +1046,29 @@
       ((eq? n 0) (values l r))
       (else (line-right (cons (car r) l) (cdr r) (- n 1)))))
 
+(define (indent-lines buff n)
+   (lets
+      ((u d l r x y w h off meta buff)
+       (l (append l shift-lst))
+       (l r (line-left l r 3))
+       (d (map-n (lambda (x)(append shift-lst x)) (- n 1) d)))
+      (buffer u d l r x y w h off meta)))
+   
 (define (command-indent ll buff undo mode n t cont)
-   (lets ((range ll (uncons ll #false)))
-      (if (equal? range (tuple 'key #\>)) ;; only line-based indenting for now
-         (lets
-            ((undo (push-undo undo buff))
-             (u d l r x y w h off meta buff)
-             (l (append l shift-lst))
-             (l r (line-left l r 3))
-             (n (if (number? n) n 1))
-             (d 
-               (map-n    
-                  (lambda (x) (append shift-lst x))
-                  (- n 1) d))
-             (buffp (buffer u d l r x y w h off meta)))
-            (output (delta-update-screen buff buffp))
-            (cont (keys ll #\l 3) buffp undo mode)) ;; move with shift
-         (begin
+   (lets 
+      ((range ll (uncons ll #false))
+       (undop (push-undo undo buff)))
+      (cond
+         ((equal? range (tuple 'key #\>)) ;; only line-based indenting for now
+            (lets ((buffp (indent-lines buff n)))
+               (output (delta-update-screen buff buffp))
+               (cont (keys ll #\l 3) buffp undop mode)))
+         ((equal? range (tuple 'key #\%))
+            (lets ((dy dx (movement-matching-paren-forward buff))
+                   (buffp (indent-lines buff (+ dy 1)))) ;; current line + dy down
+               (output (delta-update-screen buff buffp))
+               (cont (keys ll #\l 3) buffp undop mode)))
+         (else
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
 
