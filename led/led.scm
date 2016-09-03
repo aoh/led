@@ -421,6 +421,8 @@
             (else
                (loop (+ x 1) y (cdr r) d depth))))))
 
+(define sexp-key #\s)
+
 (define eof (tuple 'eof))
 
 (define (get-relative-movement ll buff r self)
@@ -430,9 +432,10 @@
       (tuple-case op
          ((key k)
             (cond
-               ;((eq? k #\k) (values n 'up ll))
-               ((eq? k #\h) 
-                  (values ll 0 (- 0 n)))
+               ;((eq? k #\k) 
+               ;   (values ll (- 0 n) 0))
+               ;((eq? k #\h) 
+               ;   (values ll 0 (- 0 n)))
                ((eq? k #\j) 
                   (values ll n 0))
                ((eq? k #\l) 
@@ -445,6 +448,11 @@
                          (dy dx rp dp (next-words r d n)))
                       (values ll dy dx)))
                ((eq? k #\%) 
+                  (lets ((dy dx (movement-matching-paren-forward buff)))
+                     (if dy
+                        (values ll dy dx)
+                        (values ll #f #f))))
+               ((eq? k sexp-key) 
                   (lets ((dy dx (movement-matching-paren-forward buff)))
                      (if dy
                         (values ll dy dx)
@@ -946,22 +954,14 @@
                            (-> buff (put-buffer-meta 'search-regex regex))))
                       (buffp msg
                         (find-next buff)))
-                     (output (delta-update-screen buff buffp))
-                     (if msg (notify buffp msg))
-                     (cont ll buffp undo mode))
-                  (begin
-                     (notify buff "Invalid extended regexp")
-                     (cont ll buff undo mode))))
-            (begin
-               (notify buff "canceled")
-               (cont ll buff undo mode)))))
+                     (cont ll buffp undo mode (or msg "")))
+                  (cont ll buff undo mode "invalid regexp")))
+            (cont ll buff undo mode "canceled"))))
 
 (define (command-find-next ll buff undo mode r t cont)
    (lets ((buffp msg (find-next buff)))
       (output (delta-update-screen buff buffp))
-      (if msg
-         (notify buffp msg))
-      (cont ll buffp undo mode)))
+      (cont ll buffp undo mode (or msg ""))))
 
 (define (command-mark-position ll buff undo mode r t cont)
    (lets ((msg ll (uncons ll #false)))
@@ -1068,6 +1068,11 @@
                    (buffp (indent-lines buff (+ dy 1)))) ;; current line + dy down
                (output (delta-update-screen buff buffp))
                (cont (keys ll #\l 3) buffp undop mode)))
+         ((equal? range (tuple 'key sexp-key))
+            (lets ((dy dx (movement-matching-paren-forward buff))
+                   (buffp (indent-lines buff (+ dy 1)))) ;; current line + dy down
+               (output (delta-update-screen buff buffp))
+               (cont (keys ll #\l 3) buffp undop mode)))
          (else
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
@@ -1084,23 +1089,42 @@
 (define (unindent lst)
    (or (drop-prefix lst shift-lst) lst))
 
+(define (unindent-lines buff n)
+   (lets
+      ((u d l r x y w h off meta buff)
+       (rlp (drop-prefix (reverse l) shift-lst)))
+      (if rlp
+         (lets ((l (reverse rlp))
+                (l r (line-right l r 3))
+                (d (map-n unindent (- n 1) d))
+                (buffp (buffer u d l r x y w h off meta)))
+             buffp)
+          buff)))
+         
 (define (command-unindent ll buff undo mode n t cont)
    (lets ((range ll (uncons ll #false)))
-      (if (equal? range (tuple 'key #\<)) ;; only line-based indenting for now
-         (lets
-            ((undo (push-undo undo buff))
-             (u d l r x y w h off meta buff)
-             (rlp (drop-prefix (reverse l) shift-lst)))
-            (if rlp
-               (lets ((l (reverse rlp))
-                      (l r (line-right l r 3))
-                      (n (if (number? n) n 1))
-                      (d (map-n unindent (- n 1) d))
-                      (buffp (buffer u d l r x y w h off meta)))
-                  (output (delta-update-screen buff buffp))
-                  (cont (keys ll #\h 3) buffp undo mode))
-               (cont ll buff undo mode)))
-         (begin
+      (cond
+         ((equal? range (tuple 'key #\<))
+            (lets ((buffp (unindent buff n)))
+               (output (delta-update-screen buff buffp))
+               (cont (keys ll #\h 3) buffp (push-undo undo buff) mode)))
+         ((equal? range (tuple 'key #\%))
+            (lets ((dy dx (movement-matching-paren-forward buff))
+                   (buffp (unindent-lines buff (+ dy 1)))) ;; current line + dy down
+               (if (eq? buff buffp)
+                  (cont ll buff undo mode)
+                  (begin
+                     (output (delta-update-screen buff buffp))
+                     (cont (keys ll #\h 3) buffp (push-undo undo buff) mode)))))
+         ((equal? range (tuple 'key sexp-key))
+            (lets ((dy dx (movement-matching-paren-forward buff))
+                   (buffp (unindent-lines buff (+ dy 1)))) ;; current line + dy down
+               (if (eq? buff buffp)
+                  (cont ll buff undo mode)
+                  (begin
+                     (output (delta-update-screen buff buffp))
+                     (cont (keys ll #\h 3) buffp (push-undo undo buff) mode)))))
+         (else
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
 
@@ -1131,7 +1155,7 @@
                   (cont ll buffp undo mode)))
             (else   
                (lets
-                  ((tail (drop-leading-whitespace (car d)))
+                  ((buff out tail (drop-leading-whitespace (car d)))
                    (tail (if (whitespace? (last r #\a)) tail (cons #\space tail))))
                   (loop (append r tail) (cdr d) (- n 1))))))))
 
@@ -1479,7 +1503,9 @@
       (put #\W command-next-buffer)
       (put #\C command-change-rest-of-line)
       (put #\Z command-maybe-save-and-close)
-      (put #\% command-seek-matching-paren)))
+      (put #\% command-seek-matching-paren)
+      (put sexp-key command-seek-matching-paren)
+      ))
 
 
 ;;;
@@ -1546,6 +1572,14 @@
 
 (define (maybe-get-target ll)
    (values #false ll))
+
+(define (update-cont self buff)
+   (lambda (ll buffp undo mode . msg)
+      (output (delta-update-screen buff buffp))
+      (if (pair? msg)
+         (let ((what (apply str msg)))
+            (notify buffp what)))
+      (self ll buffp undo mode)))
 
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
@@ -1615,10 +1649,10 @@
          (tuple-case msg
            ((key k)
                ((get *command-mode-actions* k command-no-op)
-                  ll buff undo mode count target led-buffer))
+                  ll buff undo mode count target (update-cont led-buffer buff)))
            ((ctrl key)
                ((get *command-mode-control-actions* key command-no-op)
-                  ll buff undo mode count target led-buffer))
+                  ll buff undo mode count target (update-cont led-buffer buff)))
            (else
                (log "not handling command " msg)
                (led-buffer ll buff undo mode))))))
