@@ -470,7 +470,7 @@
        (l null)
        (r d (uncons d null))) ;; bug, but ok for now
       (values ll
-         (buffer u d l r 1 y w h off meta)
+         (buffer u d l r 1 y w h (cons 0 (cdr off)) meta)
          (tuple 'lines taken))))
    
 ;; ll buff rep self -> ll' buff' tob|#false
