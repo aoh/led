@@ -344,6 +344,22 @@
             (log "unknown movement type " type)
             (values #f #f)))))
 
+(define (cut-backward u l dy dx)
+   (if (eq? dy 0)
+      (lets ((all (length l))
+             (l cutd (split l (max 0 (- all dx)))))
+         (values u l (tuple 'sequence cutd)))
+      (lets ((next-lines u (split u (- dy 1))))
+         (if (eq? dx 0)
+            (lets ((new-l u (uncons u null)))
+               (values u new-l (tuple 'lines (append next-lines (list (reverse l))))))
+            (lets ((new-l u (uncons u null))
+                   (all (length new-l))
+                   (new-l last-partial (split new-l (max 0 (- all dx)))))
+                (values new-l u 
+                   (tuple 'lines 
+                      (cons last-partial (append next-lines (list (reverse l)))))))))))
+ 
 (define (cut-forward r d dy dx)
    (if (eq? dy 0)
       (lets ((cutd r (split r dx)))
@@ -408,6 +424,13 @@
 
 (define eof (tuple 'eof))
 
+(define (get-key ll)
+   (lets ((x ll (uncons ll eof)))
+      (values ll
+         (if (eq? (ref x 1) 'key)
+            (ref x 2)
+            #false))))
+
 (define (get-relative-movement ll buff r self)
    (lets ((np ll (maybe-get-count ll 1))
           (n (* np r)) ;; 6dw = d6w = 3d2w
@@ -440,6 +463,23 @@
                      (if dy
                         (values ll dy dx)
                         (values ll #f #f))))
+               ((eq? k #\') ;; from cursor to mark
+                  (lets ((ll k (get-key ll)))
+                     (cond
+                        ((not k)
+                           (log "no key")
+                           (values ll #f #f))
+                        ((get (get-buffer-meta buff 'marks #empty) k #false) =>
+                           (lambda (pos)
+                              (lets ((u d l r x y w h off meta buff)
+                                     (dy dx off)
+                                     (mx my pos)
+                                     (tx (+ (length l) dx))
+                                     (ty (+ (- y 1) dy)))
+                                 (log "relative movement up to pos" pos)
+                                 (values ll (- my ty) (- mx tx)))))
+                        (else
+                           (values ll #f #f)))))
                (else
                   (log "get-relative-movement confused: " n ", " k ", op was " k)
                   (values ll #false #false))))
@@ -458,6 +498,9 @@
                      (tuple 'sequence (reverse rcut))))
                (lets ((r d cut (cut-forward r d dy dx)))
                   (values ll (buffer u d l r x y w h off meta) cut))))
+         ((< dy 0)
+            (lets ((u l cut (cut-backward u l (* -1 dy) (* -1 dx))))
+               (values ll (buffer u d l r x y w h off meta) cut)))
          (else
             (lets ((r d cut (cut-forward r d dy dx)))
                (values ll (buffer u d l r x y w h off meta) cut))))))
