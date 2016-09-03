@@ -473,7 +473,7 @@
        (l null)
        (r d (uncons d null))) ;; bug, but ok for now
       (values ll
-         (buffer u d l r x y w h off meta)
+         (buffer u d l r 1 y w h off meta)
          (tuple 'lines taken))))
    
 ;; ll buff rep self -> ll' buff' tob|#false
@@ -732,24 +732,6 @@
                (append line (cons #\newline tl)))
             null
             (append (reverse u) (list (append (reverse l) r)) d)))))
-
-(define (delete-line buff)
-   (lets ((u d l r x y w h off meta buff)
-          (next d (uncons d #false)))
-      (cond
-         (next
-            (values
-               (buffer u d null next 1 y w h off meta)
-               (append (reverse l) r)))
-         ((null? u)
-            (values 
-               (buffer u d null null 1 y w h off meta)
-               (append (reverse l) r)))
-         (else
-            (values
-               (buffer (cdr u) d null (car u) 1 
-                  (min y (length u)) w h off meta)
-               (append (reverse l) r))))))
 
 (define (paste-lines-below buff lines)
    (lets ((u d l r x y w h off meta buff))
@@ -1302,6 +1284,7 @@
 (define (command-delete ll buff undo mode r t cont)
    (lets ((undop (push-undo undo buff))
           (ll buffp tob (cut-movement ll buff r #\d)))
+       (log "deleted " tob)
        (if tob
           (cont ll (put-buffer-meta buffp 'yank tob) undop mode)
           (cont ll buff undo mode))))
