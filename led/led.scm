@@ -24,6 +24,11 @@
       (raw (render "~" null))
       (font-normal)))
 
+
+;;;
+;;; Screen update
+;;;
+
 (define (draw-lines-at-offset tl w dx y dy end lines)
    (cond
       ((null? lines) 
@@ -276,40 +281,20 @@
          (else
             (loop (cdr lines) (- pos 1) (cons (car lines) u))))))
 
-;; compute place to show the buffer horizontally to get buffer position pos to screen
-(define (set-line-pos buff pos)
-   (log "set-line-pos, pos " pos)
-   (lets ((u d l r x y w h off meta buff)
-          (dx dy off)
-          (line (append (reverse l) r))
-          (pos (min pos (printable-length line))))
-      (if (< pos w)
-         ;; can be show without scrolling, so do that
-         (lets ((l r off (seek-in-line line pos))
-                (x (+ 1 (- pos off))) ;; bug, but doesn't matter for now
-                (buff (buffer u d l r x y w h (cons 0 dy) meta)))
-            buff)
-         (begin
-            (log "not moving here yet")
-            buff))))
-
-;; todo: remove tio
 (define (seek-line-end buff)
    (lets ((u d l r x y w h off meta buff)
           (step (>> w 1))
           (dx dy off))
       (if (null? r)
-         (values buff null)
-         (let loop ((l l) (r r) (x x) (dx dx) (moved? #false))
+         buff
+         (let loop ((l l) (r r) (x x) (dx dx))
             (cond
                ((null? (cdr r))
-                  (let ((buffp (buffer u d l r x y w h (cons dx dy) meta)))
-                     (values buffp
-                        (if moved? (delta-update-screen buff buffp) (tio (set-cursor x y))))))
+                  (buffer u d l r x y w h (cons dx dy) meta))
                ((eq? x w)
-                  (loop l r (- x step) (+ dx step) #true))
+                  (loop l r (- x step) (+ dx step)))
                (else
-                  (loop (cons (car r) l) (cdr r) (+ x (node-width (car r))) dx moved?)))))))
+                  (loop (cons (car r) l) (cdr r) (+ x (node-width (car r))) dx)))))))
 
 
 
@@ -553,16 +538,12 @@
 
 
 
-;; todo: remove tio
 (define (seek-line-start buff)
    (lets ((u d l r x y w h off meta buff)
           (dx dy off)
           (buffp 
             (buffer u d null (append (reverse l) r) 1 y w h (cons 0 dy) meta)))
-         (values buffp
-            (if (eq? dx 0)
-               (tio (set-cursor 1 y))
-               (delta-update-screen buff buffp)))))
+         buffp))
 
 ;; row+1 = y + dy, dy = row + 1 - y
 (define (buffer-seek buff x y screen-y)
@@ -895,28 +876,26 @@
        (yp (+ (cdr off) (- y 1))))      ;; yp is at row y on screen currently
       (cond
          ((null? r)
-            (values buff null))
+            buff)
          ((right-paren? (car r))
             (lets ((match (seek-matching-paren-back buff)))
                (log "matching open paren result " match)
                (if match
                   (lets ((mx my match)
                          (buffp (buffer-seek buff mx my (maybe-keep-y yp y my h))))
-                     (values buffp 
-                        (delta-update-screen buff buffp)))
-                  (values buff null))))
+                     buffp)
+                  buff)))
          ((left-paren? (car r))
             (lets ((match (seek-matching-paren-forward buff)))
                (log "matching close paren result " match)
                (if match
                   (lets ((mx my match)
                          (buffp (buffer-seek buff mx my (maybe-keep-y yp y my h))))
-                     (values buffp 
-                        (delta-update-screen buff buffp)))
-                  (values buff null))))
+                     buffp)
+                  buff)))
          (else
             (log "seek-matching-paren: current is " (car r))
-            (values buff null)))))
+            buff))))
 
 ;;;
 ;;; Command mode actions
@@ -973,16 +952,15 @@
          (cont ll buff undo mode))))
 
 (define (command-line-end ll buff undo mode r t cont)
-   (lets ((buff out (seek-line-end buff)))
+   (lets ((buff (seek-line-end buff)))
       (cont ll buff undo mode)))
 
 (define (command-line-start ll buff undo mode r t cont)
-   (lets ((buff out (seek-line-start buff)))
+   (lets ((buff (seek-line-start buff)))
       (cont ll buff undo mode)))
 
 (define (command-move-down ll buff undo mode r t cont)
    (lets ((buff out (move-arrow buff 'down #f)))
-      ;(output out) 
       (cont ll buff undo mode)))
 
 (define (command-move-up ll buff undo mode r t cont)
@@ -998,13 +976,13 @@
       (cont ll buff undo mode)))
 
 (define (command-seek-matching-paren ll buff undo mode r t cont)
-   (lets ((buff out (maybe-seek-matching-paren buff))) 
+   (lets ((buff (maybe-seek-matching-paren buff))) 
       (cont ll buff undo mode)))
 
 (define (command-paste ll buff undo mode r t cont)
    (lets ((undo (push-undo undo buff))
           (buffp (paste-yank buff)))
-      (cont ll buffp undo mode)))
+      (cont ll buffp undo mode "pasted")))
 
 (define (command-add-line-below ll buff undo mode r t cont)
    (cont (ilist (tuple 'key #\A) (tuple 'enter) ll) buff undo mode))
@@ -1097,7 +1075,8 @@
    (lets ((range ll (uncons ll #false)))
       (cond
          ((equal? range (tuple 'key #\<))
-            (lets ((buffp (unindent buff n)))
+            (lets ((buffp (unindent-lines buff n)))
+               (log "foo")
                (cont (keys ll #\h 3) buffp (push-undo undo buff) mode)))
          ((equal? range (tuple 'key #\%))
             (lets ((dy dx (movement-matching-paren-forward buff))
@@ -1615,6 +1594,7 @@
       (lets ((target ll (maybe-get-target ll))
              (count ll (maybe-get-count ll 1))
              (msg ll (uncons ll space-key)))
+         ;; todo: read the possible text object here based on command type, so that a function to recompute the last change can be stored for .
          (tuple-case msg
            ((key k)
                ((get *command-mode-actions* k command-no-op)
