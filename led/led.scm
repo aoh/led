@@ -1,8 +1,5 @@
 #!/usr/bin/ol --run
 
-;; todo: operations return a promiscuously updated buffer, and led-buffer fixes it with proper x and y if necessary
-;; todo: operations return a notification message
-
 (import
   (led terminal)
   (led log)
@@ -1090,6 +1087,7 @@
 (define (command-join-lines ll buff undo mode n t cont)
    (lets
       ((undo (push-undo undo buff))
+       (buff (seek-line-end buff))
        (n (if (number? n) n 1)) ;; fixme: no interval handling
        (u d l r x y w h off meta buff))
       (let loop ((r r) (d d) (n n))
@@ -1099,7 +1097,7 @@
                   (cont ll buffp undo mode)))
             (else   
                (lets
-                  ((buff out tail (drop-leading-whitespace (car d)))
+                  ((tail (drop-leading-whitespace (car d)))
                    (tail (if (whitespace? (last r #\a)) tail (cons #\space tail))))
                   (loop (append r tail) (cdr d) (- n 1))))))))
 
