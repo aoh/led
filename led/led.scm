@@ -278,6 +278,18 @@
          (else
             (loop (cdr lines) (- pos 1) (cons (car lines) u))))))
 
+(define (step-zipper l r n)
+   (cond
+      ((eq? n 0) (values l r))
+      ((> n 0)
+         (if (null? r)
+            (values l r)
+            (step-zipper (cons (car r) l) r (- n 1))))
+      (else
+         (if (null? l)
+            (values l r)
+            (step-zipper (cdr l) (cons (car l) r) (+ n 1))))))
+            
 (define (seek-line-end buff)
    (lets ((u d l r x y w h off meta buff)
           (step (>> w 1))
@@ -344,35 +356,9 @@
             (log "unknown movement type " type)
             (values #f #f)))))
 
-(define (cut-backward u l dy dx)
-   (if (eq? dy 0)
-      (lets ((all (length l))
-             (l cutd (split l (max 0 (- all dx)))))
-         (values u l (tuple 'sequence cutd)))
-      (lets ((next-lines u (split u (- dy 1))))
-         (if (eq? dx 0)
-            (lets ((new-l u (uncons u null)))
-               (values u new-l (tuple 'lines (append next-lines (list (reverse l))))))
-            (lets ((new-l u (uncons u null))
-                   (all (length new-l))
-                   (new-l last-partial (split new-l (max 0 (- all dx)))))
-                (values new-l u 
-                   (tuple 'lines 
-                      (cons last-partial (append next-lines (list (reverse l)))))))))))
+
  
-(define (cut-forward r d dy dx)
-   (if (eq? dy 0)
-      (lets ((cutd r (split r dx)))
-         (values r d (tuple 'sequence cutd)))
-      (lets ((next-lines d (split d (- dy 1))))
-         (if (eq? dx 0)
-            (lets ((new-r d (uncons d null)))
-               (values new-r d (tuple 'lines (cons r next-lines))))
-            (lets ((new-r d (uncons d null))
-                   (last-partial new-r (split new-r dx)))
-                (values new-r d 
-                   (tuple 'lines 
-                      (cons r (append next-lines (list last-partial))))))))))
+
       
 (define space-key (tuple 'key #\space))
      
@@ -431,6 +417,9 @@
             (ref x 2)
             #false))))
 
+(define (increase n)
+   (+ n (if (> n 0) +1 -1)))
+
 (define (get-relative-movement ll buff r self)
    (lets ((np ll (maybe-get-count ll 1))
           (n (* np r)) ;; 6dw = d6w = 3d2w
@@ -477,7 +466,14 @@
                                      (tx (+ (length l) dx))
                                      (ty (+ (- y 1) dy)))
                                  (log "relative movement up to pos" pos)
-                                 (values ll (- my ty) (- mx tx)))))
+                                 ;; include cursor position at mark
+                                 (cond
+                                    ((= my ty)
+                                       (values ll 0 (increase (- mx tx))))
+                                    ((< my ty)
+                                       (values ll (- my ty) mx))
+                                    (else
+                                       (values ll (- my ty) (increase mx)))))))
                         (else
                            (values ll #f #f)))))
                (else
@@ -487,19 +483,55 @@
             (log "get-relative-movement confused: " op)
             (values ll #f #f)))))
 
+(define (cut-backward-multiline u l dy dx)
+   (lets ((next-lines u (split u (- dy 1))))
+      (if (eq? dx 0)
+         (lets ((new-l u (uncons u null)))
+            (log "backward cut, just lines")
+            (values u new-l (tuple 'lines (append next-lines (list (reverse l))))))
+         (lets ((new-l u (uncons u null))
+                (new-l last-partial (split new-l dx)))
+             (log "cut back multiline, taking " dx " of last")
+             (log "cut back multiline, new-l is " new-l)
+             (values u (reverse new-l)
+                (tuple 'lines 
+                   (cons last-partial (append next-lines (list (reverse l))))))))))
+ 
+(define (cut-forward r d dy dx)
+   (if (eq? dy 0)
+      (lets ((cutd r (split r dx)))
+         (values r d (tuple 'sequence cutd)))
+      (lets ((next-lines d (split d (- dy 1))))
+         (if (eq? dx 0)
+            (lets ((new-r d (uncons d null)))
+               (log "forward cut, dx 0")
+               (values new-r d (tuple 'lines (cons r next-lines))))
+            (lets ((new-r d (uncons d null))
+                   (last-partial new-r (split new-r dx)))
+               (log "forward cut, dx " dx)
+                (values new-r d 
+                   (tuple 'lines 
+                      (cons r (append next-lines (list last-partial))))))))))
+ 
 (define (cut-relative-movement ll buff dy dx)
    (lets ((u d l r x y w h off meta buff))
       (cond
          ((eq? dy 0)
             (if (< dx 0)
-               (lets ((rcut l (split l (* dx -1))))
+               ;; cut backwards, one line
+               (lets ((l r (step-zipper l r +1)) ;; include cursor position
+                      (rcut l (split l (* dx -1)))
+                      (r (maybe-cdr r)))
                   (values ll
                      (buffer u d l r (- x (printable-length rcut)) y w h off meta)
                      (tuple 'sequence (reverse rcut))))
+               ;; cut forwards, oneline
                (lets ((r d cut (cut-forward r d dy dx)))
                   (values ll (buffer u d l r x y w h off meta) cut))))
          ((< dy 0)
-            (lets ((u l cut (cut-backward u l (* -1 dy) (* -1 dx))))
+            ;; cut backwards, multiple lines
+            (lets ((u l cut (cut-backward-multiline u l (* -1 dy) dx)))
+               (log "cut back multi done " cut)
                (values ll (buffer u d l r x y w h off meta) cut)))
          (else
             (lets ((r d cut (cut-forward r d dy dx)))
