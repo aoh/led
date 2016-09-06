@@ -523,19 +523,20 @@
                       (rcut l (split l (* dx -1)))
                       (r (maybe-cdr r)))
                   (values ll
-                     (buffer u d l r (- x (printable-length rcut)) y w h off meta)
+                     (buffer u d l r (+ 1 (- x (printable-length rcut))) y w h off meta)
                      (tuple 'sequence (reverse rcut))))
                ;; cut forwards, oneline
                (lets ((r d cut (cut-forward r d dy dx)))
+                  ;; bug, no scroll
                   (values ll (buffer u d l r x y w h off meta) cut))))
          ((< dy 0)
             ;; cut backwards, multiple lines
             (lets ((u l cut (cut-backward-multiline u l (* -1 dy) dx)))
                (log "cut back multi done " cut)
-               (values ll (buffer u d l r x y w h off meta) cut)))
+               (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut)))
          (else
             (lets ((r d cut (cut-forward r d dy dx)))
-               (values ll (buffer u d l r x y w h off meta) cut))))))
+               (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut))))))
 
 (define (cut-lines ll buff n)
    (lets 
@@ -1242,9 +1243,11 @@
          (get (buffer-meta buff) 'command-history null) 
          2 (+ 1 (screen-height buff) 1) (screen-width buff)))
        (buff
-         (set-buffer-meta buff
-           (put metadata 'command-history
-             (cons res (get metadata 'command-history null))))))
+         (if res
+            (set-buffer-meta buff
+              (put metadata 'command-history
+                (cons res (get metadata 'command-history null))))
+            buff)))
       (log (str "readline returned '" res "'"))
       (output
          (tio 
@@ -1588,6 +1591,7 @@
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
    (log-buff buff mode)
+   (log" -> " ll)
    (if (eq? mode 'insert)
       (lets
          ((msg ll (uncons ll #false))
