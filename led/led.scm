@@ -1470,6 +1470,8 @@
       (put #\r command-redo)
       (put 'arrow-left command-previous-buffer)
       (put 'arrow-right command-next-buffer)
+      (put '#\p command-previous-buffer) ;; also available in insert mode
+      (put '#\n command-next-buffer)     ;; ditto
       (put #\l command-update-screen)))
 
 ;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
@@ -1642,10 +1644,10 @@
                      buff undo mode))
                ((ctrl key)
                   (cond
-                     ((eq? key 'arrow-left)
-                        (values ll buff undo mode 'left))
-                     ((eq? key 'arrow-right)
-                        (values ll buff undo mode 'right))
+                     ((eq? key 'arrow-left) (values ll buff undo mode 'left))
+                     ((eq? key 'arrow-right) (values ll buff undo mode 'right))
+                     ((eq? key #\p) (values ll buff undo mode 'left))
+                     ((eq? key #\n) (values ll buff undo mode 'right))
                      (else
                         (log "ignoring control " key " in insert mode")
                         (led-buffer ll buff undo mode))))

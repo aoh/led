@@ -249,8 +249,6 @@
                   ((eq? hd 21)  (cons (tuple 'nak) (loop ll))) ;; ^u
                   ((eq? hd 3)  (cons (tuple 'end-of-text) (loop ll))) ;; ^c
                   ((eq? hd 4)  (cons (tuple 'end-of-transmission) (loop ll))) ;; ^d
-                  ((eq? hd 16)  (cons (tuple 'data-link-escape) (loop ll))) ;; ^p
-                  ((eq? hd 14)  (cons (tuple 'shift-out) (loop ll))) ;; ^n
                   ((eq? hd 23)  (cons (tuple 'end-of-transmission-block) (loop ll))) ;; ^w
                   ((eq? hd 1)  (cons (tuple 'ctrl-a) (loop ll))) ;; ^n
                   ((eq? hd 5)  (cons (tuple 'ctrl-e) (loop ll))) ;; ^w
@@ -258,6 +256,8 @@
                   ((eq? hd 9)  (cons (tuple 'tab) (loop ll)))
                   ((eq? hd 2)  (cons (tuple 'ctrl #\b) (loop ll)))
                   ((eq? hd 18)  (cons (tuple 'ctrl #\r) (loop ll))) ;; ^n
+                  ((eq? hd 14)  (cons (tuple 'ctrl #\n) (loop ll)))
+                  ((eq? hd 16)  (cons (tuple 'ctrl #\p) (loop ll)))
                   ((eq? hd 12) (cons (tuple 'ctrl #\l) (loop ll)))
                   ((eq? hd 24) (cons (tuple 'ctrl #\x) (loop ll)))
                   ((eq? hd 22)
