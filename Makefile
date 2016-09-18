@@ -12,8 +12,8 @@ everything: bin/led .parrot
 	touch .parrot
 
 # gcc takes a while on a raspberry. this is a lot faster.
-#fasltest: led.fasl
-#	cd test && ./run  ../owl-lisp-$(OWLVERSION)/bin/vm ../led.fasl
+fasltest: led.fasl bin/ol
+	cd test && ./run  ../bin/ol -l ../led.fasl
 
 bin/led: led.c
 	mkdir -p bin
