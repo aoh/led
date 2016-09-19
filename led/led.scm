@@ -504,7 +504,21 @@
          (values new-r d 
             (tuple 'lines 
                (cons r (append next-lines (list last-partial))))))))
- 
+
+;; move buffer left if x is off screen
+(define (maybe-scroll-left buff)
+   (if (> (buffer-x buff) 0)
+      buff
+      (lets ((u d l r x y w h off meta buff)
+             (dx dy off))
+         (let loop ((x x) (dx dx))
+            (cond
+               ((> x 0)
+                  (buffer u d l r x y w h (cons dx dy) meta))
+               (else
+                  (let ((step (min dx w)))
+                     (loop (+ x step) (- dx step)))))))))
+      
 (define (cut-relative-movement ll buff dy dx)
    (lets ((u d l r x y w h off meta buff))
       (cond
@@ -514,7 +528,8 @@
                (lets ((l r (step-zipper l r +1)) ;; include cursor position
                       (rcut l (split l (* dx -1))))
                   (values ll
-                     (buffer u d l r (+ 1 (- x (printable-length rcut))) y w h off meta)
+                     (maybe-scroll-left 
+                        (buffer u d l r (+ 1 (- x (printable-length rcut))) y w h off meta))
                      (tuple 'sequence (reverse rcut))))
                ;; cut forwards, oneline
                (lets ((r d cut (cut-forward r d dy dx)))
@@ -525,9 +540,7 @@
             (log "l and r are " (list l r))
             (lets 
                ((l r (step-zipper l r 1)) ;; include char at cursor if there
-                (_ (log "l and r are " (list l r) " after zip"))
                 (u l cut (cut-backward-multiline u l (* -1 dy) dx)))
-               (log "cut back multi done " cut)
                (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut)))
          (else
             (lets 
