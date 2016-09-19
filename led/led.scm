@@ -461,10 +461,13 @@
                         ((get (get-buffer-meta buff 'marks #empty) k #false) =>
                            (lambda (pos)
                               (lets ((u d l r x y w h off meta buff)
-                                     (dy dx off)
+                                     (dx dy off)
                                      (mx my pos)
-                                     (tx (+ (length l) dx))
+                                     (tx (+ (- x 1) dx))
                                      (ty (+ (- y 1) dy)))
+                                 (log "cursor is at " (cons x y))
+                                 (log "offset is " (cons dx dy))
+                                 (log "relative movement from mar " pos " to this " (cons tx ty))
                                  (log "relative movement up to pos" pos)
                                  ;; include cursor position at mark
                                  (cond
@@ -484,34 +487,23 @@
             (values ll #f #f)))))
 
 (define (cut-backward-multiline u l dy dx)
-   (lets ((next-lines u (split u (- dy 1))))
-      (if (and #false (eq? dx 0)) ;; likely better to use the same semantics
-         (lets ((new-l u (uncons u null)))
-            (log "backward cut, just lines")
-            (values u new-l (tuple 'lines (append next-lines (list (reverse l))))))
-         (lets ((new-l u (uncons u null))
-                (new-l last-partial (split new-l dx)))
-             (log "cut back multiline, taking " dx " of last")
-             (log "cut back multiline, new-l is " new-l)
-             (values u (reverse new-l)
-                (tuple 'lines 
-                   (cons (reverse l) (reverse (cons last-partial next-lines)))))))))
+   (lets ((next-lines u (split u (- dy 1)))
+          (new-l u (uncons u null))
+          (new-l last-partial (split new-l dx)))
+      (values u (reverse new-l)
+         (tuple 'lines 
+            (cons last-partial (reverse (cons (reverse l) next-lines)))))))
  
 (define (cut-forward r d dy dx)
    (if (eq? dy 0)
       (lets ((cutd r (split r dx)))
          (values r d (tuple 'sequence cutd)))
-      (lets ((next-lines d (split d (- dy 1))))
-         (if (and #false (eq? dx 0)) ;; likely better to use the same semantics as above
-            (lets ((new-r d (uncons d null)))
-               (log "forward cut, dx 0")
-               (values new-r d (tuple 'lines (cons r next-lines))))
-            (lets ((new-r d (uncons d null))
-                   (last-partial new-r (split new-r dx)))
-               (log "forward cut, dx " dx)
-                (values new-r d 
-                   (tuple 'lines 
-                      (cons r (append next-lines (list last-partial))))))))))
+      (lets ((next-lines d (split d (- dy 1)))
+             (new-r d (uncons d null))
+             (last-partial new-r (split new-r dx)))
+         (values new-r d 
+            (tuple 'lines 
+               (cons r (append next-lines (list last-partial))))))))
  
 (define (cut-relative-movement ll buff dy dx)
    (lets ((u d l r x y w h off meta buff))
@@ -520,8 +512,7 @@
             (if (< dx 0)
                ;; cut backwards, one line
                (lets ((l r (step-zipper l r +1)) ;; include cursor position
-                      (rcut l (split l (* dx -1)))
-                      (r (maybe-cdr r)))
+                      (rcut l (split l (* dx -1))))
                   (values ll
                      (buffer u d l r (+ 1 (- x (printable-length rcut))) y w h off meta)
                      (tuple 'sequence (reverse rcut))))
