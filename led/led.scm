@@ -284,7 +284,7 @@
       ((> n 0)
          (if (null? r)
             (values l r)
-            (step-zipper (cons (car r) l) r (- n 1))))
+            (step-zipper (cons (car r) l) (cdr r) (- n 1))))
       (else
          (if (null? l)
             (values l r)
@@ -485,7 +485,7 @@
 
 (define (cut-backward-multiline u l dy dx)
    (lets ((next-lines u (split u (- dy 1))))
-      (if (eq? dx 0)
+      (if (and #false (eq? dx 0)) ;; likely better to use the same semantics
          (lets ((new-l u (uncons u null)))
             (log "backward cut, just lines")
             (values u new-l (tuple 'lines (append next-lines (list (reverse l))))))
@@ -495,14 +495,14 @@
              (log "cut back multiline, new-l is " new-l)
              (values u (reverse new-l)
                 (tuple 'lines 
-                   (cons last-partial (append next-lines (list (reverse l))))))))))
+                   (cons (reverse l) (reverse (cons last-partial next-lines)))))))))
  
 (define (cut-forward r d dy dx)
    (if (eq? dy 0)
       (lets ((cutd r (split r dx)))
          (values r d (tuple 'sequence cutd)))
       (lets ((next-lines d (split d (- dy 1))))
-         (if (eq? dx 0)
+         (if (and #false (eq? dx 0)) ;; likely better to use the same semantics as above
             (lets ((new-r d (uncons d null)))
                (log "forward cut, dx 0")
                (values new-r d (tuple 'lines (cons r next-lines))))
@@ -531,11 +531,17 @@
                   (values ll (buffer u d l r x y w h off meta) cut))))
          ((< dy 0)
             ;; cut backwards, multiple lines
-            (lets ((u l cut (cut-backward-multiline u l (* -1 dy) dx)))
+            (log "l and r are " (list l r))
+            (lets 
+               ((l r (step-zipper l r 1)) ;; include char at cursor if there
+                (_ (log "l and r are " (list l r) " after zip"))
+                (u l cut (cut-backward-multiline u l (* -1 dy) dx)))
                (log "cut back multi done " cut)
                (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut)))
          (else
-            (lets ((r d cut (cut-forward r d dy dx)))
+            (lets 
+               ((r d cut (cut-forward r d dy dx)))
+               (log "cut forwards")
                (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut))))))
 
 (define (cut-lines ll buff n)
