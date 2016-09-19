@@ -493,7 +493,7 @@
       (values u (reverse new-l)
          (tuple 'lines 
             (cons last-partial (reverse (cons (reverse l) next-lines)))))))
- 
+
 (define (cut-forward r d dy dx)
    (if (eq? dy 0)
       (lets ((cutd r (split r dx)))
@@ -502,7 +502,7 @@
              (new-r d (uncons d null))
              (last-partial new-r (split new-r dx)))
          (values new-r d 
-            (tuple 'lines 
+            (tuple 'line-sequence 
                (cons r (append next-lines (list last-partial))))))))
 
 ;; move buffer left if x is off screen
@@ -533,14 +533,13 @@
                      (tuple 'sequence (reverse rcut))))
                ;; cut forwards, oneline
                (lets ((r d cut (cut-forward r d dy dx)))
-                  ;; bug, no scroll
                   (values ll (buffer u d l r x y w h off meta) cut))))
          ((< dy 0)
             ;; cut backwards, multiple lines
-            (log "l and r are " (list l r))
             (lets 
                ((l r (step-zipper l r 1)) ;; include char at cursor if there
                 (u l cut (cut-backward-multiline u l (* -1 dy) dx)))
+               ;; fixme, scrolling
                (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut)))
          (else
             (lets 
@@ -828,6 +827,30 @@
             ;; paste after cursor
             (buffer u d l (cons this (append lst r)) x y w h off meta)))))
 
+(define (maybe-join-partials a b d)
+   (let ((new (append a b)))
+      (if (null? new)
+         d
+         (cons new d))))
+   
+;; paste 0-n lines with partial ones at both ends
+(define (paste-line-sequence buff lst)
+   (lets ((u d l r x y w h off meta buff)
+          (this lst (uncons lst null))
+          (fulls lasts (split lst (- (length lst) 1)))
+          (last _ (uncons lasts null)))
+      (if (and (null? fulls) (null? last))
+          ;; special case, no new lines
+         (paste-sequence buff this)
+         (if (null? r)
+            (buffer u
+               (append fulls (maybe-join-partials last r d))
+               l this x y w h off meta)
+            (lets ((current r r)) ;; paste after cursor if content
+               (buffer u 
+                  (append fulls (maybe-join-partials last r d))
+                  l (cons current this) x y w h off meta))))))
+               
 ;;
 ;; Data structures
 ;;   yank = #(lines <buffer lines>)
@@ -892,6 +915,9 @@
             (log "appending sequence from buffer")
             (lets ((buff (paste-sequence buff (ref data 2))))
                buff))
+         ((eq? 'line-sequence (ref data 1))
+            (log "appending line sequence " (ref data 2) " from buffer")
+            (paste-line-sequence buff (ref data 2)))
          (else
             (error "how do i paste " data)))))
  
