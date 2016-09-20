@@ -20,8 +20,6 @@
       (font-dim)
       (raw (render "~" null))
       (font-normal)))
-
-
 ;;;
 ;;; Screen update
 ;;;
@@ -355,10 +353,6 @@
          (else
             (log "unknown movement type " type)
             (values #f #f)))))
-
-
- 
-
       
 (define space-key (tuple 'key #\space))
      
@@ -491,7 +485,7 @@
           (new-l u (uncons u null))
           (new-l last-partial (split new-l dx)))
       (values u (reverse new-l)
-         (tuple 'lines 
+         (tuple 'line-sequence
             (cons last-partial (reverse (cons (reverse l) next-lines)))))))
 
 (define (cut-forward r d dy dx)
