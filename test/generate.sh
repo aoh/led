@@ -23,3 +23,15 @@ blab -l . -e 'led.prelude "ifoo bar baz quux\r" led.esc "/bar\r2dw$p:w del-words
 
 # del words multi line
 blab -l . -e 'led.prelude "ifoo\rbar \rbaz  \rquux   " led.esc "/bar\r2dw$p:w del-words-ml.io.out\r:q\r"' > del-words-ml.io
+
+# cut mark back single line
+blab -l . -e 'led.prelude "ia\rfoo bar baz\rb" led.esc "/bar\rma/baz\rd" 39 "a:w cut-back-sl.io.out\r:q\r"' > cut-back-sl.io
+
+# cut mark forward single line
+blab -l . -e 'led.prelude "ia\rfoo bar baz\rb" led.esc "/baz\rma/bar\rd" 39 "a:w cut-forward-sl.io.out\r:q\r"' > cut-forward-sl.io
+
+# cut mark forward multi line
+blab -l . -e 'led.prelude "ia\rfoo FOO\rbar BAR\rbaz BAZ\rb" led.esc "/FOO\rma/BAZ\rd" 39 "a:w cut-forward-ml.io.out\r:q\r"' > cut-forward-ml.io
+
+# cut mark backward multi line
+blab -l . -e 'led.prelude "ia\rfoo FOO\rbar BAR\rbaz BAZ\rb" led.esc "/BAZ\rma/FOO\rd" 39 "a:w cut-back-ml.io.out\r:q\r"' > cut-back-ml.io
