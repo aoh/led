@@ -1591,19 +1591,23 @@
             (else
                (drop-spaces lead (* bal -3)))))))
 
+(define (key x) 
+   (tuple 'key x))
+
 ;; ai hardcoded for now
 (define (insert-enter buff)
    (lets
       ((u d l r x y w h off meta buff)
        (ind (artificial-intelligence (cons (reverse l) u)))
-       (buffp
-         (buffer u (cons (append ind r) d) l null x y w h  off meta))
-       (draw-tio
-         (delta-update-screen buff buffp))
-       (buffp move-tio (move-arrow buffp 'down #t)))
-      (values
-         buffp
-         (append draw-tio move-tio))))
+       (buffp _
+         (move-arrow 
+            (seek-line-start 
+               (buffer u (cons (append ind r) d) l null x y w h  off meta))
+            'down #true)))
+      (fold
+         (lambda (buff node)
+            (lets ((buff _ (move-arrow buff 'right #true))) buff))
+         buffp ind)))
 
 ;;;
 ;;; Buffer handling loop
@@ -1648,9 +1652,9 @@
                ((tab)
                   (led-buffer (ilist space-key space-key space-key ll) buff undo mode))
                ((enter)
-                  (lets ((buff out (insert-enter buff)))
-                     (output out)
-                     (led-buffer ll buff undo mode)))
+                  (lets ((buffp (insert-enter buff)))
+                     (output (delta-update-screen buff buffp))
+                     (led-buffer ll buffp undo mode)))
                ((backspace)
                   (lets ((buff out (insert-backspace buff)))
                      (output out)
