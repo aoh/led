@@ -1269,9 +1269,9 @@
    (lets
       ((metadata (buffer-meta buff))
        (ll res 
-       (readline ll 
-         (get (buffer-meta buff) 'command-history null) 
-         2 (+ 1 (screen-height buff) 1) (screen-width buff)))
+          (readline ll 
+            (get (buffer-meta buff) 'command-history null) 
+            2 (+ 1 (screen-height buff) 1) (screen-width buff)))
        (buff
          (if res
             (set-buffer-meta buff
@@ -1627,80 +1627,84 @@
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
    (log-buff buff mode)
-   (log" -> " ll)
-   (if (eq? mode 'insert)
-      (lets
-         ((msg ll (uncons ll #false))
-          (u d l r x y w h off meta buff))
-         (log "cursor " (cons x y) ", offset " off ", event " msg)
+   (log "in " ll)
+   (cond
+      ((eq? mode 'insert)
+         (lets
+            ((msg ll (uncons ll #false))
+             (u d l r x y w h off meta buff))
+            (log "cursor " (cons x y) ", offset " off ", event " msg)
+               (tuple-case msg
+                  ((key x)
+                     (lets ((buff out (insert-handle-key buff x)))
+                        (output out)
+                        (if (eq? x 41) ;; close paren, highlight the match for a while (hack)
+                           (led-buffer
+                              (ilist (tuple 'esc)
+                                     (tuple 'key #\%)
+                                     (lambda ()
+                                        (sleep 150)
+                                        (ilist
+                                           (tuple 'key #\%)
+                                           (tuple 'key #\a)
+                                           ll)))
+                                buff undo mode)
+                           (led-buffer ll buff undo mode))))
+                  ((tab)
+                     (led-buffer (ilist space-key space-key space-key ll) buff undo mode))
+                  ((enter)
+                     (lets ((buffp (insert-enter buff)))
+                        (output (delta-update-screen buff buffp))
+                        (led-buffer ll buffp undo mode)))
+                  ((backspace)
+                     (lets ((buff out (insert-backspace buff)))
+                        (output out)
+                        (led-buffer ll buff undo mode)))
+                  ((arrow dir)
+                     (lets ((buff out (move-arrow buff dir #t)))
+                        (output out)
+                        (led-buffer ll buff undo mode)))
+                  ((end-of-text)
+                     ; (output (update-screen buff)) ;; would clear overstrike
+                     (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
+                  ((esc)
+                     (log "switching out of insert mode on esc + moving cursor")
+                     ;(output (update-screen buff)) ;; would clear overstrike
+                     (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
+                  ((end-of-transmission)
+                     ;; ^D = 3 backspace (remove indent)
+                     ;; fixme: switch to unindent
+                     (led-buffer
+                        (ilist (tuple 'backspace) (tuple 'backspace) (tuple 'backspace) ll)
+                        buff undo mode))
+                  ((ctrl key)
+                     (cond
+                        ((eq? key 'arrow-left) (values ll buff undo mode 'left))
+                        ((eq? key 'arrow-right) (values ll buff undo mode 'right))
+                        ((eq? key #\p) (values ll buff undo mode 'left))
+                        ((eq? key #\n) (values ll buff undo mode 'right))
+                        (else
+                           (log "ignoring control " key " in insert mode")
+                           (led-buffer ll buff undo mode))))
+                  (else
+                     (led-buffer ll buff undo mode)))))
+      ((null? ll)
+         (values ll buff undo mode 'close-all))
+      (else
+         (lets ((target ll (maybe-get-target ll))
+                (count ll (maybe-get-count ll 1))
+                (msg ll (uncons ll space-key)))
+            ;; todo: read the possible text object here based on command type, so that a function to recompute the last change can be stored for .
             (tuple-case msg
-               ((key x)
-                  (lets ((buff out (insert-handle-key buff x)))
-                     (output out)
-                     (if (eq? x 41) ;; close paren, highlight the match for a while (hack)
-                        (led-buffer
-                           (ilist (tuple 'esc)
-                                  (tuple 'key #\%)
-                                  (lambda ()
-                                     (sleep 150)
-                                     (ilist
-                                        (tuple 'key #\%)
-                                        (tuple 'key #\a)
-                                        ll)))
-                             buff undo mode)
-                        (led-buffer ll buff undo mode))))
-               ((tab)
-                  (led-buffer (ilist space-key space-key space-key ll) buff undo mode))
-               ((enter)
-                  (lets ((buffp (insert-enter buff)))
-                     (output (delta-update-screen buff buffp))
-                     (led-buffer ll buffp undo mode)))
-               ((backspace)
-                  (lets ((buff out (insert-backspace buff)))
-                     (output out)
-                     (led-buffer ll buff undo mode)))
-               ((arrow dir)
-                  (lets ((buff out (move-arrow buff dir #t)))
-                     (output out)
-                     (led-buffer ll buff undo mode)))
-               ((end-of-text)
-                  ; (output (update-screen buff)) ;; would clear overstrike
-                  (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
-               ((esc)
-                  (log "switching out of insert mode on esc + moving cursor")
-                  ;(output (update-screen buff)) ;; would clear overstrike
-                  (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
-               ((end-of-transmission)
-                  ;; ^D = 3 backspace (remove indent)
-                  ;; fixme: switch to unindent
-                  (led-buffer
-                     (ilist (tuple 'backspace) (tuple 'backspace) (tuple 'backspace) ll)
-                     buff undo mode))
-               ((ctrl key)
-                  (cond
-                     ((eq? key 'arrow-left) (values ll buff undo mode 'left))
-                     ((eq? key 'arrow-right) (values ll buff undo mode 'right))
-                     ((eq? key #\p) (values ll buff undo mode 'left))
-                     ((eq? key #\n) (values ll buff undo mode 'right))
-                     (else
-                        (log "ignoring control " key " in insert mode")
-                        (led-buffer ll buff undo mode))))
-               (else
-                  (led-buffer ll buff undo mode))))
-      (lets ((target ll (maybe-get-target ll))
-             (count ll (maybe-get-count ll 1))
-             (msg ll (uncons ll space-key)))
-         ;; todo: read the possible text object here based on command type, so that a function to recompute the last change can be stored for .
-         (tuple-case msg
-           ((key k)
-               ((get *command-mode-actions* k command-no-op)
-                  ll buff undo mode count target (update-cont led-buffer buff)))
-           ((ctrl key)
-               ((get *command-mode-control-actions* key command-no-op)
-                  ll buff undo mode count target (update-cont led-buffer buff)))
-           (else
-               (log "not handling command " msg)
-               (led-buffer ll buff undo mode))))))
+              ((key k)
+                  ((get *command-mode-actions* k command-no-op)
+                     ll buff undo mode count target (update-cont led-buffer buff)))
+              ((ctrl key)
+                  ((get *command-mode-control-actions* key command-no-op)
+                     ll buff undo mode count target (update-cont led-buffer buff)))
+              (else
+                  (log "not handling command " msg)
+                  (led-buffer ll buff undo mode)))))))
 
 
 ;;; Program startup

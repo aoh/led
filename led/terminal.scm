@@ -75,6 +75,7 @@
       (owl ff)
       (owl list-extra)
       (scheme base)
+      (led log)
       (owl io)
       (only (owl unicode) utf8-decoder utf8-encode)
       (only (owl sexp) string->sexp)
@@ -527,7 +528,7 @@
                   (update-line-right right w x)
                   (loop ll hi null right x off))
                 ((end-of-text)
-                  (values null #false))
+                  (values ll #false))
                 ((end-of-transmission)
                   (values ll #false))
                 ((data-link-escape) ;; ^p -> up
