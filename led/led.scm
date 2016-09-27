@@ -14,12 +14,15 @@
    (write-bytes stdout lst))
 
 ;;; Movement and insert mode edit operation
-  
+
 (define empty-buffer-line
    (tio
       (font-dim)
       (raw (render "~" null))
       (font-normal)))
+
+(define (key x) (tuple 'key x))
+
 ;;;
 ;;; Screen update
 ;;;
@@ -53,7 +56,7 @@
           (draw-lines-at-offset w (car off) (+ y 1) +1 (+ h 1) d)
           (set-cursor x y))))
 
-(define (maybe-car lst) (if (pair? lst) (car lst) #false))
+(define (maybe-car lst def) (if (pair? lst) (car lst) def))
 (define (maybe-cdr lst) (if (pair? lst) (cdr lst) null))
 
 (define (maybe-draw-lines-at-offset tl w dx y dy end lines old-lines)
@@ -62,11 +65,12 @@
          (maybe-draw-lines-at-offset tl w dx y dy end
             (list empty-buffer-line) old-lines))
       ((eq? y end) tl)
-      ((equal? (car lines) (maybe-car old-lines))
+      ((equal? (car lines) (maybe-car old-lines empty-buffer-line))
          ;(log "not redrawing shared line at " y)
+         ;(log "not updating line " (car lines) " vs " (maybe-car old-lines empty-buffer-line))
          (maybe-draw-lines-at-offset tl w dx (+ y dy) dy end (cdr lines) (maybe-cdr old-lines)))
       (else
-         ;(log " - delta updating line " y " having '" (list->string (car lines)) "' vs '" (list->string (or null (maybe-car old-lines))) "'")
+         ;(log " - delta updating line " y " having '" (list->string (car lines)) "' vs '" (list->string (or null (maybe-car old-lines empty-buffer-line))) "'")
          (let ((these (drop-printable (car lines) dx)))
             (tio*
                (set-cursor 1 y)
@@ -541,79 +545,6 @@
                (log "cut forwards")
                (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut))))))
 
-(define (cut-lines ll buff n)
-   (lets 
-      ((u d l r x y w h off meta buff)
-       (d (cons (append (reverse l) r) d))
-       (taken d (split d n))
-       (l null)
-       (r d (uncons d null))) ;; bug, but ok for now
-      (values ll
-         (buffer u d l r 1 y w h (cons 0 (cdr off)) meta)
-         (tuple 'lines taken))))
-   
-;; ll buff rep self -> ll' buff' tob|#false
-(define (cut-movement ll buff r self)
-   (lets ((np ll (maybe-get-count ll 1))
-          (n (* np r))
-          (op ll (uncons ll eof)))
-       (tuple-case op
-          ((key k)
-             (cond
-                ((eq? self k)
-                   ;; cut lines via shortcut
-                   (cut-lines ll buff n))
-                (else
-                   (lets ((ll dy dx (get-relative-movement (cons op ll) buff n self)))
-                      (log "relative movement for cut is " (cons dy dx))
-                      (cond
-                         ((not dy)
-                            (values ll buff #false))
-                         (else
-                            (log "cutting relative")
-                            (cut-relative-movement ll buff dy dx)))))))
-          (else
-             (values ll buff #false)))))
-
-;; buff → (x . y) | #false
-(define (seek-matching-paren-back buff)
-   (lets ((u d l r x y w h off meta buff))
-      (let loop 
-         ((x (length l)) (y (+ (cdr off) (- y 1))) (l l) (u u) (depth 1))
-         (cond
-            ((null? l)
-               (if (null? u)
-                  #false
-                  (loop (length (car u)) (- y 1) (reverse (car u)) (cdr u) depth)))
-            ((left-paren? (car l))
-               (if (eq? depth 1)
-                  (cons (- x 1) y)
-                  (loop (- x 1) y (cdr l) u (- depth 1))))
-            ((right-paren? (car l))
-               (loop (- x 1) y (cdr l) u (+ depth 1)))
-            (else
-               (loop (- x 1) y (cdr l) u depth))))))
-
-(define (seek-matching-paren-forward buff)
-   (lets ((u d l r x y w h off meta buff))
-      (let loop 
-         ((x (length l)) (y (+ (cdr off) (- y 1))) (r r) (d d) (depth 0))
-         (cond
-            ((null? r)
-               (if (null? d)
-                  #false
-                  (loop 0 (+ y 1) (car d) (cdr d) depth)))
-            ((right-paren? (car r))
-               (if (eq? depth 1)
-                  (cons x y)
-                  (loop (+ x 1) y (cdr r) d (- depth 1))))
-            ((left-paren? (car r))
-               (loop (+ x 1) y (cdr r) d (+ depth 1)))
-            (else
-               (loop (+ x 1) y (cdr r) d depth))))))
-
-
-
 (define (seek-line-start buff)
    (lets ((u d l r x y w h off meta buff)
           (dx dy off)
@@ -675,37 +606,7 @@
         (values
           (buffer u d l r (- x offset) y w h off meta)
           (- x offset) y)))
-
-;; regex is a ^... one
-(define (search-from l ls regex x y)
-   (cond
-      ((null? l)
-         (if (null? ls)
-            (values #f #f)
-            (search-from (car ls) (cdr ls) regex 0 (+ y 1))))
-      ((regex l)
-         (values x y))
-      (else
-         (search-from (cdr l) ls regex (+ x 1) y))))
-         
-(define (find-next buff)
-   (lets ((u d l r x y w h off meta buff)
-          (dx dy off)
-          (regex (get meta 'search-regex (λ (x) #false)))
-          (row (+ (length u) 1))
-          (_ rt (uncons r #false)) ;; move one char forward
-          (mx my 
-            (search-from rt d regex (+ x dx) (+ (- y 1) dy))))
-         (if mx
-            (values (buffer-seek buff mx my #false) #false)
-            (lets
-               ((this (append (reverse l) r))
-                (up (reverse (cons this u)))
-                (mx my (search-from (car up) (cdr up) regex 0 0)))
-               (if mx
-                  (values (buffer-seek buff mx my #false) "search wrapped")
-                  (values buff "no matches"))))))
-
+ 
 (define (move-arrow buff dir ip)
    (lets ((u d l r x y w h off meta buff))
       (log "arrow " dir " from " (cons x y) ", dim " (cons w h))
@@ -797,6 +698,123 @@
          (else
             (log "odd line move: " dir)
             (values buff null)))))
+
+(define (cut-lines ll buff n)
+   (lets 
+      ((u d l r x y w h off meta buff)
+       (d (cons (append (reverse l) r) d))
+       (taken d (split d n))
+       (l null))
+      (if (null? d)
+         ;; need to move up, unless u is null
+         (if (null? u)
+            (values ll
+               (buffer u d null null 1 1 w h '(0 . 0) meta)
+               (tuple 'lines taken))
+            (lets ((buff _ (move-arrow buff 'up #f))
+                   (u d l r x y w h off meta buff))
+               (values ll
+                  (buffer u (cdr d) l r x y w h off meta)
+                  (tuple 'lines taken))))
+         (lets ((r d (uncons d null)))
+            (values ll
+               (buffer u d l r 1 y w h (cons 0 (cdr off)) meta)
+               (tuple 'lines taken))))))
+   
+;; ll buff rep self -> ll' buff' tob|#false
+(define (cut-movement ll buff r self)
+   (lets ((np ll (maybe-get-count ll 1))
+          (n (* np r))
+          (op ll (uncons ll eof)))
+       (tuple-case op
+          ((key k)
+             (cond
+                ((eq? self k)
+                   ;; cut lines via shortcut
+                   (log "cut-lines")
+                   (cut-lines ll buff n))
+                (else
+                   (lets ((ll dy dx (get-relative-movement (cons op ll) buff n self)))
+                      (log "relative movement for cut is " (cons dy dx))
+                      (cond
+                         ((not dy)
+                            (values ll buff #false))
+                         (else
+                            (log "cutting relative")
+                            (cut-relative-movement ll buff dy dx)))))))
+          (else
+             (values ll buff #false)))))
+
+;; buff → (x . y) | #false
+(define (seek-matching-paren-back buff)
+   (lets ((u d l r x y w h off meta buff))
+      (let loop 
+         ((x (length l)) (y (+ (cdr off) (- y 1))) (l l) (u u) (depth 1))
+         (cond
+            ((null? l)
+               (if (null? u)
+                  #false
+                  (loop (length (car u)) (- y 1) (reverse (car u)) (cdr u) depth)))
+            ((left-paren? (car l))
+               (if (eq? depth 1)
+                  (cons (- x 1) y)
+                  (loop (- x 1) y (cdr l) u (- depth 1))))
+            ((right-paren? (car l))
+               (loop (- x 1) y (cdr l) u (+ depth 1)))
+            (else
+               (loop (- x 1) y (cdr l) u depth))))))
+
+(define (seek-matching-paren-forward buff)
+   (lets ((u d l r x y w h off meta buff))
+      (let loop 
+         ((x (length l)) (y (+ (cdr off) (- y 1))) (r r) (d d) (depth 0))
+         (cond
+            ((null? r)
+               (if (null? d)
+                  #false
+                  (loop 0 (+ y 1) (car d) (cdr d) depth)))
+            ((right-paren? (car r))
+               (if (eq? depth 1)
+                  (cons x y)
+                  (loop (+ x 1) y (cdr r) d (- depth 1))))
+            ((left-paren? (car r))
+               (loop (+ x 1) y (cdr r) d (+ depth 1)))
+            (else
+               (loop (+ x 1) y (cdr r) d depth))))))
+
+
+
+;; regex is a ^... one
+(define (search-from l ls regex x y)
+   (cond
+      ((null? l)
+         (if (null? ls)
+            (values #f #f)
+            (search-from (car ls) (cdr ls) regex 0 (+ y 1))))
+      ((regex l)
+         (values x y))
+      (else
+         (search-from (cdr l) ls regex (+ x 1) y))))
+         
+(define (find-next buff)
+   (lets ((u d l r x y w h off meta buff)
+          (dx dy off)
+          (regex (get meta 'search-regex (λ (x) #false)))
+          (row (+ (length u) 1))
+          (_ rt (uncons r #false)) ;; move one char forward
+          (mx my 
+            (search-from rt d regex (+ x dx) (+ (- y 1) dy))))
+         (if mx
+            (values (buffer-seek buff mx my #false) #false)
+            (lets
+               ((this (append (reverse l) r))
+                (up (reverse (cons this u)))
+                (mx my (search-from (car up) (cdr up) regex 0 0)))
+               (if mx
+                  (values (buffer-seek buff mx my #false) "search wrapped")
+                  (values buff "no matches"))))))
+
+
 
 ;; special case of input not having a terminal newline can be handled 
 ;; in buffer metadata if necessary
