@@ -951,7 +951,8 @@
          ((port (open-output-file path))
           (lst (buffer->bytes buff))
           (n (length lst))
-          (res (byte-stream->port lst port)))
+          (res (if port (byte-stream->port lst port) #f)))
+         (close-port port)
          (if res
             (values #true
                (foldr render null 
