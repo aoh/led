@@ -746,7 +746,7 @@
              (values ll buff #false)))))
 
 ;; buff → (x . y) | #false
-(define (seek-matching-paren-back buff)
+(define (seek-matching-paren-back buff left? right?)
    (lets ((u d l r x y w h off meta buff))
       (let loop 
          ((x (length l)) (y (+ (cdr off) (- y 1))) (l l) (u u) (depth 1))
@@ -755,16 +755,16 @@
                (if (null? u)
                   #false
                   (loop (length (car u)) (- y 1) (reverse (car u)) (cdr u) depth)))
-            ((left-paren? (car l))
+            ((left? (car l))
                (if (eq? depth 1)
                   (cons (- x 1) y)
                   (loop (- x 1) y (cdr l) u (- depth 1))))
-            ((right-paren? (car l))
+            ((right? (car l))
                (loop (- x 1) y (cdr l) u (+ depth 1)))
             (else
                (loop (- x 1) y (cdr l) u depth))))))
 
-(define (seek-matching-paren-forward buff)
+(define (seek-matching-paren-forward buff left? right?)
    (lets ((u d l r x y w h off meta buff))
       (let loop 
          ((x (length l)) (y (+ (cdr off) (- y 1))) (r r) (d d) (depth 0))
@@ -773,11 +773,11 @@
                (if (null? d)
                   #false
                   (loop 0 (+ y 1) (car d) (cdr d) depth)))
-            ((right-paren? (car r))
+            ((right? (car r))
                (if (eq? depth 1)
                   (cons x y)
                   (loop (+ x 1) y (cdr r) d (- depth 1))))
-            ((left-paren? (car r))
+            ((left? (car r))
                (loop (+ x 1) y (cdr r) d (+ depth 1)))
             (else
                (loop (+ x 1) y (cdr r) d depth))))))
@@ -973,30 +973,39 @@
          ((< rel-pos 1) #false)  ;; above screen, center on it
          ((< rel-pos h) rel-pos) ;; on screen, ask y to be there
          (else #false))))        ;; below screen
-   
-(define (maybe-seek-matching-paren buff)
+
+(define (paren-hunter buff seeker left? right?)
    (lets 
       ((u d l r x y w h off meta buff)
        (yp (+ (cdr off) (- y 1))))      ;; yp is at row y on screen currently
+      (lets ((match (seeker buff left? right?)))
+         (log "matching open paren result " match)
+         (if match
+            (lets ((mx my match)
+                   (buffp (buffer-seek buff mx my (maybe-keep-y yp y my h))))
+               buffp)
+            buff))))
+
+(define (is? x) 
+   (lambda (y) (eq? x y)))
+
+(define (maybe-seek-matching-paren buff)
+   (lets ((u d l r x y w h off meta buff))
       (cond
          ((null? r)
             buff)
          ((right-paren? (car r))
-            (lets ((match (seek-matching-paren-back buff)))
-               (log "matching open paren result " match)
-               (if match
-                  (lets ((mx my match)
-                         (buffp (buffer-seek buff mx my (maybe-keep-y yp y my h))))
-                     buffp)
-                  buff)))
+            (paren-hunter buff seek-matching-paren-back left-paren? right-paren?))
          ((left-paren? (car r))
-            (lets ((match (seek-matching-paren-forward buff)))
-               (log "matching close paren result " match)
-               (if match
-                  (lets ((mx my match)
-                         (buffp (buffer-seek buff mx my (maybe-keep-y yp y my h))))
-                     buffp)
-                  buff)))
+            (paren-hunter buff seek-matching-paren-forward left-paren? right-paren?))
+         ((eq? (car r) #\{)
+            (paren-hunter buff seek-matching-paren-forward (is? #\{) (is? #\})))
+         ((eq? (car r) #\})
+            (paren-hunter buff seek-matching-paren-back (is? #\{) (is? #\})))
+         ((eq? (car r) #\[)
+            (paren-hunter buff seek-matching-paren-forward (is? #\[) (is? #\])))
+         ((eq? (car r) #\])
+            (paren-hunter buff seek-matching-paren-back (is? #\[) (is? #\])))
          (else
             (log "seek-matching-paren: current is " (car r))
             buff))))
@@ -1557,8 +1566,8 @@
       (put #\G command-go-to-line)
       (put #\> command-indent)
       (put #\< command-unindent)
-      (put #\Q command-previous-buffer)
-      (put #\W command-next-buffer)
+      ;(put #\Q command-previous-buffer) ;; use ^p and ^n
+      ;(put #\W command-next-buffer)
       (put #\C command-change-rest-of-line)
       (put #\Z command-maybe-save-and-close)
       (put #\% command-seek-matching-paren)
