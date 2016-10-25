@@ -1756,15 +1756,14 @@
             (if (pair? data)
                (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) (put meta 'path path))
                (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
-      ((open-output-file path) =>
-         (lambda (fd)
-            (log "opened new fd " fd)
-            (close-port fd) ;; now input succeeds
-            (log "created " path)
-            (make-file-state w h path meta)))
+      ;((open-output-file path) =>
+      ;   (lambda (fd)
+      ;      (log "opened new fd " fd)
+      ;      (close-port fd) ;; now input succeeds
+      ;      (log "created " path)
+      ;      (make-file-state w h path meta)))
       (else
-         (log "Could not open " path)
-         #false)))
+         (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
 
 (define (path->buffer-state ll path)
    (lets ((w h ll (get-terminal-size ll))
