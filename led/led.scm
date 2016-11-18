@@ -34,8 +34,10 @@
             (list empty-buffer-line)))
       ((eq? y end) tl)
       ((not (car lines)) ;; not drawn, leave on screen
+         ;(log "not drawing screen line " y  ", buffer line " (+ y dy))
          (draw-lines-at-offset tl w dx (+ y dy) dy end (cdr lines)))
       (else
+         ;(log "drawing screen line " y  ", buffer line " (+ y dy))
          (let ((these (drop-printable (car lines) dx)))
             ;(log "printable after " dx " of " (car lines) " is " (drop-printable (car lines) dx))
             (tio*
@@ -61,16 +63,16 @@
 
 (define (maybe-draw-lines-at-offset tl w dx y dy end lines old-lines)
    (cond
+      ((eq? y end) 
+         tl)
       ((null? lines) 
          (maybe-draw-lines-at-offset tl w dx y dy end
             (list empty-buffer-line) old-lines))
-      ((eq? y end) tl)
       ((equal? (car lines) (maybe-car old-lines empty-buffer-line))
          ;(log "not redrawing shared line at " y)
-         ;(log "not updating line " (car lines) " vs " (maybe-car old-lines empty-buffer-line))
          (maybe-draw-lines-at-offset tl w dx (+ y dy) dy end (cdr lines) (maybe-cdr old-lines)))
       (else
-         ;(log " - delta updating line " y " having '" (list->string (car lines)) "' vs '" (list->string (or null (maybe-car old-lines empty-buffer-line))) "'")
+         ;(log " - DIFFERENT from before " (car lines) ", old " (maybe-car old-lines empty-buffer-line))
          (let ((these (drop-printable (car lines) dx)))
             (tio*
                (set-cursor 1 y)
@@ -83,10 +85,10 @@
    (cond
       ((eq? dy 0) (values u d))
       ((> dy 0)
-         (lets ((x u (uncons u null)))
+         (lets ((x u (uncons u empty-buffer-line)))
             (same-line u (cons x d) (- dy 1))))
       (else
-         (lets ((x d (uncons d null)))
+         (lets ((x d (uncons d empty-buffer-line)))
             (same-line (cons x u) d (+ dy 1))))))
 
 ;; note: delta updates could be used to work around lack of clear-line-upto and allow
@@ -107,9 +109,8 @@
          (if (equal? ooff noff)
             ;; no offset changes, so old lines may be intact
             (begin
-               (log "doing delta update")
                (tio
-                  (maybe-draw-lines-at-offset w (car noff) ny -1 0 nu ou)
+                  (maybe-draw-lines-at-offset w (car noff)    ny    -1      0  nu ou)
                   (maybe-draw-lines-at-offset w (car noff) (+ ny 1) +1 (+ h 1) nd od)
                   (set-cursor nx ny)))
             (update-screen new)))))
@@ -1662,60 +1663,60 @@
             ((msg ll (uncons ll #false))
              (u d l r x y w h off meta buff))
             (log "cursor " (cons x y) ", offset " off ", event " msg)
-               (tuple-case msg
-                  ((key x)
-                     (lets ((buff out (insert-handle-key buff x)))
-                        (output out)
-                        (if (eq? x 41) ;; close paren, highlight the match for a while (hack)
-                           (led-buffer
-                              (ilist (tuple 'esc)
-                                     (tuple 'key #\%)
-                                     (lambda ()
-                                        (sleep 150)
-                                        (ilist
-                                           (tuple 'key #\%)
-                                           (tuple 'key #\a)
-                                           ll)))
-                                buff undo mode)
-                           (led-buffer ll buff undo mode))))
-                  ((tab)
-                     (led-buffer (ilist space-key space-key space-key ll) buff undo mode))
-                  ((enter)
-                     (lets ((buffp (insert-enter buff)))
-                        (output (delta-update-screen buff buffp))
-                        (led-buffer ll buffp undo mode)))
-                  ((backspace)
-                     (lets ((buff out (insert-backspace buff)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((arrow dir)
-                     (lets ((buff out (move-arrow buff dir #t)))
-                        (output out)
-                        (led-buffer ll buff undo mode)))
-                  ((end-of-text)
-                     ; (output (update-screen buff)) ;; would clear overstrike
-                     (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
-                  ((esc)
-                     (log "switching out of insert mode on esc + moving cursor")
-                     ;(output (update-screen buff)) ;; would clear overstrike
-                     (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
-                  ((end-of-transmission)
-                     ;; ^D = 3 backspace (remove indent)
-                     ;; fixme: switch to unindent
-                     (led-buffer
-                        (ilist (tuple 'backspace) (tuple 'backspace) (tuple 'backspace) ll)
-                        buff undo mode))
-                  ((ctrl key)
-                     (cond
-                        ((eq? key 'arrow-left) (values ll buff undo mode 'left))
-                        ((eq? key 'arrow-right) (values ll buff undo mode 'right))
-                        ((eq? key #\p) (values ll buff undo mode 'left))
-                        ((eq? key #\n) (values ll buff undo mode 'right))
-                        (else
-                           (log "ignoring control " key " in insert mode")
-                           (led-buffer ll buff undo mode))))
-                  (else
-                     (led-buffer ll buff undo mode)))))
+            (tuple-case msg
+               ((key x)
+                  (lets ((buff out (insert-handle-key buff x)))
+                     (output out)
+                     (if (eq? x 41) ;; close paren, highlight the match for a while (hack)
+                        (led-buffer
+                           (ilist (tuple 'esc)
+                                  (tuple 'key #\%)
+                                  (lambda ()
+                                     (sleep 150)
+                                     (ilist
+                                        (tuple 'key #\%)
+                                        (tuple 'key #\a)
+                                        ll)))
+                             buff undo mode)
+                        (led-buffer ll buff undo mode))))
+               ((tab)
+                  (led-buffer (ilist space-key space-key space-key ll) buff undo mode))
+               ((enter)
+                  (lets ((buffp (insert-enter buff)))
+                     (output (delta-update-screen buff buffp))
+                     (led-buffer ll buffp undo mode)))
+               ((backspace)
+                  (lets ((buff out (insert-backspace buff)))
+                     (output out)
+                     (led-buffer ll buff undo mode)))
+               ((arrow dir)
+                  (lets ((buff out (move-arrow buff dir #t)))
+                     (output out)
+                     (led-buffer ll buff undo mode)))
+               ((end-of-text)
+                  ; (output (update-screen buff)) ;; would clear overstrike
+                  (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
+               ((esc)
+                  (log "switching out of insert mode on esc + moving cursor")
+                  ;(output (update-screen buff)) ;; would clear overstrike
+                  (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
+               ((end-of-transmission)
+                  ;; ^D = 3 backspace (remove indent)
+                  ;; fixme: switch to unindent
+                  (led-buffer
+                     (ilist (tuple 'backspace) (tuple 'backspace) (tuple 'backspace) ll)
+                     buff undo mode))
+               ((ctrl key)
+                  (cond
+                     ((eq? key 'arrow-left) (values ll buff undo mode 'left))
+                     ((eq? key 'arrow-right) (values ll buff undo mode 'right))
+                     ((eq? key #\p) (values ll buff undo mode 'left))
+                     ((eq? key #\n) (values ll buff undo mode 'right))
+                     (else
+                        (log "ignoring control " key " in insert mode")
+                        (led-buffer ll buff undo mode))))
+               (else
+                  (led-buffer ll buff undo mode)))))
       ((null? ll)
          (values ll buff undo mode 'close-all))
       (else
