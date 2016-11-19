@@ -1,0 +1,1 @@
+[10;10R[10;10Ria	:set expandtab:set tabstop=3a	b:w tabstop.io.out:q

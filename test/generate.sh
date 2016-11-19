@@ -35,3 +35,6 @@ blab -l . -e 'led.prelude "ia\rfoo FOO\rbar BAR\rbaz BAZ\rb" led.esc "/FOO\rma/B
 
 # cut mark backward multi line
 blab -l . -e 'led.prelude "ia\rfoo FOO\rbar BAR\rbaz BAZ\rb" led.esc "/BAZ\rma/FOO\rd" 39 "a:w cut-back-ml.io.out\r:q\r"' > cut-back-ml.io
+
+# tabstop
+blab -l . -e 'led.prelude "ia\t" led.esc ":set expandtab\r:set tabstop=3\ra\tb" led.esc ":w tabstop.io.out\r:q\r"' > tabstop.io
