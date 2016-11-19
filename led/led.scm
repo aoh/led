@@ -1,11 +1,16 @@
 #!/usr/bin/ol --run
 
+;; todo: buffer command notify should receive info whether it was an error
+;;  error -> break on config load 
+;;        -> otherwise highlight the message
+
 (import
   (led terminal)
   (led log)
   (led buffer)
   (led undo)
   (led node)
+  (only (owl sys) getenv)
   (owl args))
 
 (define version-str "led v0.1a")
@@ -1961,9 +1966,37 @@
       (tio
          (disable-line-wrap))))
 
-(define (load-settings)
-   (log "Not loading setting yet")
-   (-> #empty))
+(define sink 
+   (lambda x x))
+
+;; dict -> meta | #false
+(define (load-settings dict)
+   (lets/cc ret
+      ((config-path 
+         (or (getf dict 'config)
+             (str (or (getenv "HOME") ".")
+                  "/.ledrc")))
+       (empty-config #empty)
+       (config-port 
+         (open-input-file config-path)))
+      (log "loading config from " config-path)
+      (cond
+         ((not config-port)
+            empty-config)
+         ((force-ll (lines config-port)) =>
+            (lambda (lines)
+               (buffer-meta
+                  (fold
+                     (lambda (buff cmd)
+                        (log "led eval: " cmd)
+                        (led-eval null buff empty-undo 'command 
+                            (lambda (ll buff undo mode) buff)
+                            sink cmd))
+                     (make-empty-buffer 10 10 empty-config)
+                     lines))))
+         (else
+            (print-to stderr "Bad data in config")
+            #false))))
       
 (define (start-led dict args ll)
   (log "start-led " dict ", " args)
@@ -1972,7 +2005,7 @@
     (log "dimensions " (cons w h))
     (initial-terminal-setup)
     (lets
-      ((meta (load-settings))
+      ((meta (load-settings dict))
        (states
          (reverse
             (if (null? args)
