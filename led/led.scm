@@ -2024,7 +2024,7 @@
     `((help "-h" "--help" comment "show this thing")
       (version "-V" "--version" comment "show program version")
       (log "-L" "--log" has-arg comment "debug log file")
-      (log "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
+      (config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
       (faketerm "-I" "--input" has-arg comment "fake terminal input stream source"))))
 
 (define (trampoline)
