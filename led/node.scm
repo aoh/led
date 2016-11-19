@@ -29,6 +29,7 @@
       (led terminal))
   
    (begin    
+      
       (define rp-node
          (tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal))))
          
@@ -45,7 +46,8 @@
       
       (define (space-char? x)
          (or (eq? x #\space) (eq? x 9)))
-      
+     
+      ;; representation of a real tab 
       (define tab-node 
         (tuple 'replace 
          (list #\tab) 
@@ -92,11 +94,11 @@
             ((whitespace? (car lst))
                (drop-leading-whitespace (cdr lst)))
             (else lst)))
-            
-      (define (key-node k)
+      
+      (define (key-node k meta)
          (cond
             ((eq? k #\tab)
-               tab-node)
+               (get meta 'tab tab-node))
             ((eq? k 40) ;; lp
                ;k
                lp-node

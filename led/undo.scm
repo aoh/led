@@ -2,6 +2,7 @@
    
    (export
       initial-undo
+      empty-undo
       push-undo
       pop-undo
       unpop-undo)
@@ -11,6 +12,10 @@
       (led log))
    
    (begin
+
+      (define empty-undo 
+         (cons null null))
+
       (define (initial-undo buff)
          (cons (list buff) null))
       

@@ -1,11 +1,16 @@
 #!/usr/bin/ol --run
 
+;; todo: buffer command notify should receive info whether it was an error
+;;  error -> break on config load 
+;;        -> otherwise highlight the message
+
 (import
   (led terminal)
   (led log)
   (led buffer)
   (led undo)
   (led node)
+  (only (owl sys) getenv)
   (owl args))
 
 (define version-str "led v0.1a")
@@ -182,7 +187,7 @@
 
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
-      (lets ((node (key-node k))
+      (lets ((node (key-node k meta))
              (nw (node-width node)))
          (log "adding node " node)
          (if (< (+ x nw) w)
@@ -1268,30 +1273,105 @@
                (cont ll buff undo mode "no such mark")))
          (cont ll buff undo mode))))
 
-(define (command-go-to-last-line ll buff undo mode r t cont)
+(define (command-go-to-last-line ll buff undo mode cont)
    (lets 
       ((u d l r x y w h off meta buff)
        (last (+ 1 (+ (length u) (length d))))
        (buff (buffer-seek buff 0 last #false)))
       (cont ll buff undo mode "last line")))
 
-(define (untab meta)
+(define (convert-paren meta)
    (let ((tab (get meta 'tab tab-node)))
       (λ (line)
-         (map 
-            (λ (node)   
-               (cond
-                  ((eq? node #\() lp-node)
-                  ((eq? node #\)) rp-node)
-                  ((eq? node #\tab) tab)
-                  (else node)))
-            line))))
+         (map (λ (node) (key-node node meta)) line))))
       
 (define (path->lines path meta)
    (let ((fd (open-input-file path)))
+      ;; todo: allow binary mode operation
       (if fd
-         (map (untab meta) (map string->list (force-ll (lines fd))))
+         (map (convert-paren meta) (map string->list (force-ll (lines fd))))
          #false)))
+
+(define (led-eval ll buff undo mode cont notify exp)
+   (cond
+      ((equal? exp "")
+        (notify buff "canceled")
+        (cont ll buff undo mode))
+      ((equal? exp "q")
+        (values ll buff undo mode 'close))
+      ((equal? exp "q!")
+        (values ll buff undo mode 'close))
+      ((equal? exp "Q!")
+        (values ll buff undo mode 'close-all))
+      ((equal? exp "n")
+        (values ll buff undo mode 'new))
+      ((m/^n [^ ]+$/ exp)
+         (values ll buff undo mode (tuple 'open (s/n +// exp))))
+      ((equal? exp "vi")
+        (cont ll buff undo 'insert))
+      ((m/^w / exp)
+        (let ((path (s/^w +// exp)))
+           (lets ((ok? write-msg (write-buffer buff path)))
+              (cont ll (put-buffer-meta buff 'path path) undo mode (list->string write-msg)))))
+      ((m/^r +[^ ]/ exp)
+         (lets ((path (s/^r +// exp))
+                (lines (path->lines path (buffer-meta buff))))
+            (log "read" lines "from" path)
+            (if lines
+               (lets ((undo (push-undo undo buff))
+                      (buff (paste-lines-below buff lines)))
+                  (output (update-screen buff))
+                  (notify buff (str "Read " (length lines) " lines from '" path "'"))
+                  (cont ll buff undo mode))
+               (begin
+                  (notify buff (str "Failed to read '" path "'"))
+                  (cont ll buff undo mode)))))
+      ((m/^w$/ exp)
+        (let ((path (buffer-path buff #false)))
+           (if path
+              (lets ((ok? write-tio (write-buffer buff path)))
+                 (notify buff write-tio)
+                 (cont ll buff undo mode))
+              (cont ll buff undo mode))))
+      ((m/^x$/ exp)
+         (lets ((path (buffer-path buff #false))
+                (ok? msg (write-buffer buff path)))
+            (if ok?
+               ;; exit to led-buffers
+               (values ll buff undo mode 'close)
+               (begin
+                  (notify buff msg)
+                  (cont ll buff undo mode)))))
+      ((m/^[0-9]+$/ exp)
+        (lets ((line (max 0 (- (string->number exp 10) 1)))
+               (buff (buffer-seek buff 0 line #false)))
+           (output (update-screen buff))
+           (cont ll buff undo mode)))
+      ((m/^move +[0-9]+$/ exp)
+          (let ((n (string->number (s/^move +// exp))))
+            (values ll buff undo mode (tuple 'move n))))
+      ((equal? exp "$")
+         (command-go-to-last-line ll buff undo mode cont))
+      ((m/set *ai/ exp)
+         (notify buff "AI enabled")
+         (log "AI -> paren")
+         (cont ll (put-buffer-meta buff 'ai 'paren) undo mode))
+      ((m/set *noai/ exp)
+         (notify buff "AI disabled")
+         (log "AI -> none")
+         (cont ll (put-buffer-meta buff 'ai 'none) undo mode))
+      ((m/set *expandtab/ exp)
+         (notify buff "Expanding tabs")
+         (cont ll (put-buffer-meta buff 'expandtab #true) undo mode))
+      ((m/set *noexpandtab/ exp)
+         (notify buff "Not expanding tabs")
+         (cont ll (put-buffer-meta buff 'expandtab #false) undo mode))
+      ((m/set *tabstop=[1-9][0-9]*/ exp)
+         (lets ((n (string->integer (s/set *tabstop=// exp))))
+            (notify buff (str "Tabstop = " n))
+            (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
+      (else
+        (cont ll buff undo mode))))
 
 (define (command-enter-command ll buff undo mode r t cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))
@@ -1313,69 +1393,9 @@
             (set-cursor 1 (+ 1 (screen-height buff))) 
             (clear-line)
             (set-cursor (buffer-x buff) (buffer-y buff))))
-      (cond
-       ((not res)
-          (cont ll buff undo mode))
-       ((equal? res "")
-          (notify buff "canceled")
-          (cont ll buff undo mode))
-       ((equal? res "q")
-         (values ll buff undo mode 'close))
-       ((equal? res "q!")
-         (values ll buff undo mode 'close))
-       ((equal? res "Q!")
-         (values ll buff undo mode 'close-all))
-       ((equal? res "n")
-         (values ll buff undo mode 'new))
-       ((m/^n [^ ]+$/ res)
-         (values ll buff undo mode (tuple 'open (s/n +// res))))
-       ((equal? res "vi")
-         (cont ll buff undo 'insert))
-       ((m/^w / res)
-         (let ((path (s/^w +// res)))
-            (lets ((ok? write-msg (write-buffer buff path)))
-               (cont ll (put-buffer-meta buff 'path path) undo mode (list->string write-msg)))))
-       ((m/^r +[^ ]/ res)
-          (lets ((path (s/^r +// res))
-                 (lines (path->lines path metadata)))
-             (log "read" lines "from" path)
-             (if lines
-                (lets ((undo (push-undo undo buff))
-                       (buff (paste-lines-below buff lines)))
-                   (output (update-screen buff))
-                   (notify buff (str "Read " (length lines) " lines from '" path "'"))
-                   (cont ll buff undo mode))
-                (begin
-                   (notify buff (str "Failed to read '" path "'"))
-                   (cont ll buff undo mode)))))
-       ((m/^w$/ res)
-         (let ((path (buffer-path buff #false)))
-            (if path
-               (lets ((ok? write-tio (write-buffer buff path)))
-                  (notify buff write-tio)
-                  (cont ll buff undo mode))
-               (cont ll buff undo mode))))
-       ((m/^x$/ res)
-          (lets ((path (buffer-path buff #false))
-                 (ok? msg (write-buffer buff path)))
-             (if ok?
-                ;; exit to led-buffers
-                (values ll buff undo mode 'close)
-                (begin
-                   (notify buff msg)
-                   (cont ll buff undo mode)))))
-       ((m/^[0-9]+$/ res)
-         (lets ((line (max 0 (- (string->number res 10) 1)))
-                (buff (buffer-seek buff 0 line #false)))
-            (output (update-screen buff))
-            (cont ll buff undo mode)))
-       ((m/^move +[0-9]+$/ res)
-          (let ((n (string->number (s/^move +// res))))
-             (values ll buff undo mode (tuple 'move n))))
-       ((equal? res "$")
-         (command-go-to-last-line ll buff undo mode r #f cont))
-       (else
-         (cont ll buff undo mode)))))
+      (if res
+         (led-eval ll buff undo mode cont notify res)
+         (cont ll buff undo mode))))
 
 (define (command-redo ll buff undo mode r t cont)
   (lets ((undo buffp (unpop-undo undo buff)))
@@ -1623,20 +1643,30 @@
 (define (key x) 
    (tuple 'key x))
 
-;; ai hardcoded for now
 (define (insert-enter buff)
-   (lets
-      ((u d l r x y w h off meta buff)
-       (ind (artificial-intelligence (cons (reverse l) u)))
-       (buffp _
-         (move-arrow 
-            (seek-line-start 
-               (buffer u (cons (append ind r) d) l null x y w h  off meta))
-            'down #true)))
-      (fold
-         (lambda (buff node)
-            (lets ((buff _ (move-arrow buff 'right #true))) buff))
-         buffp ind)))
+   (lets ((u d l r x y w h off meta buff)
+          (ai (get meta 'ai 'none)))
+      (cond
+         ((eq? ai 'none)
+            (lets
+               ((buffp (buffer u (cons r d) l null x y w h off meta))
+                (buffp _ (move-arrow (seek-line-start buffp) 'down #true)))
+               buffp))
+         ((eq? ai 'paren)
+            (lets
+               ((ind (artificial-intelligence (cons (reverse l) u)))
+                (buffp _
+                  (move-arrow 
+                     (seek-line-start 
+                        (buffer u (cons (append ind r) d) l null x y w h off meta))
+                     'down #true)))
+               (fold
+                  (lambda (buff node)
+                     (lets ((buff _ (move-arrow buff 'right #true))) buff))
+                  buffp ind)))
+         (else
+            (error "Unknown AI: " ai)))))
+
 
 ;;;
 ;;; Buffer handling loop
@@ -1667,6 +1697,7 @@
                ((key x)
                   (lets ((buff out (insert-handle-key buff x)))
                      (output out)
+                     ;; todo: next only if showmatch is set
                      (if (eq? x 41) ;; close paren, highlight the match for a while (hack)
                         (led-buffer
                            (ilist (tuple 'esc)
@@ -1680,7 +1711,13 @@
                              buff undo mode)
                         (led-buffer ll buff undo mode))))
                ((tab)
-                  (led-buffer (ilist space-key space-key space-key ll) buff undo mode))
+                  ;(led-buffer (ilist space-key space-key space-key ll) buff undo mode)
+                  ;; expandtab = #false or tab width
+                  (let ((exp (getf meta 'expandtab)))
+                     (log "tab expansion -> " exp)
+                     (if exp
+                        (led-buffer (keys ll #\space (get meta 'tabstop 8)) buff undo mode)
+                        (led-buffer (cons (tuple 'key 9) ll) buff undo mode))))
                ((enter)
                   (lets ((buffp (insert-enter buff)))
                      (output (delta-update-screen buff buffp))
@@ -1924,11 +1961,43 @@
                         ))
                out (list 30 31 32 33 34 35 36 37)))
          null (list 40 41 42 43 44 45 46 47)))
-   '(sleep 10000)
+   '(sleep 1000)
    (output
       (tio
          (disable-line-wrap))))
 
+(define sink 
+   (lambda x x))
+
+;; dict -> meta | #false
+(define (load-settings dict)
+   (lets/cc ret
+      ((config-path 
+         (or (getf dict 'config)
+             (str (or (getenv "HOME") ".")
+                  "/.ledrc")))
+       (empty-config #empty)
+       (config-port 
+         (open-input-file config-path)))
+      (log "loading config from " config-path)
+      (cond
+         ((not config-port)
+            empty-config)
+         ((force-ll (lines config-port)) =>
+            (lambda (lines)
+               (buffer-meta
+                  (fold
+                     (lambda (buff cmd)
+                        (log "led eval: " cmd)
+                        (led-eval null buff empty-undo 'command 
+                            (lambda (ll buff undo mode) buff)
+                            sink cmd))
+                     (make-empty-buffer 10 10 empty-config)
+                     lines))))
+         (else
+            (print-to stderr "Bad data in config")
+            #false))))
+      
 (define (start-led dict args ll)
   (log "start-led " dict ", " args)
   (lets ((w h ll (get-terminal-size ll))
@@ -1936,10 +2005,7 @@
     (log "dimensions " (cons w h))
     (initial-terminal-setup)
     (lets
-      ((meta
-         (-> #empty
-            (put 'tab tab-node)
-            (put 'tab-width 3)))
+      ((meta (load-settings dict))
        (states
          (reverse
             (if (null? args)
@@ -1958,6 +2024,7 @@
     `((help "-h" "--help" comment "show this thing")
       (version "-V" "--version" comment "show program version")
       (log "-L" "--log" has-arg comment "debug log file")
+      (config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
       (faketerm "-I" "--input" has-arg comment "fake terminal input stream source"))))
 
 (define (trampoline)
