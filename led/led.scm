@@ -182,7 +182,7 @@
 
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
-      (lets ((node (key-node k))
+      (lets ((node (key-node k meta))
              (nw (node-width node)))
          (log "adding node " node)
          (if (< (+ x nw) w)
@@ -1275,22 +1275,16 @@
        (buff (buffer-seek buff 0 last #false)))
       (cont ll buff undo mode "last line")))
 
-(define (untab meta)
+(define (convert-paren meta)
    (let ((tab (get meta 'tab tab-node)))
       (λ (line)
-         (map 
-            (λ (node)   
-               (cond
-                  ((eq? node #\() lp-node)
-                  ((eq? node #\)) rp-node)
-                  ((eq? node #\tab) tab)
-                  (else node)))
-            line))))
+         (map (λ (node) (key-node node meta)) line))))
       
 (define (path->lines path meta)
    (let ((fd (open-input-file path)))
+      ;; todo: allow binary mode operation
       (if fd
-         (map (untab meta) (map string->list (force-ll (lines fd))))
+         (map (convert-paren meta) (map string->list (force-ll (lines fd))))
          #false)))
 
 (define (command-enter-command ll buff undo mode r t cont)
@@ -1382,6 +1376,16 @@
             (notify buff "AI disabled")
             (log "AI -> none")
             (cont ll (put-buffer-meta buff 'ai 'none) undo mode))
+         ((m/set *expandtab/ res)
+            (notify buff "Expanding tabs")
+            (cont ll (put-buffer-meta buff 'expandtab #true) undo mode))
+         ((m/set *noexpandtab/ res)
+            (notify buff "Not expanding tabs")
+            (cont ll (put-buffer-meta buff 'expandtab #false) undo mode))
+         ((m/set *tabstop=[1-9][0-9]*/ res)
+            (lets ((n (string->integer (s/set *tabstop=// res))))
+               (notify buff (str "Tabstop = " n))
+               (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
          (else
            (cont ll buff undo mode)))))
 
@@ -1685,6 +1689,7 @@
                ((key x)
                   (lets ((buff out (insert-handle-key buff x)))
                      (output out)
+                     ;; todo: next only if showmatch is set
                      (if (eq? x 41) ;; close paren, highlight the match for a while (hack)
                         (led-buffer
                            (ilist (tuple 'esc)
@@ -1698,7 +1703,13 @@
                              buff undo mode)
                         (led-buffer ll buff undo mode))))
                ((tab)
-                  (led-buffer (ilist space-key space-key space-key ll) buff undo mode))
+                  ;(led-buffer (ilist space-key space-key space-key ll) buff undo mode)
+                  ;; expandtab = #false or tab width
+                  (let ((exp (getf meta 'expandtab)))
+                     (log "tab expansion -> " exp)
+                     (if exp
+                        (led-buffer (keys ll #\space (get meta 'tabstop 8)) buff undo mode)
+                        (led-buffer (cons (tuple 'key 9) ll) buff undo mode))))
                ((enter)
                   (lets ((buffp (insert-enter buff)))
                      (output (delta-update-screen buff buffp))
@@ -1942,11 +1953,15 @@
                         ))
                out (list 30 31 32 33 34 35 36 37)))
          null (list 40 41 42 43 44 45 46 47)))
-   '(sleep 10000)
+   '(sleep 1000)
    (output
       (tio
          (disable-line-wrap))))
 
+(define (load-settings)
+   (log "Not loading setting yet")
+   (-> #empty))
+      
 (define (start-led dict args ll)
   (log "start-led " dict ", " args)
   (lets ((w h ll (get-terminal-size ll))
@@ -1954,10 +1969,7 @@
     (log "dimensions " (cons w h))
     (initial-terminal-setup)
     (lets
-      ((meta
-         (-> #empty
-            (put 'tab tab-node)
-            (put 'tab-width 3)))
+      ((meta (load-settings))
        (states
          (reverse
             (if (null? args)
