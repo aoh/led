@@ -16,7 +16,7 @@ blab -l . -e 'led.prelude "mai" "foo\rbar" led.esc 39 "aiX" led.esc ":w mark-1.i
 blab -l . -e 'led.prelude "i foo foo " led.esc "ddppp:1\rdd:2\r/foo\rnnnnniX" led.esc ":w search-1.io.out\r:q\r"' > search-1.io
 
 # ai test
-blab -l . -e 'led.prelude "i(define (map f l)\r(if (null? l)\rnull\r(cons (f (car l))\r(map f (cdr l)))))\r; foo" led.esc ":w ai-1.io.out\r:q\r"' > ai-1.io
+blab -l . -e 'led.prelude ":set ai\ri(define (map f l)\r(if (null? l)\rnull\r(cons (f (car l))\r(map f (cdr l)))))\r; foo" led.esc ":w ai-1.io.out\r:q\r"' > ai-1.io
 
 # del words single line
 blab -l . -e 'led.prelude "ifoo bar baz quux\r" led.esc "/bar\r2dw$p:w del-words-sl.io.out\r:q\r"' > del-words-sl.io
