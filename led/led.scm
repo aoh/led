@@ -10,7 +10,7 @@
   (led buffer)
   (led undo)
   (led node)
-  (only (owl sys) getenv dir->list)
+  (owl sys)
   (owl args))
 
 (define version-str "led v0.1a")
@@ -1519,11 +1519,55 @@
       (ref event 2)
       #false))
 
+(define (drop-dir-contents slst dir)
+   (log "dropping contents of " dir)
+   (let ((pre (append (string->list dir) '(#\/))))
+      (let loop ((lst slst))
+         (if (null? lst)
+            null
+            (if (drop-prefix (car lst) pre)
+               (loop (cdr lst))
+               lst)))))
+               
 (define (command-do ll buff undo mode r t cont)
-   (lets ((u d l r x y old-w old-h off meta buff)
+   (lets ((u d l r x y w h off meta buff)
           (type (get meta 'type 'file)))
-      (notify buff (str "Would do in buffer of type '" type "'"))
-      (cont ll buff undo mode)))
+      (cond
+         ((eq? type 'directory)
+            (let ((line (list->string (foldr render-node null (append (reverse l) r)))))
+               (log "Opening '" line "' from directory buffer")
+               (cond
+                  ((file? line)
+                     (log "Opening or switching to file '" line "'")
+                     (values ll buff undo mode (tuple 'open line)))
+                  ((directory? line)
+                     (let ((dp (drop-dir-contents d line)))
+                        (log "dropping length " (length d) " -> " (length dp))
+                        (if (eq? dp d) ;; no prefixed lines, open it
+                           (let ((contents (dir->list line)))
+                              (if contents
+                                 (cont ll
+                                    (buffer u 
+                                       (append
+                                          (map
+                                             (lambda (x)
+                                                (append (string->list line)
+                                                   (cons #\/ (string->list x))))
+                                             contents)
+                                          d)
+                                       l r x y w h off meta)
+                                    undo mode)
+                                 (begin
+                                    (notify "Cannot read '" line "'")
+                                    (cont ll buff undo mode))))
+                           (let ((buff (buffer u dp l r x y w h off meta)))
+                              (cont ll buff undo mode)))))
+                  (else
+                     (notify "Cannot figure out what '" line "' is.")
+                     (cont ll buff undo mode)))))
+         (else
+            (notify buff (str "Cannot do in buffer of type '" type "' yet."))
+            (cont ll buff undo mode)))))
    
 (define (command-replace-char ll buff undo mode ran t cont)
    (lets ((val ll (uncons ll #false))
@@ -1820,17 +1864,18 @@
       (else
          (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
 
-(define (path->buffer-state ll path)
+(define (path->buffer-state ll path meta)
    (lets ((w h ll (get-terminal-size ll))
-          (buff (make-file-state w h path #empty)))
+          (buff (make-file-state w h path meta)))
       (values ll
          (if buff
             (tuple buff (initial-undo buff) 'command)
             #false))))
 
-(define (make-directory-buffer ll contents meta)
+(define (make-directory-buffer ll path contents meta)
    (lets ((w h ll (get-terminal-size ll))
-          (contents (map string->list contents))
+          (prefix (append (string->list path) (string->list "/")))
+          (contents (map (lambda (x) (append prefix (string->list x))) contents))
           (buff (buffer null (cdr contents) null (car contents) 1 1 w h (cons 0 0) 
                    (-> meta 
                       (put 'type 'directory)))))
@@ -1925,11 +1970,11 @@
                      ((dir->list path) =>
                         (lambda (subs)
                            (log path " contains " subs)
-                           (lets ((ll new (make-directory-buffer ll subs (buffer-meta buff))))
+                           (lets ((ll new (make-directory-buffer ll path subs (buffer-meta buff))))
                               (log "made dir buffer")
                               (led-buffers ll (cons state left) new right path))))
                      (else
-                        (lets ((ll new (path->buffer-state ll path)))
+                        (lets ((ll new (path->buffer-state ll path (buffer-meta buff))))
                            (if new
                               (led-buffers ll (cons state left) new right #false)
                               (begin
