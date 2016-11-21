@@ -13,6 +13,11 @@
   (owl sys)
   (owl args))
 
+
+;; temporary workaround until owl upgrade
+(define (directory? x) (list? (dir->list x)))
+(define (file? x) (let ((p (open-input-file x))) (if p (begin (close-port p) #true) #false)))
+
 (define version-str "led v0.1a")
 
 (define (output lst)
