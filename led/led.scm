@@ -10,8 +10,13 @@
   (led buffer)
   (led undo)
   (led node)
-  (only (owl sys) getenv)
+  (owl sys)
   (owl args))
+
+
+;; temporary workaround until owl upgrade
+(define (directory? x) (list? (dir->list x)))
+(define (file? x) (let ((p (open-input-file x))) (if p (begin (close-port p) #true) #false)))
 
 (define version-str "led v0.1a")
 
@@ -1519,6 +1524,65 @@
       (ref event 2)
       #false))
 
+(define (drop-dir-contents slst dir)
+   (log "dropping contents of " dir)
+   (let ((pre (append (string->list dir) '(#\/))))
+      (let loop ((lst slst))
+         (if (null? lst)
+            null
+            (if (drop-prefix (car lst) pre)
+               (loop (cdr lst))
+               lst)))))
+
+(define (directory-contents prefix contents)
+   (lets 
+      ((prefix
+          (cond
+             ((equal? prefix ".") null)
+             ((equal? prefix "/") '(#\/))
+             ((m/.*\/$/ prefix) (string->list prefix))
+             (else 
+                (append (string->list prefix) '(#\/))))))
+      (log "prefix list is " prefix)
+      (map
+         (lambda (x)
+            (append prefix (string->list x)))
+         contents)))
+
+(define (command-do ll buff undo mode r t cont)
+   (lets ((u d l r x y w h off meta buff)
+          (type (get meta 'type 'file)))
+      (cond
+         ((eq? type 'directory)
+            (let ((line (list->string (foldr render-node null (append (reverse l) r)))))
+               (log "Opening '" line "' from directory buffer")
+               (cond
+                  ((file? line)
+                     (log "Opening or switching to file '" line "'")
+                     (values ll buff undo mode (tuple 'open line)))
+                  ((directory? line)
+                     (let ((dp (drop-dir-contents d line)))
+                        (log "dropping length " (length d) " -> " (length dp))
+                        (if (eq? dp d) ;; no prefixed lines, open it
+                           (let ((contents (dir->list line)))
+                              (if contents
+                                 (cont ll
+                                    (buffer u 
+                                       (append (directory-contents line contents) d)
+                                       l r x y w h off meta)
+                                    (push-undo undo buff) mode)
+                                 (begin
+                                    (notify buff (str "Cannot read '" line "'"))
+                                    (cont ll buff undo mode))))
+                           (let ((buffp (buffer u dp l r x y w h off meta)))
+                              (cont ll buffp (push-undo undo buff) mode)))))
+                  (else
+                     (notify buff (str "Cannot open '" line "'."))
+                     (cont ll buff undo mode)))))
+         (else
+            (notify buff (str "Cannot do in buffer of type '" type "' yet."))
+            (cont ll buff undo mode)))))
+   
 (define (command-replace-char ll buff undo mode ran t cont)
    (lets ((val ll (uncons ll #false))
           (k (key-value val)))
@@ -1592,8 +1656,7 @@
       (put #\C command-change-rest-of-line)
       (put #\Z command-maybe-save-and-close)
       (put #\% command-seek-matching-paren)
-      (put sexp-key command-seek-matching-paren)
-      ))
+      (put sexp-key command-seek-matching-paren)))
 
 
 ;;;
@@ -1768,6 +1831,8 @@
               ((ctrl key)
                   ((get *command-mode-control-actions* key command-no-op)
                      ll buff undo mode count target (update-cont led-buffer buff)))
+              ((enter)
+                 (command-do ll buff undo mode count target (update-cont led-buffer buff)))
               (else
                   (log "not handling command " msg)
                   (led-buffer ll buff undo mode)))))))
@@ -1800,9 +1865,10 @@
    (cond
       ((path->lines path meta) =>
          (lambda (data)
-            (if (pair? data)
-               (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) (put meta 'path path))
-               (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
+            (let ((meta (-> meta (put 'path path) (put 'type 'file))))
+               (if (pair? data)
+                  (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) meta)
+                  (buffer null null null null 1 1 w h (cons 0 0) meta)))))
       ;((open-output-file path) =>
       ;   (lambda (fd)
       ;      (log "opened new fd " fd)
@@ -1812,13 +1878,22 @@
       (else
          (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
 
-(define (path->buffer-state ll path)
+(define (path->buffer-state ll path meta)
    (lets ((w h ll (get-terminal-size ll))
-          (buff (make-file-state w h path #empty)))
+          (buff (make-file-state w h path meta)))
       (values ll
          (if buff
             (tuple buff (initial-undo buff) 'command)
             #false))))
+
+(define (make-directory-buffer ll path contents meta)
+   (lets ((w h ll (get-terminal-size ll))
+          (contents (directory-contents path contents))
+          (buff (buffer null (cdr contents) null (car contents) 1 1 w h (cons 0 0) 
+                   (-> meta 
+                      (put 'type 'directory)))))
+      (values ll 
+         (tuple buff (initial-undo buff) 'command))))
 
 (define (notify-buffer-source left buff right)
    (lets ((source (buffer-path-str buff))
@@ -1847,11 +1922,14 @@
    (set-terminal-rawness #false)
    n)
 
-(define (already-open? l s r path)
-   (first
-      (lambda (st) (equal? path (get-buffer-meta (ref st 1) 'path #false)))
-      (append l (cons s r))
-      #false))
+(define (buffer-position l s r path)
+   (let loop ((pos 1) (bs (append (reverse l) (cons s r))))
+      (cond
+         ((null? bs) #false)
+         ((equal? path (get-buffer-meta (ref (car bs) 1) 'path #false))
+            pos)
+         (else
+            (loop (+ pos 1) (cdr bs))))))
 
 (define (led-buffers ll left state right msg)
    (lets ((buff undo mode state)
@@ -1861,67 +1939,85 @@
             (led-buffer ll buff undo mode))
           (state (tuple buff undo mode)))
       (log "led-buffers: action " action)
-      (cond
-         ((eq? action 'close-all)
-            (log "close-all")
-            (exit-led 0))
-         ((eq? action 'close)
-            (cond
-               ((pair? left)
-                  (led-buffers ll (cdr left) (car left) right 
-                     (str "Closed " (buffer-path-str buff))))
-               ((pair? right)
-                  (led-buffers ll left (car right) (cdr right) 
-                     (str "Closed " (buffer-path-str buff))))
-               (else
-                  (log "all buffers closed")
-                  (exit-led 0))))
-         ((eq? action 'left)
-            (if (null? left)
-               (led-buffers ll left state right 
-                  (if (null? right)
-                     (str "You only have " (buffer-path-str buff) " open.")
-                     "already at first buffer"))
-               (led-buffers ll (cdr left) (car left)
-                  (cons state right) #false)))
-         ((eq? action 'right)
-            (if (null? right)
-               (led-buffers ll left state right 
-                  (if (null? left)
-                     (str "You only have " (buffer-path-str buff) " open.")
-                     "already at last buffer"))
-               (led-buffers ll (cons state left)
-                  (car right) (cdr right) #false)))
-         ((eq? action 'new)
-            (log "making new buffer")
-            (lets ((ll new-state (make-new-state ll)))
-               (led-buffers ll (cons state left) new-state right "new scratch buffer")))
-         ((tuple? action)
-            (tuple-case action
-               ((open path)
-                  (if (already-open? left state right path)
-                     (begin
-                        (notify (ref state 1) "buffer is already open")
-                        (log "buffer is already open")
-                        (led-buffers ll left state right 
-                           (str "'" path "' is already open")))
-                     (lets ((ll new (path->buffer-state ll path)))
-                        (if new
-                           (led-buffers ll (cons state left) new right #false)
+      (let loop ((action action))
+         (cond
+            ((eq? action 'close-all)
+               (log "close-all")
+               (exit-led 0))
+            ((eq? action 'close)
+               (cond
+                  ((pair? left)
+                     (led-buffers ll (cdr left) (car left) right 
+                        (str "Closed " (buffer-path-str buff))))
+                  ((pair? right)
+                     (led-buffers ll left (car right) (cdr right) 
+                        (str "Closed " (buffer-path-str buff))))
+                  (else
+                     (log "all buffers closed")
+                     (exit-led 0))))
+            ((eq? action 'left)
+               (if (null? left)
+                  (led-buffers ll left state right 
+                     (if (null? right)
+                        (str "You only have " (buffer-path-str buff) " open.")
+                        "already at first buffer"))
+                  (led-buffers ll (cdr left) (car left)
+                     (cons state right) #false)))
+            ((eq? action 'right)
+               (if (null? right)
+                  (led-buffers ll left state right 
+                     (if (null? left)
+                        (str "You only have " (buffer-path-str buff) " open.")
+                        "already at last buffer"))
+                  (led-buffers ll (cons state left)
+                     (car right) (cdr right) #false)))
+            ((eq? action 'new)
+               (log "making new buffer")
+               (lets ((ll new-state (make-new-state ll)))
+                  (led-buffers ll (cons state left) new-state right "new scratch buffer")))
+            ((tuple? action)
+               (tuple-case action
+                  ((open path)
+                     (cond
+                        ((buffer-position left state right path) =>
+                           (lambda (pos)
+                              (log "Already open at " pos)
+                              (loop (tuple 'buffer pos))))
+                        ((dir->list path) =>
+                           (lambda (subs)
+                              (notify buff (str "Opening directory " path))
+                              (lets ((ll new (make-directory-buffer ll path subs (buffer-meta buff))))
+                                 (log "made dir buffer")
+                                 (led-buffers ll (cons state left) new right path))))
+                        (else
+                           (notify buff (str "opening " path "..."))
+                           (lets ((ll new (path->buffer-state ll path (buffer-meta buff))))
+                              (if new
+                                 (led-buffers ll (cons state left) new right #false)
+                                 (begin
+                                    (log "failed to open " path)
+                                    (led-buffers ll left state right #false)))))))
+                  ((buffer n)
+                     (log "Going to buffer " n)
+                     (lets ((buffers (append (reverse left) (cons state right))))
+                        (if (and (> n 0) (<= n (length buffers)))
+                           (lets ((left right (split buffers (- n 1))))
+                              (led-buffers ll (reverse left) (car right) (cdr right) 
+                                 (str "switched to " n)))
                            (begin
-                              (log "failed to open " path)
-                              (led-buffers ll left state right #false))))))
-               ((move n)
-                  (log "moving buffer to" n)
-                  (lets ((left right (seek-in-list (append (reverse left) right) (max 0 (- n 1)))))
-                     (log "lens " (cons (length left) (length right)))
-                     (led-buffers ll left state right (str "moved to " (+ 1 (length left))))))
-               (else is unknown
-                  (log "unknown buffer action " action)
-                  (led-buffers ll left state right #false))))
-         (else
-            (log "unknown buffer action " action)
-            (led-buffers ll left state right #false)))))
+                              (notify buff "No such buffer")
+                              (led-buffers ll left state right #false)))))
+                  ((move n)
+                     (log "moving buffer to" n)
+                     (lets ((left right (seek-in-list (append (reverse left) right) (max 0 (- n 1)))))
+                        (log "lens " (cons (length left) (length right)))
+                        (led-buffers ll left state right (str "moved to " (+ 1 (length left))))))
+                  (else is unknown
+                     (log "unknown buffer action " action)
+                     (led-buffers ll left state right #false))))
+            (else
+               (log "unknown buffer action " action)
+               (led-buffers ll left state right #false))))))
 
 (define (open-all-files paths w h shared-meta)
    (fold
