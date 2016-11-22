@@ -1561,12 +1561,12 @@
                                              contents)
                                           d)
                                        l r x y w h off meta)
-                                    undo mode)
+                                    (push-undo undo buff) mode)
                                  (begin
                                     (notify "Cannot read '" line "'")
                                     (cont ll buff undo mode))))
-                           (let ((buff (buffer u dp l r x y w h off meta)))
-                              (cont ll buff undo mode)))))
+                           (let ((buffp (buffer u dp l r x y w h off meta)))
+                              (cont ll buffp (push-undo undo buff) mode)))))
                   (else
                      (notify "Cannot figure out what '" line "' is.")
                      (cont ll buff undo mode)))))
