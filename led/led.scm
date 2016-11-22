@@ -1563,12 +1563,12 @@
                                        l r x y w h off meta)
                                     (push-undo undo buff) mode)
                                  (begin
-                                    (notify "Cannot read '" line "'")
+                                    (notify buff (str "Cannot read '" line "'"))
                                     (cont ll buff undo mode))))
                            (let ((buffp (buffer u dp l r x y w h off meta)))
                               (cont ll buffp (push-undo undo buff) mode)))))
                   (else
-                     (notify "Cannot figure out what '" line "' is.")
+                     (notify buff (str "Cannot figure out what '" line "' is."))
                      (cont ll buff undo mode)))))
          (else
             (notify buff (str "Cannot do in buffer of type '" type "' yet."))
@@ -2008,7 +2008,7 @@
                               (led-buffers ll (reverse left) (car right) (cdr right) 
                                  (str "switched to " n)))
                            (begin
-                              (notify "No such buffer")
+                              (notify buff "No such buffer")
                               (led-buffers ll left state right #false)))))
                   ((move n)
                      (log "moving buffer to" n)
