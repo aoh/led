@@ -1533,7 +1533,22 @@
             (if (drop-prefix (car lst) pre)
                (loop (cdr lst))
                lst)))))
-               
+
+(define (directory-contents prefix contents)
+   (lets 
+      ((prefix
+          (cond
+             ((equal? prefix ".") null)
+             ((equal? prefix "/") '(#\/))
+             ((m/.*\/$/ prefix) (string->list prefix))
+             (else 
+                (append (string->list prefix) '(#\/))))))
+      (log "prefix list is " prefix)
+      (map
+         (lambda (x)
+            (append prefix (string->list x)))
+         contents)))
+
 (define (command-do ll buff undo mode r t cont)
    (lets ((u d l r x y w h off meta buff)
           (type (get meta 'type 'file)))
@@ -1553,13 +1568,7 @@
                               (if contents
                                  (cont ll
                                     (buffer u 
-                                       (append
-                                          (map
-                                             (lambda (x)
-                                                (append (string->list line)
-                                                   (cons #\/ (string->list x))))
-                                             contents)
-                                          d)
+                                       (append (directory-contents line contents) d)
                                        l r x y w h off meta)
                                     (push-undo undo buff) mode)
                                  (begin
@@ -1568,7 +1577,7 @@
                            (let ((buffp (buffer u dp l r x y w h off meta)))
                               (cont ll buffp (push-undo undo buff) mode)))))
                   (else
-                     (notify buff (str "Cannot figure out what '" line "' is."))
+                     (notify buff (str "Cannot open '" line "'."))
                      (cont ll buff undo mode)))))
          (else
             (notify buff (str "Cannot do in buffer of type '" type "' yet."))
@@ -1879,8 +1888,7 @@
 
 (define (make-directory-buffer ll path contents meta)
    (lets ((w h ll (get-terminal-size ll))
-          (prefix (append (string->list path) (string->list "/")))
-          (contents (map (lambda (x) (append prefix (string->list x))) contents))
+          (contents (directory-contents path contents))
           (buff (buffer null (cdr contents) null (car contents) 1 1 w h (cons 0 0) 
                    (-> meta 
                       (put 'type 'directory)))))
@@ -1913,12 +1921,6 @@
          (set-cursor 1 1)))
    (set-terminal-rawness #false)
    n)
-
-(define (already-open? l s r path)
-   (first
-      (lambda (st) (equal? path (get-buffer-meta (ref st 1) 'path #false)))
-      (append l (cons s r))
-      #false))
 
 (define (buffer-position l s r path)
    (let loop ((pos 1) (bs (append (reverse l) (cons s r))))
@@ -1974,7 +1976,6 @@
                (lets ((ll new-state (make-new-state ll)))
                   (led-buffers ll (cons state left) new-state right "new scratch buffer")))
             ((tuple? action)
-               (print "ACTION " action)
                (tuple-case action
                   ((open path)
                      (cond
@@ -1982,18 +1983,14 @@
                            (lambda (pos)
                               (log "Already open at " pos)
                               (loop (tuple 'buffer pos))))
-                        ;((already-open? left state right path)
-                        ;   (notify (ref state 1) "buffer is already open")
-                        ;   (log "buffer is already open")
-                        ;   (led-buffers ll left state right 
-                        ;      (str "'" path "' is already open")))
                         ((dir->list path) =>
                            (lambda (subs)
-                              (log path " contains " subs)
+                              (notify buff (str "Opening directory " path))
                               (lets ((ll new (make-directory-buffer ll path subs (buffer-meta buff))))
                                  (log "made dir buffer")
                                  (led-buffers ll (cons state left) new right path))))
                         (else
+                           (notify buff (str "opening " path "..."))
                            (lets ((ll new (path->buffer-state ll path (buffer-meta buff))))
                               (if new
                                  (led-buffers ll (cons state left) new right #false)
