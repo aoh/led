@@ -12,6 +12,8 @@ do
 	rm "$foo.out"
 done
 
+rm config
+
 test -n "$FAILURES" && echo "Failed tests: $FAILURES" && exit 1
 
 echo "Tests OK"
