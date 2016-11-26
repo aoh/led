@@ -1257,7 +1257,19 @@
                (values ll buff undo mode 'close)
                (cont ll buff undo mode msg)))
          (cont ll buff undo mode "close aborted"))))
-       
+
+ (define (command-close-buffer ll buff undo mode n t cont)
+   ;; todo: add dirtiness check
+   (if #false ;; todo: dirtiness check here
+      (begin
+         ;; todo: search the changes to see what is about to be lost
+         (notify buff "Unsaved changes. Pres Q again to close anyway.")
+         (lets ((chr ll (uncons ll #false)))
+            (if (equal? chr (tuple 'key #\Q))
+               (values ll buff undo mode 'close)
+               (cont (cons chr ll) buff undo mode "Close aborted"))))
+      (values ll buff undo mode 'close)))
+         
 (define (command-go-to-line ll buff undo mode n t cont)
    (lets ((buff (buffer-seek buff 0 (if (number? n) (- n 1) 0) #false)))
       (cont ll buff undo mode (str "line " n))))
@@ -1651,10 +1663,10 @@
       (put #\G command-go-to-line)
       (put #\> command-indent)
       (put #\< command-unindent)
-      ;(put #\Q command-previous-buffer) ;; use ^p and ^n
       ;(put #\W command-next-buffer)
       (put #\C command-change-rest-of-line)
       (put #\Z command-maybe-save-and-close)
+      (put #\Q command-close-buffer)
       (put #\% command-seek-matching-paren)
       (put sexp-key command-seek-matching-paren)))
 
