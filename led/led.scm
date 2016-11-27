@@ -1262,12 +1262,24 @@
                (cont ll buff undo mode msg)))
          (cont ll buff undo mode "close aborted"))))
 
- (define (command-close-buffer ll buff undo mode n cont)
+(define (command-maybe-save ll buff undo mode n cont)
+   (notify buff "press W again to save")
+   (lets ((chr ll (uncons ll #false)))
+      (if (equal? chr (tuple 'key #\W))
+         (lets ((path (buffer-path buff #false))
+                (ok? msg (write-buffer buff path))
+                (msg (list->string msg)))
+            (if ok?
+               (cont ll buff (mark-saved undo buff (time-ms)) mode msg)
+               (cont ll buff undo mode msg)))
+         (cont ll buff undo mode "save aborted"))))
+
+(define (command-close-buffer ll buff undo mode n cont)
    ;; todo: add dirtiness check
-   (if #false ;; todo: dirtiness check here
+   (if (dirty-buffer? buff undo)
       (begin
          ;; todo: search the changes to see what is about to be lost
-         (notify buff "Unsaved changes. Pres Q again to close anyway.")
+         (notify buff "Unsaved changes. Press Q again to close anyway.")
          (lets ((chr ll (uncons ll #false)))
             (if (equal? chr (tuple 'key #\Q))
                (values ll buff undo mode 'close)
@@ -1319,7 +1331,11 @@
         (notify buff "canceled")
         (cont ll buff undo mode))
       ((equal? exp "q")
-        (values ll buff undo mode 'close))
+         (if (dirty-buffer? buff undo)
+            (begin
+               (notify buff "Unsaved changes. q! quits anyway.")
+               (cont ll buff undo mode))
+            (values ll buff undo mode 'close)))
       ((equal? exp "q!")
         (values ll buff undo mode 'close))
       ((equal? exp "Q!")
@@ -1431,6 +1447,7 @@
           "redone. press u to re-undo."))))
 
 (define (command-undo ll buff undo mode r cont)
+   (log "undoing")
    (lets ((undo buffp (pop-undo undo buff)))
       (cont ll buffp undo mode
          (if (eq? buff buffp)
@@ -1671,9 +1688,8 @@
       (put #\G command-go-to-line)
       (put #\> command-indent)
       (put #\< command-unindent)
-      ;(put #\W command-next-buffer)
       (put #\C command-change-rest-of-line)
-      (put #\Z command-maybe-save-and-close)
+      (put #\W command-maybe-save)
       (put #\Q command-close-buffer)
       (put #\% command-seek-matching-paren)
       (put sexp-key command-seek-matching-paren)))
@@ -2038,6 +2054,7 @@
                (log "unknown buffer action " action)
                (led-buffers ll left state right #false))))))
 
+;; todo: use the buffer open command instead
 (define (open-all-files paths w h shared-meta)
    (fold
       (lambda (states path)
