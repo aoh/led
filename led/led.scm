@@ -1447,7 +1447,6 @@
           "redone. press u to re-undo."))))
 
 (define (command-undo ll buff undo mode r cont)
-   (log "undoing")
    (lets ((undo buffp (pop-undo undo buff)))
       (cont ll buffp undo mode
          (if (eq? buff buffp)

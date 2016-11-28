@@ -46,10 +46,13 @@
                    null))))
       
       (define (dirty-buffer? buff undo)
-         (not (pair? (caar undo))))
+         (let ((u (car undo)))
+            (cond
+               ((null? u) #true)
+               ((pair? (car u)) #false)
+               (else #true))))
          
       (define (pop-undo undo buff)
-         (log "popping undo")
          (lets ((prev new undo))
             (if (null? prev)
                (values undo buff)
