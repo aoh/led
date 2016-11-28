@@ -30,4 +30,6 @@
                (sink #f))))
       
       (define (log . what)
-         (mail 'logger what))))
+         (mail 'logger what)
+         ; (wait 10) ;; wait for message to be logged in case of crash
+         )))

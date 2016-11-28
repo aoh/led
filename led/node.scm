@@ -31,10 +31,12 @@
    (begin    
       
       (define rp-node
-         (tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal))))
+        ;(tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal)))
+         (tuple 'replace (list 41) 1 (tio (font-dim) (font-fg-cyan) (raw (list 41)) (font-normal))))
          
       (define lp-node
-         (tuple 'replace (list 40) 1 (tio (font-dim) (raw (list 40)) (font-normal))))
+        ;(tuple 'replace (list 40) 1 (tio (font-dim) (raw (list 40)) (font-normal)))
+         (tuple 'replace (list 40) 1 (tio (font-dim) (font-fg-cyan) (raw (list 40)) (font-normal))))
          
       (define (left-paren? x)
          (or (eq? x 40)
