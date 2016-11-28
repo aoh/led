@@ -38,3 +38,6 @@ blab -l . -e 'led.prelude "ia\rfoo FOO\rbar BAR\rbaz BAZ\rb" led.esc "/BAZ\rma/F
 
 # tabstop
 blab -l . -e 'led.prelude "ia\t" led.esc ":set expandtab\r:set tabstop=3\ra\tb" led.esc ":w tabstop.io.out\r:q\r"' > tabstop.io
+
+# buffer dirtiness
+blab -l . -e 'led.prelude "ifoo" led.esc ":w dirty.io.out\rabar" led.esc ":q\rabaz" led.esc "WQ"' > dirty.io
