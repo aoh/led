@@ -1797,7 +1797,15 @@
                 (tuple 'key #\%)
                 (tuple 'key #\a)
                 ll))))
-    
+
+(define (closing-paren? x)
+   (or ;(eq? x #\()
+       (eq? x #\))
+       ;(eq? x #\[)
+       (eq? x #\])
+       ;(eq? x #\{)
+       (eq? x #\})))
+ 
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
    (log-buff buff undo mode)
@@ -1811,7 +1819,7 @@
                ((key x)
                   (lets ((buff out (insert-handle-key buff x)))
                      (output out)
-                     (if (and (eq? x 41) (get-buffer-meta buff 'show-match #false))
+                     (if (and (closing-paren? x) (get-buffer-meta buff 'show-match #false))
                         (led-buffer (highlight-match ll) buff undo mode)
                         (led-buffer ll buff undo mode))))
                ((tab)
