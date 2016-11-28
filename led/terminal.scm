@@ -10,6 +10,8 @@
       font-reverse         ;; lst → lst'
       font-attrs           ;; lst a b c → lst'
       
+      font-gray
+      
       font-fg-black
       font-fg-red
       font-fg-green
@@ -110,6 +112,9 @@
       (define (font-standard lst)  (ilist 27 #\[ #\3 #\m lst))
       (define (font-reverse lst)   (ilist 27 #\[ #\7 #\m lst))
 
+      (define (font-gray lst)
+         (ilist 27 #\[ #\1 #\; #\3 #\0 #\m lst))
+      
       (define (font-fg-black lst)   (ilist 27 #\[ #\3 #\0 #\m lst))
       (define (font-fg-red lst)     (ilist 27 #\[ #\3 #\1 #\m lst))
       (define (font-fg-green lst)   (ilist 27 #\[ #\3 #\2 #\m lst))
@@ -256,6 +261,7 @@
                   ((eq? hd 6)  (cons (tuple 'ctrl #\f) (loop ll))) ;; switch to these
                   ((eq? hd 9)  (cons (tuple 'tab) (loop ll)))
                   ((eq? hd 2)  (cons (tuple 'ctrl #\b) (loop ll)))
+                  ((eq? hd  8)  (cons (tuple 'ctrl #\h) (loop ll)))
                   ((eq? hd 18)  (cons (tuple 'ctrl #\r) (loop ll))) ;; ^n
                   ((eq? hd 14)  (cons (tuple 'ctrl #\n) (loop ll)))
                   ((eq? hd 16)  (cons (tuple 'ctrl #\p) (loop ll)))

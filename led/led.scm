@@ -1262,17 +1262,13 @@
                (cont ll buff undo mode msg)))
          (cont ll buff undo mode "close aborted"))))
 
-(define (command-maybe-save ll buff undo mode n cont)
-   (notify buff "press W again to save")
-   (lets ((chr ll (uncons ll #false)))
-      (if (equal? chr (tuple 'key #\W))
-         (lets ((path (buffer-path buff #false))
-                (ok? msg (write-buffer buff path))
-                (msg (list->string msg)))
-            (if ok?
-               (cont ll buff (mark-saved undo buff (time-ms)) mode msg)
-               (cont ll buff undo mode msg)))
-         (cont ll buff undo mode "save aborted"))))
+(define (command-save ll buff undo mode n cont)
+   (lets ((path (buffer-path buff #false))
+          (ok? msg (write-buffer buff path))
+          (msg (list->string msg)))
+      (if ok?
+         (cont ll buff (mark-saved undo buff (time-ms)) mode msg)
+         (cont ll buff undo mode msg))))
 
 (define (command-close-buffer ll buff undo mode n cont)
    ;; todo: add dirtiness check
@@ -1618,7 +1614,10 @@
          (else
             (notify buff (str "Cannot do in buffer of type '" type "' yet."))
             (cont ll buff undo mode)))))
-   
+
+(define (command-go-home ll buff undo mode ran cont)
+   (values ll buff undo mode (tuple 'buffer 1)))
+
 (define (command-replace-char ll buff undo mode ran cont)
    (lets ((val ll (uncons ll #false))
           (k (key-value val)))
@@ -1647,6 +1646,7 @@
       (put #\f command-step-forward)
       (put #\b command-step-backward)
       (put #\r command-redo)
+      (put #\h command-go-home)
       (put 'arrow-left command-previous-buffer)
       (put 'arrow-right command-next-buffer)
       (put '#\p command-previous-buffer) ;; also available in insert mode
@@ -1688,7 +1688,7 @@
       (put #\> command-indent)
       (put #\< command-unindent)
       (put #\C command-change-rest-of-line)
-      (put #\W command-maybe-save)
+      (put #\W command-save)
       (put #\Q command-close-buffer)
       (put #\% command-seek-matching-paren)
       (put sexp-key command-seek-matching-paren)))
@@ -1784,7 +1784,6 @@
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
    (log-buff buff undo mode)
-   (log "in " ll)
    (cond
       ((eq? mode 'insert)
          (lets
@@ -1860,7 +1859,7 @@
             ;; todo: read the possible text object here based on command type, so that a function to recompute the last change can be stored for .
             (tuple-case msg
               ((key k)
-                  ((get *command-mode-actions* k command-no-op)
+                 ((get *command-mode-actions* k command-no-op)
                      ll buff undo mode count (update-cont led-buffer buff)))
               ((ctrl key)
                   ((get *command-mode-control-actions* key command-no-op)
