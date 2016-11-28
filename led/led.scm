@@ -1404,6 +1404,12 @@
       ((m/set *noexpandtab/ exp)
          (notify buff "Not expanding tabs")
          (cont ll (put-buffer-meta buff 'expandtab #false) undo mode))
+      ((m/set *noshowmatch/ exp)
+         (notify buff "Not showing matching parens")
+         (cont ll (put-buffer-meta buff 'show-match #false) undo mode))
+      ((m/set *showmatch/ exp)
+         (notify buff "Showing matching parens")
+         (cont ll (put-buffer-meta buff 'show-match #true) undo mode))
       ((m/set *tabstop=[1-9][0-9]*/ exp)
          (lets ((n (string->integer (s/set *tabstop=// exp))))
             (notify buff (str "Tabstop = " n))
@@ -1781,6 +1787,17 @@
             (notify buffp what)))
       (self ll buffp undo mode)))
 
+
+(define (highlight-match ll)
+   (ilist (tuple 'esc)
+          (tuple 'key #\%)
+          (lambda ()
+             (sleep 150)
+             (ilist
+                (tuple 'key #\%)
+                (tuple 'key #\a)
+                ll))))
+    
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
    (log-buff buff undo mode)
@@ -1794,18 +1811,8 @@
                ((key x)
                   (lets ((buff out (insert-handle-key buff x)))
                      (output out)
-                     ;; todo: next only if showmatch is set
-                     (if (eq? x 41) ;; close paren, highlight the match for a while (hack)
-                        (led-buffer
-                           (ilist (tuple 'esc)
-                                  (tuple 'key #\%)
-                                  (lambda ()
-                                     (sleep 150)
-                                     (ilist
-                                        (tuple 'key #\%)
-                                        (tuple 'key #\a)
-                                        ll)))
-                             buff undo mode)
+                     (if (and (eq? x 41) (get-buffer-meta buff 'show-match #false))
+                        (led-buffer (highlight-match ll) buff undo mode)
                         (led-buffer ll buff undo mode))))
                ((tab)
                   ;(led-buffer (ilist space-key space-key space-key ll) buff undo mode)
