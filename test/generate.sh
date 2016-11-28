@@ -41,3 +41,6 @@ blab -l . -e 'led.prelude "ia\t" led.esc ":set expandtab\r:set tabstop=3\ra\tb" 
 
 # buffer dirtiness
 blab -l . -e 'led.prelude "ifoo" led.esc ":w dirty.io.out\rabar" led.esc ":q\rabaz" led.esc "WQ"' > dirty.io
+
+# directory buffer
+blab -l . -e 'led.prelude ":n ..\r/test\r\r/dirlist.io.ok\r\r:w dirlist.io.out\rQQQQ"' > dirlist.io

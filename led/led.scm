@@ -1887,11 +1887,10 @@
            (raw (render "esc + :q quits" null))
            (set-cursor 1 1)))))
 
-(define (make-new-state ll)
-   (lets ((w h ll (get-terminal-size ll))
+(define (make-new-state buff)
+   (lets ((w h (buffer-screen-size buff))
           (buff (make-empty-buffer w (- h 1) #empty)))
-      (values ll
-         (tuple buff (initial-undo buff) 'command))))
+      (tuple buff (initial-undo buff) 'command)))
 
 (define (make-file-state w h path meta)
    (log "making file state out out of " path)
@@ -1911,22 +1910,19 @@
       (else
          (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
 
-(define (path->buffer-state ll path meta)
-   (lets ((w h ll (get-terminal-size ll))
+(define (path->buffer-state path meta buff)
+   (lets ((w h (buffer-screen-size buff))
           (buff (make-file-state w h path meta)))
-      (values ll
-         (if buff
-            (tuple buff (initial-undo buff) 'command)
-            #false))))
+      (if buff
+         (tuple buff (initial-undo buff) 'command)
+         #false)))
 
-(define (make-directory-buffer ll path contents meta)
-   (lets ((w h ll (get-terminal-size ll))
-          (contents (directory-contents path contents))
+(define (make-directory-buffer path contents meta w h)
+   (lets ((contents (directory-contents path contents))
           (buff (buffer null (cdr contents) null (car contents) 1 1 w h (cons 0 0) 
                    (-> meta 
                       (put 'type 'directory)))))
-      (values ll 
-         (tuple buff (initial-undo buff) 'command))))
+      (tuple buff (initial-undo buff) 'command)))
 
 (define (notify-buffer-source left buff right)
    (lets ((source (buffer-path-str buff))
@@ -2006,7 +2002,7 @@
                      (car right) (cdr right) #false)))
             ((eq? action 'new)
                (log "making new buffer")
-               (lets ((ll new-state (make-new-state ll)))
+               (lets ((new-state (make-new-state buff)))
                   (led-buffers ll (cons state left) new-state right "new scratch buffer")))
             ((tuple? action)
                (tuple-case action
@@ -2019,12 +2015,14 @@
                         ((dir->list path) =>
                            (lambda (subs)
                               (notify buff (str "Opening directory " path))
-                              (lets ((ll new (make-directory-buffer ll path subs (buffer-meta buff))))
+                              (lets
+                                 ((w h (buffer-screen-size buff)) 
+                                  (new (make-directory-buffer path subs (buffer-meta buff) w h)))
                                  (log "made dir buffer")
                                  (led-buffers ll (cons state left) new right path))))
                         (else
                            (notify buff (str "opening " path "..."))
-                           (lets ((ll new (path->buffer-state ll path (buffer-meta buff))))
+                           (lets ((new (path->buffer-state path (buffer-meta buff) buff)))
                               (if new
                                  (led-buffers ll (cons state left) new right #false)
                                  (begin
