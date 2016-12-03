@@ -12,9 +12,7 @@
 
       (define (sort-paths paths)
          (sort string<?
-            ;(remove m/^\./ paths)
-            paths
-            ))
+            (remove m/^\./ paths)))
       
       (define (led-dir->list path)
          (let ((contents (dir->list path)))
