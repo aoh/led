@@ -15,6 +15,7 @@
       buffer-x
       screen-width
       screen-height
+      buffer-screen-size
       buffer-y)
 
    (begin      
@@ -24,7 +25,11 @@
    
       (define (make-empty-buffer w h meta)
          (buffer null null null null 1 1 w h (cons 0 0) meta))
-   
+      
+      (define (buffer-screen-size buff)
+         (lets ((u d l r x y w h off meta buff))
+            (values w h)))
+      
       (define (buffer-meta buff) (ref buff 10))
       (define (set-buffer-meta buff meta) (set buff 10 meta))
       (define (screen-width buff) (ref buff 7))
