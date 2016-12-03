@@ -16,6 +16,7 @@
       drop-printable
       printable-length
       render-node
+      render-code-point
             
       tab-node
       hex-node
@@ -161,7 +162,8 @@
                   (error "take-printable: what is " x)))))
           (else
             null)))
-      
+    
+      ;; render as UTF-8 encoded actual data (not screen representation)
       (define (render-node node tl)
          (cond
             ((eq? (type node) type-fix+)
@@ -170,6 +172,16 @@
                (foldr render-node tl (ref node 2)))
             (else
                (error "render-node: what is " node))))
+     
+      ;; render as UTF-8 code points of actual data (not screen representation)
+      (define (render-code-point node tl)
+         (cond
+            ((eq? (type node) type-fix+)
+               (cons node tl))
+            ((and (tuple? node) (eq? (ref node 1) 'replace))
+               (foldr render-code-point tl (ref node 2)))
+            (else
+               (error "render-code-point: what is " node))))
       
       (define (drop-printable line n)
         (cond

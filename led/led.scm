@@ -829,13 +829,13 @@
                   (values (buffer-seek buff mx my #false) "search wrapped")
                   (values buff "no matches"))))))
 
+(define (nodes->bytes nodes)       (foldr render-node null nodes))
 
+(define (nodes->code-points nodes) (foldr render-code-point null nodes))
 
-;; special case of input not having a terminal newline can be handled 
-;; in buffer metadata if necessary
 (define (buffer->bytes buff)
    (lets ((u d l r x y w h off meta buff))
-      (foldr render-node null
+      (nodes->bytes
          (foldr 
             (λ (line tl)
                (append line (cons #\newline tl)))
@@ -1588,6 +1588,20 @@
             (append prefix (string->list x)))
          contents)))
 
+(define word-chars 
+   (fold (lambda (ff x) (put ff x x))
+      #empty
+      (string->list
+         "0123456789abcdefghijklmnopqrstuvwxyzAVCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?")))
+
+(define (word-char? x)
+   (getf word-chars x))
+
+(define (current-word l r)
+   (lets ((l _ (take-while word-char? (nodes->code-points l)))
+          (r _ (take-while word-char? (nodes->code-points r))))
+      (list->string (append (reverse l) r))))
+
 (define (command-do ll buff undo mode r cont)
    (lets ((u d l r x y w h off meta buff)
           (type (get meta 'type 'file)))
@@ -1618,6 +1632,10 @@
                   (else
                      (notify buff (str "Cannot open '" line "'."))
                      (cont ll buff undo mode)))))
+         ((eq? type 'file)
+            (let ((word (current-word l r)))
+               (notify buff (str "Word is '" word "'"))
+               (cont ll buff undo mode)))
          (else
             (notify buff (str "Cannot do in buffer of type '" type "' yet."))
             (cont ll buff undo mode)))))
@@ -1909,7 +1927,7 @@
 
 (define (make-new-state buff)
    (lets ((w h (buffer-screen-size buff))
-          (buff (make-empty-buffer w (- h 1) #empty)))
+          (buff (make-empty-buffer w h #empty)))
       (tuple buff (initial-undo buff) 'command)))
 
 (define (make-file-state w h path meta)
