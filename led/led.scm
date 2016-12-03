@@ -11,6 +11,7 @@
   (led undo)
   (led node)
   (led system)
+  (led search)
   (owl sys)
   (owl args))
 
@@ -1592,7 +1593,7 @@
    (fold (lambda (ff x) (put ff x x))
       #empty
       (string->list
-         "0123456789abcdefghijklmnopqrstuvwxyzAVCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?")))
+         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>")))
 
 (define (word-char? x)
    (getf word-chars x))
@@ -1993,11 +1994,6 @@
          (else
             (loop (+ pos 1) (cdr bs))))))
 
-(define (run-search what where)
-   (map string->list
-      (cons (str "Would have searched for '" what "' from")
-            (map (lambda (path) (str " - " path)) where))))
-                        
 (define (led-buffers-action ll left state right action led-buffers)
    (lets ((buff undo mode state))
       (cond
@@ -2072,7 +2068,10 @@
                                  (make-buffer-having w h 
                                     (-> (buffer-meta ibuff) 
                                        (put 'type 'search-results))
-                                    (run-search what (buffer->lines ibuff))))
+                                    (run-search what (buffer->lines ibuff)
+                                       (lambda (msg) (notify ibuff msg))
+                                       m/\.scm$/ ;; fixme: hardcoded for now
+                                       )))
                               right (str "Searched for '" what "'")))
                         (led-buffers ll left state right
                            "No index buffer found"))))
