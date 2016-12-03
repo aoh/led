@@ -1634,8 +1634,7 @@
                      (cont ll buff undo mode)))))
          ((eq? type 'file)
             (let ((word (current-word l r)))
-               (notify buff (str "Word is '" word "'"))
-               (cont ll buff undo mode)))
+               (values ll buff undo mode (tuple 'search word))))
          (else
             (notify buff (str "Cannot do in buffer of type '" type "' yet."))
             (cont ll buff undo mode)))))
@@ -1921,9 +1920,11 @@
            (raw (render "esc + :q quits" null))
            (set-cursor 1 1)))))
 
-(define (make-initial-state w h meta)
-   (let ((buff (make-empty-buffer w h meta)))
-      (tuple buff (initial-undo buff) 'command)))
+(define (initial-state buff)
+   (tuple buff (initial-undo buff) 'command))
+
+(define (empty-initial-state w h meta)
+   (initial-state (make-empty-buffer w h meta)))
 
 (define (make-new-state buff)
    (lets ((w h (buffer-screen-size buff))
@@ -1992,6 +1993,11 @@
          (else
             (loop (+ pos 1) (cdr bs))))))
 
+(define (run-search what where)
+   (map string->list
+      (cons (str "Would have searched for '" what "' from")
+            (map (lambda (path) (str " - " path)) where))))
+                        
 (define (led-buffers-action ll left state right action led-buffers)
    (lets ((buff undo mode state))
       (cond
@@ -2053,6 +2059,23 @@
                               (begin
                                  (log "failed to open " path)
                                  (led-buffers ll left state right #false)))))))
+               ((search what)
+                  (lets
+                     ((index (last left #false))
+                      (ibuff (if index (ref index 1) #f))
+                      (w h (buffer-screen-size ibuff)))
+                     (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
+                        (begin
+                           (log "Searching for " what)
+                           (led-buffers ll (cons state left)
+                              (initial-state
+                                 (make-buffer-having w h 
+                                    (-> (buffer-meta ibuff) 
+                                       (put 'type 'search-results))
+                                    (run-search what (buffer->lines ibuff))))
+                              right (str "Searched for '" what "'")))
+                        (led-buffers ll left state right
+                           "No index buffer found"))))
                ((buffer n)
                   (log "Going to buffer " n)
                   (lets ((buffers (append (reverse left) (cons state right))))
@@ -2089,7 +2112,7 @@
 ;; todo: use the buffer open command instead
 ;                                 (led-buffers ll left state right #false)))))))
 (define (open-all-files paths w h shared-meta)
-   (let loop ((left null) (state (make-initial-state w h shared-meta)) (right null) (paths paths))
+   (let loop ((left null) (state (empty-initial-state w h shared-meta)) (right null) (paths paths))
       (log "open all files loop " paths)
       (if (null? paths)
          (append (reverse left) (cons state right))
