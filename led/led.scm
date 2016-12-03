@@ -1975,95 +1975,97 @@
          (else
             (loop (+ pos 1) (cdr bs))))))
 
+(define (led-buffers-action ll left state right action led-buffers)
+   (lets ((buff undo mode state))
+      (cond
+         ((eq? action 'close-all)
+            (log "close-all")
+            (exit-led 0))
+         ((eq? action 'close)
+            (cond
+               ((pair? left)
+                  (led-buffers ll (cdr left) (car left) right 
+                     (str "Closed " (buffer-path-str buff))))
+               ((pair? right)
+                  (led-buffers ll left (car right) (cdr right) 
+                     (str "Closed " (buffer-path-str buff))))
+               (else
+                  (log "all buffers closed")
+                  (exit-led 0))))
+         ((eq? action 'left)
+            (if (null? left)
+               (led-buffers ll left state right 
+                  (if (null? right)
+                     (str "You only have " (buffer-path-str buff) " open.")
+                     "already at first buffer"))
+               (led-buffers ll (cdr left) (car left)
+                  (cons state right) #false)))
+         ((eq? action 'right)
+            (if (null? right)
+               (led-buffers ll left state right 
+                  (if (null? left)
+                     (str "You only have " (buffer-path-str buff) " open.")
+                     "already at last buffer"))
+               (led-buffers ll (cons state left)
+                  (car right) (cdr right) #false)))
+         ((eq? action 'new)
+            (log "making new buffer")
+            (lets ((new-state (make-new-state buff)))
+               (led-buffers ll (cons state left) new-state right "new scratch buffer")))
+         ((tuple? action)
+            (tuple-case action
+               ((open path)
+                  (cond
+                     ((buffer-position left state right path) =>
+                        (lambda (pos)
+                           (log "Already open at " pos)
+                           (led-buffers-action ll left state right (tuple 'buffer pos) led-buffers)))
+                     ((dir->list path) =>
+                        (lambda (subs)
+                           (notify buff (str "Opening directory " path))
+                           (lets
+                              ((w h (buffer-screen-size buff)) 
+                               (new (make-directory-buffer path subs (buffer-meta buff) w h)))
+                              (log "made dir buffer")
+                              (led-buffers ll (cons state left) new right path))))
+                     (else
+                        (notify buff (str "opening " path "..."))
+                        (lets ((new (path->buffer-state path (buffer-meta buff) buff)))
+                           (if new
+                              (led-buffers ll (cons state left) new right #false)
+                              (begin
+                                 (log "failed to open " path)
+                                 (led-buffers ll left state right #false)))))))
+               ((buffer n)
+                  (log "Going to buffer " n)
+                  (lets ((buffers (append (reverse left) (cons state right))))
+                     (if (and (> n 0) (<= n (length buffers)))
+                        (lets ((left right (split buffers (- n 1))))
+                           (led-buffers ll (reverse left) (car right) (cdr right) 
+                              (str "switched to " n)))
+                        (begin
+                           (notify buff "No such buffer")
+                           (led-buffers ll left state right #false)))))
+               ((move n)
+                  (log "moving buffer to" n)
+                  (lets ((left right (seek-in-list (append (reverse left) right) (max 0 (- n 1)))))
+                     (log "lens " (cons (length left) (length right)))
+                     (led-buffers ll left state right (str "moved to " (+ 1 (length left))))))
+               (else is unknown
+                  (log "unknown buffer action " action)
+                  (led-buffers ll left state right #false))))
+         (else
+            (log "unknown buffer action " action)
+            (led-buffers ll left state right #false)))))
+   
 (define (led-buffers ll left state right msg)
    (lets ((buff undo mode state)
           (_ (output (update-screen buff)))
           (_ (if msg (notify buff msg) (notify-buffer-source left buff right)))
-          (ll buff undo mode action
-            (led-buffer ll buff undo mode))
+          (ll buff undo mode action (led-buffer ll buff undo mode))
           (state (tuple buff undo mode)))
       (log "led-buffers: action " action)
-      (let loop ((action action))
-         (cond
-            ((eq? action 'close-all)
-               (log "close-all")
-               (exit-led 0))
-            ((eq? action 'close)
-               (cond
-                  ((pair? left)
-                     (led-buffers ll (cdr left) (car left) right 
-                        (str "Closed " (buffer-path-str buff))))
-                  ((pair? right)
-                     (led-buffers ll left (car right) (cdr right) 
-                        (str "Closed " (buffer-path-str buff))))
-                  (else
-                     (log "all buffers closed")
-                     (exit-led 0))))
-            ((eq? action 'left)
-               (if (null? left)
-                  (led-buffers ll left state right 
-                     (if (null? right)
-                        (str "You only have " (buffer-path-str buff) " open.")
-                        "already at first buffer"))
-                  (led-buffers ll (cdr left) (car left)
-                     (cons state right) #false)))
-            ((eq? action 'right)
-               (if (null? right)
-                  (led-buffers ll left state right 
-                     (if (null? left)
-                        (str "You only have " (buffer-path-str buff) " open.")
-                        "already at last buffer"))
-                  (led-buffers ll (cons state left)
-                     (car right) (cdr right) #false)))
-            ((eq? action 'new)
-               (log "making new buffer")
-               (lets ((new-state (make-new-state buff)))
-                  (led-buffers ll (cons state left) new-state right "new scratch buffer")))
-            ((tuple? action)
-               (tuple-case action
-                  ((open path)
-                     (cond
-                        ((buffer-position left state right path) =>
-                           (lambda (pos)
-                              (log "Already open at " pos)
-                              (loop (tuple 'buffer pos))))
-                        ((dir->list path) =>
-                           (lambda (subs)
-                              (notify buff (str "Opening directory " path))
-                              (lets
-                                 ((w h (buffer-screen-size buff)) 
-                                  (new (make-directory-buffer path subs (buffer-meta buff) w h)))
-                                 (log "made dir buffer")
-                                 (led-buffers ll (cons state left) new right path))))
-                        (else
-                           (notify buff (str "opening " path "..."))
-                           (lets ((new (path->buffer-state path (buffer-meta buff) buff)))
-                              (if new
-                                 (led-buffers ll (cons state left) new right #false)
-                                 (begin
-                                    (log "failed to open " path)
-                                    (led-buffers ll left state right #false)))))))
-                  ((buffer n)
-                     (log "Going to buffer " n)
-                     (lets ((buffers (append (reverse left) (cons state right))))
-                        (if (and (> n 0) (<= n (length buffers)))
-                           (lets ((left right (split buffers (- n 1))))
-                              (led-buffers ll (reverse left) (car right) (cdr right) 
-                                 (str "switched to " n)))
-                           (begin
-                              (notify buff "No such buffer")
-                              (led-buffers ll left state right #false)))))
-                  ((move n)
-                     (log "moving buffer to" n)
-                     (lets ((left right (seek-in-list (append (reverse left) right) (max 0 (- n 1)))))
-                        (log "lens " (cons (length left) (length right)))
-                        (led-buffers ll left state right (str "moved to " (+ 1 (length left))))))
-                  (else is unknown
-                     (log "unknown buffer action " action)
-                     (led-buffers ll left state right #false))))
-            (else
-               (log "unknown buffer action " action)
-               (led-buffers ll left state right #false))))))
+      (led-buffers-action ll left state right action led-buffers)))
 
 ;; todo: use the buffer open command instead
 (define (open-all-files paths w h shared-meta)
