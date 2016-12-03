@@ -1902,6 +1902,10 @@
            (raw (render "esc + :q quits" null))
            (set-cursor 1 1)))))
 
+(define (make-initial-state w h meta)
+   (let ((buff (make-empty-buffer w h meta)))
+      (tuple buff (initial-undo buff) 'command)))
+
 (define (make-new-state buff)
    (lets ((w h (buffer-screen-size buff))
           (buff (make-empty-buffer w (- h 1) #empty)))
@@ -1916,12 +1920,6 @@
                (if (pair? data)
                   (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) meta)
                   (buffer null null null null 1 1 w h (cons 0 0) meta)))))
-      ;((open-output-file path) =>
-      ;   (lambda (fd)
-      ;      (log "opened new fd " fd)
-      ;      (close-port fd) ;; now input succeeds
-      ;      (log "created " path)
-      ;      (make-file-state w h path meta)))
       (else
          (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
 
@@ -2032,7 +2030,7 @@
                         (notify buff (str "opening " path "..."))
                         (lets ((new (path->buffer-state path (buffer-meta buff) buff)))
                            (if new
-                              (led-buffers ll (cons state left) new right #false)
+                              (led-buffers ll (cons state left) new right "")
                               (begin
                                  (log "failed to open " path)
                                  (led-buffers ll left state right #false)))))))
@@ -2067,21 +2065,23 @@
       (log "led-buffers: action " action)
       (led-buffers-action ll left state right action led-buffers)))
 
+; (define (led-buffers-action ll left state right action led-buffers)
+   
 ;; todo: use the buffer open command instead
+;                                 (led-buffers ll left state right #false)))))))
 (define (open-all-files paths w h shared-meta)
-   (fold
-      (lambda (states path)
-         (log "loading " path)
-         (and states
-            (let ((buff (make-file-state w h path shared-meta)))
-               (if buff
-                  (cons (tuple buff (initial-undo buff) 'command)
-                     states)
+   (let loop ((left null) (state (make-initial-state w h shared-meta)) (right null) (paths paths))
+      (log "open all files loop " paths)
+      (if (null? paths)
+         (values left state right)
+         (led-buffers-action null left state right (tuple 'open (car paths))
+            (lambda (ll left state right result)
+               (log "led-buffers-action response to opening " (car paths) " is " result)
+               (if result
+                  (loop left state right (cdr paths))
                   (begin
-                     (print-to stderr "Failed to open '" path "'")
-                     #false)))))
-      null
-      paths))
+                     (print "Failed to open '" (car paths) "'")
+                     (values #false #false #false))))))))
 
 (define (initial-terminal-setup)
    (output
@@ -2142,7 +2142,7 @@
          (else
             (print-to stderr "Bad data in config")
             #false))))
-      
+
 (define (start-led dict args ll)
   (log "start-led " dict ", " args)
   (lets ((w h ll (get-terminal-size ll))
@@ -2151,14 +2151,10 @@
     (initial-terminal-setup)
     (lets
       ((meta (load-settings dict))
-       (states
-         (reverse
-            (if (null? args)
-               (let ((buff (make-empty-buffer w h meta)))
-                  (list (tuple buff (initial-undo buff) 'command)))
-               (open-all-files args w h meta)))))
-      (if states
-         (led-buffers ll null (car states) (cdr states) #false)
+       (left state right
+         (open-all-files args w h meta)))
+      (if left 
+         (led-buffers ll left state right #false)
          1))))
 
 (define usage-text
