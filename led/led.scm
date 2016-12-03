@@ -10,6 +10,7 @@
   (led buffer)
   (led undo)
   (led node)
+  (led system)
   (owl sys)
   (owl args))
 
@@ -1602,7 +1603,7 @@
                      (let ((dp (drop-dir-contents d line)))
                         (log "dropping length " (length d) " -> " (length dp))
                         (if (eq? dp d) ;; no prefixed lines, open it
-                           (let ((contents (dir->list line)))
+                           (let ((contents (led-dir->list line)))
                               (if contents
                                  (cont ll
                                     (buffer u 
@@ -2018,7 +2019,7 @@
                         (lambda (pos)
                            (log "Already open at " pos)
                            (led-buffers-action ll left state right (tuple 'buffer pos) led-buffers)))
-                     ((dir->list path) =>
+                     ((led-dir->list path) =>
                         (lambda (subs)
                            (notify buff (str "Opening directory " path))
                            (lets
