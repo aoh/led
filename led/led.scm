@@ -11,6 +11,7 @@
   (led undo)
   (led node)
   (led system)
+  (led search)
   (owl sys)
   (owl args))
 
@@ -1592,7 +1593,7 @@
    (fold (lambda (ff x) (put ff x x))
       #empty
       (string->list
-         "0123456789abcdefghijklmnopqrstuvwxyzAVCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?")))
+         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>")))
 
 (define (word-char? x)
    (getf word-chars x))
@@ -1634,8 +1635,7 @@
                      (cont ll buff undo mode)))))
          ((eq? type 'file)
             (let ((word (current-word l r)))
-               (notify buff (str "Word is '" word "'"))
-               (cont ll buff undo mode)))
+               (values ll buff undo mode (tuple 'search word))))
          (else
             (notify buff (str "Cannot do in buffer of type '" type "' yet."))
             (cont ll buff undo mode)))))
@@ -1921,9 +1921,11 @@
            (raw (render "esc + :q quits" null))
            (set-cursor 1 1)))))
 
-(define (make-initial-state w h meta)
-   (let ((buff (make-empty-buffer w h meta)))
-      (tuple buff (initial-undo buff) 'command)))
+(define (initial-state buff)
+   (tuple buff (initial-undo buff) 'command))
+
+(define (empty-initial-state w h meta)
+   (initial-state (make-empty-buffer w h meta)))
 
 (define (make-new-state buff)
    (lets ((w h (buffer-screen-size buff))
@@ -1992,6 +1994,22 @@
          (else
             (loop (+ pos 1) (cdr bs))))))
 
+;; somewhat hardcoded for now
+(define scheme-source?  m/\.scm$/)
+(define clojure-source? m/\.clj[cx]?$/)
+(define c-source?       m/\.(c|cc|C|h|H|cpp|cxx)$/)
+(define web-source?     m/\.(js|x?html?|css)$/)
+
+(define (allowed-search-from buff)
+   (let ((path (get-buffer-meta buff 'path "")))
+      (cond
+         ((scheme-source? path)  scheme-source?)
+         ((clojure-source? path) clojure-source?)
+         ((c-source? path)       c-source?)
+         ((web-source? path)     web-source?)
+         (else (lambda (x) #true)))))
+      
+         
 (define (led-buffers-action ll left state right action led-buffers)
    (lets ((buff undo mode state))
       (cond
@@ -2053,6 +2071,25 @@
                               (begin
                                  (log "failed to open " path)
                                  (led-buffers ll left state right #false)))))))
+               ((search what)
+                  (lets
+                     ((index (last left #false))
+                      (ibuff (if index (ref index 1) #f))
+                      (w h (buffer-screen-size ibuff)))
+                     (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
+                        (begin
+                           (log "Searching for " what)
+                           (led-buffers ll (cons state left)
+                              (initial-state
+                                 (make-buffer-having w h 
+                                    (-> (buffer-meta ibuff) 
+                                       (put 'type 'search-results))
+                                    (run-search what (buffer->lines ibuff)
+                                       (lambda (msg) (notify ibuff msg))
+                                       (allowed-search-from buff))))
+                              right (str "Searched for '" what "'")))
+                        (led-buffers ll left state right
+                           "No index buffer found"))))
                ((buffer n)
                   (log "Going to buffer " n)
                   (lets ((buffers (append (reverse left) (cons state right))))
@@ -2089,7 +2126,7 @@
 ;; todo: use the buffer open command instead
 ;                                 (led-buffers ll left state right #false)))))))
 (define (open-all-files paths w h shared-meta)
-   (let loop ((left null) (state (make-initial-state w h shared-meta)) (right null) (paths paths))
+   (let loop ((left null) (state (empty-initial-state w h shared-meta)) (right null) (paths paths))
       (log "open all files loop " paths)
       (if (null? paths)
          (append (reverse left) (cons state right))
