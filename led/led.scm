@@ -2073,7 +2073,7 @@
    (let loop ((left null) (state (make-initial-state w h shared-meta)) (right null) (paths paths))
       (log "open all files loop " paths)
       (if (null? paths)
-         (values left state right)
+         (append (reverse left) (cons state right))
          (led-buffers-action null left state right (tuple 'open (car paths))
             (lambda (ll left state right result)
                (log "led-buffers-action response to opening " (car paths) " is " result)
@@ -2081,7 +2081,7 @@
                   (loop left state right (cdr paths))
                   (begin
                      (print "Failed to open '" (car paths) "'")
-                     (values #false #false #false))))))))
+                     #false)))))))
 
 (define (initial-terminal-setup)
    (output
@@ -2151,11 +2151,15 @@
     (initial-terminal-setup)
     (lets
       ((meta (load-settings dict))
-       (left state right
+       (states
          (open-all-files args w h meta)))
-      (if left 
-         (led-buffers ll left state right #false)
-         1))))
+      (cond
+         ((null? args)
+            (led-buffers ll null (car states) (cdr states) "*scratch*"))
+         ((not states)
+            1)
+         (else
+            (led-buffers ll null (cadr states) (cddr states) "ok"))))))
 
 (define usage-text
   "Usage: led [flags] [file] ...")
