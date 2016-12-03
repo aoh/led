@@ -1994,6 +1994,22 @@
          (else
             (loop (+ pos 1) (cdr bs))))))
 
+;; somewhat hardcoded for now
+(define scheme-source?  m/\.scm$/)
+(define clojure-source? m/\.clj[cx]?$/)
+(define c-source?       m/\.(c|cc|C|h|H|cpp|cxx)$/)
+(define web-source?     m/\.(js|x?html?|css)$/)
+
+(define (allowed-search-from buff)
+   (let ((path (get-buffer-meta buff 'path "")))
+      (cond
+         ((scheme-source? path)  scheme-source?)
+         ((clojure-source? path) clojure-source?)
+         ((c-source? path)       c-source?)
+         ((web-source? path)     web-source?)
+         (else (lambda (x) #true)))))
+      
+         
 (define (led-buffers-action ll left state right action led-buffers)
    (lets ((buff undo mode state))
       (cond
@@ -2070,8 +2086,7 @@
                                        (put 'type 'search-results))
                                     (run-search what (buffer->lines ibuff)
                                        (lambda (msg) (notify ibuff msg))
-                                       m/\.scm$/ ;; fixme: hardcoded for now
-                                       )))
+                                       (allowed-search-from buff))))
                               right (str "Searched for '" what "'")))
                         (led-buffers ll left state right
                            "No index buffer found"))))
