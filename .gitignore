@@ -2,5 +2,5 @@ led.c
 led.fasl
 led.log
 .parrot
-bin/led
+bin
 tmp/ol*
