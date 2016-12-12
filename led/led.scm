@@ -138,18 +138,18 @@
        (dx dy off)
        (step (* 2 (div w 3)))
        (buff (buffer u d l r (- x step) y w h (cons (+ dx step) dy) meta)))
-      (values buff (update-screen buff))))
+      buff))
 
 (define (scroll-left buff)
    (lets 
       ((u d l r x y w h off meta buff)
        (dx dy off))
       (if (eq? dx 1)
-        (values buff null)
+        buff
         (lets
           ((step (min dx (* 2 (div w 3))))
            (buff (buffer u d l r (+ x step) y w h (cons (- dx step) dy) meta)))
-          (values buff (update-screen buff))))))
+          buff))))
 
 (define (scroll-down buff)
    (lets 
@@ -159,8 +159,7 @@
      (dx dy off)
      (buff 
       (buffer u d l r x (- y step) w h (cons dx (+ dy step)) meta)))
-    (values buff
-      (update-screen buff))))
+    buff))
 
 (define (scroll-up buff)
    (lets 
@@ -170,8 +169,7 @@
      (step (min dy 1))
      (buff 
       (buffer u d l r x (+ y step) w h (cons dx (- dy step)) meta)))
-    (values buff
-      (update-screen buff))))
+    buff))
 
 (define (log-buff buff undo mode)
   (lets
@@ -203,32 +201,20 @@
          (if (< (+ x nw) w)
             (begin
                (log "insert of key " k " at " (cons x y) " = " node)
-               (cond
-                  (else
-                     (values
-                        (buffer u d (cons node l) r (+ x nw) y w h off meta)
-                        (encode-node node
-                           (if (null? r)
-                              null
-                              (tio
-                                 (clear-line-right)
-                                 (cursor-save)
-                                 (raw (take-printable r (- w (+ x nw))))
-                                 (cursor-restore))))))))
+               (buffer u d (cons node l) r (+ x nw) y w h off meta))
             (lets
-               ((buff scroll-tio (scroll-right buff))
-                (buff insert-tio (insert-handle-key buff k)))
-               (values buff
-                  (append scroll-tio insert-tio)))))))
+               ((buff (scroll-right buff))
+                (buff (insert-handle-key buff k)))
+               buff)))))
 
 (define (insert-backspace buff)
    (lets ((u d l r x y w h off meta buff))
       (if (null? l)
          ;; no-op (could also backspace to line above)
          (if (null? u)
-            (values buff null)
+            buff
             (if (eq? y 1)
-               (values buff null)
+               buff
                (lets
                   ((line u (uncons u null))
                    (line-len (printable-length line))
@@ -237,23 +223,14 @@
                    (buffp
                      (buffer u d (reverse line) r x (- y 1) w h (cons xp (cdr off)) meta)))
                   (log "backspace")
-                  (values buffp
-                     (delta-update-screen buff buffp)))))
+                  buffp)))
          (let ((cw (node-width (car l))))
            (if (> x cw)
-             (values
-                (buffer u d (cdr l) r (- x cw) y w h off meta)
-                (tio
-                   (cursor-left cw)
-                   (clear-line-right)
-                   (cursor-save)
-                   (raw (take-printable r (- w x)))
-                   (cursor-restore)))
+            (buffer u d (cdr l) r (- x cw) y w h off meta)
             (lets 
-               ((buff scroll-tio (scroll-left buff))
-                (buff bs-tio     (insert-backspace buff)))
-               (values buff
-                  (append scroll-tio bs-tio))))))))
+               ((buff (scroll-left buff))
+                (buff (insert-backspace buff)))
+               buff))))))
 
 
 ;; (a b c d ... n) 3 → (c b a) (d... n) delta, because some chars require more space
@@ -629,91 +606,67 @@
       (cond
          ((eq? dir 'up)
             (cond
-               ((null? u)
-                  (values buff null))
+               ((null? u) buff)
                ((eq? y 1)
-                  (lets
-                    ((buff tio-scroll (scroll-up buff))
-                     (buff tio-move (move-arrow buff dir ip)))
-                    (values buff
-                      (append tio-scroll tio-move))))
+                  (move-arrow (scroll-up buff) dir 'up))
               ((not (eq? 0 (car off))) ;; there is x-offset
                 (let ((next-len (printable-length (car u))))
                   (if (< next-len (car off)) ;; next line start not visible
                     (lets ;; dummy version
-                      ((buff tio (move-arrow buff 'left ip))
-                       (buff tio-this (move-arrow buff dir ip)))
-                      (values buff (append tio tio-this)))
-                    (lets ((buff x y (line-up buff ip)))
-                      (values buff
-                        (tio (set-cursor x y)))))))
+                      ((buff (move-arrow buff 'left ip))
+                       (buff (move-arrow buff dir ip)))
+                      buff)
+                    (line-up buff ip))))
                (else
                  (lets ((buff x y (line-up buff ip)))
-                   (values buff
-                     (tio (set-cursor x y)))))))
+                    buff))))
          ((eq? dir 'down)
             (cond
-              ((null? d)
-                (values buff null))
-              ((>= y h)
-                (lets
-                  ((buff tio-scroll (scroll-down buff))
-                   (buff tio-move (move-arrow buff dir ip)))
-                  (values buff
-                    (append tio-scroll tio-move))))
+              ((null? d) buff)
+              ((>= y h) (move-arrow (scroll-down buff) dir 'down))
               ((not (eq? 0 (car off))) ;; there is x-offset
                 (let ((next-len (printable-length (car d))))
                   (if (< next-len (car off)) ;; next line start not visible
                     (lets ;; dummy version
-                      ((buff tio (move-arrow buff 'left ip))
-                       (buff tio-this (move-arrow buff dir ip)))
-                      (values buff (append tio tio-this)))
-                    (lets ((buff x y (line-down buff ip)))
-                      (values buff
-                        (tio (set-cursor x y)))))))
+                      ((buff (move-arrow buff 'left ip))
+                       (buff (move-arrow buff dir ip)))
+                    buff))))
               (else
                 (lets ((buff x y (line-down buff ip)))
-                  (values buff (tio (set-cursor x y)))))))
+                   buff))))
          ((eq? dir 'left)
             (if (null? l)
-               (values buff null)
+               buff
                (let ((step (node-width (car l))))
                   (if (<= x step)
                      (lets
-                       ((buff scroll-tio (scroll-left buff))
-                        (buff move-tio (move-arrow buff dir ip)))
-                       (values buff (append scroll-tio move-tio)))
-                     (values
-                        (buffer u d (cdr l) (cons (car l) r) (- x step) y w h off meta)
-                        (tio
-                           (cursor-left step)))))))
+                       ((buff (scroll-left buff))
+                        (buff (move-arrow buff dir ip)))
+                        buff)
+                     (buffer u d (cdr l) (cons (car l) r) (- x step) y w h off meta)))))
          ((eq? dir 'right)
             (if (null? r)
-               (values buff null)
+               buff
                (let ((step (node-width (car r))))
                   (if (< (+ x step) w)
-                     (values 
-                        (buffer u d (cons (car r) l) (cdr r) (+ x step) y w h off meta)
-                        (tio (cursor-right step)))
+                     (buffer u d (cons (car r) l) (cdr r) (+ x step) y w h off meta)
                      (lets
-                       ((buff scroll-tio (scroll-right buff))
-                        (buff move-tio (move-arrow buff dir ip)))
-                       (values buff (append scroll-tio move-tio)))))))
+                       ((buff (scroll-right buff))
+                        (buff (move-arrow buff dir ip)))
+                       buff)))))
          ((eq? dir 'command-right) ;; command mode
             (if (or (null? r) (null? (cdr r)))
-               (values buff null)
+               buff
                (let ((step (node-width (car r))))
                   (if (< (+ x step) w)
-                     (values 
-                        (buffer u d (cons (car r) l) (cdr r) (+ x step) y w h off meta)
-                        (tio (cursor-right step)))
+                     (buffer u d (cons (car r) l) (cdr r) (+ x step) y w h off meta)
                      (lets
-                       ((buff scroll-tio (scroll-right buff))
-                        (buff move-tio (move-arrow buff dir ip)))
-                       (values buff (append scroll-tio move-tio)))))))
+                       ((buff (scroll-right buff))
+                        (buff (move-arrow buff dir ip)))
+                       buff)))))
          (else
             (log "odd line move: " dir)
-            (values buff null)))))
+            buff))))
 
 (define (cut-lines ll buff n)
    (lets 
@@ -727,7 +680,7 @@
             (values ll
                (buffer u d null null 1 1 w h '(0 . 0) meta)
                (tuple 'lines taken))
-            (lets ((buff _ (move-arrow buff 'up #f))
+            (lets ((buff (move-arrow buff 'up #f))
                    (u d l r x y w h off meta buff))
                (values ll
                   (buffer u (cdr d) l r x y w h off meta)
@@ -937,7 +890,7 @@
          ((eq? 'lines (ref data 1))
             (log "appending lines from buffer")
             (lets ((buff (paste-lines-below buff (ref data 2)))
-                   (buff tio (move-arrow buff 'down #f)))
+                   (buff (move-arrow buff 'down #f)))
                buff))
          ((eq? 'sequence (ref data 1))
             (log "appending sequence from buffer")
@@ -1090,19 +1043,19 @@
       (cont ll buff undo mode)))
 
 (define (command-move-down ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'down #f)))
+   (lets ((buff (move-arrow buff 'down #f)))
       (cont ll buff undo mode)))
 
 (define (command-move-up ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'up #f))) 
+   (lets ((buff (move-arrow buff 'up #f))) 
       (cont ll buff undo mode)))
 
 (define (command-move-right ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'command-right #f))) 
+   (lets ((buff (move-arrow buff 'command-right #f))) 
       (cont ll buff undo mode)))
 
 (define (command-move-left ll buff undo mode r cont)
-   (lets ((buff out (move-arrow buff 'left #f))) 
+   (lets ((buff (move-arrow buff 'left #f))) 
       (cont ll buff undo mode)))
 
 (define (command-seek-matching-paren ll buff undo mode r cont)
@@ -1230,7 +1183,7 @@
       (if (null? r)
          (if (null? l)
             (cont ll buff undo mode)
-            (lets ((buff out (insert-backspace buff)))
+            (lets ((buff (insert-backspace buff)))
                (cont ll buff undo mode)))
          (lets ((buffp (buffer u d l (cdr r) x y w h off meta)))
             (cont ll buffp undo mode)))))
@@ -1773,19 +1726,19 @@
          ((eq? ai 'none)
             (lets
                ((buffp (buffer u (cons r d) l null x y w h off meta))
-                (buffp _ (move-arrow (seek-line-start buffp) 'down #true)))
+                (buffp (move-arrow (seek-line-start buffp) 'down #true)))
                buffp))
          ((eq? ai 'paren)
             (lets
                ((ind (artificial-intelligence (cons (reverse l) u)))
-                (buffp _
+                (buffp
                   (move-arrow 
                      (seek-line-start 
                         (buffer u (cons (append ind r) d) l null x y w h off meta))
                      'down #true)))
                (fold
                   (lambda (buff node)
-                     (lets ((buff _ (move-arrow buff 'right #true))) buff))
+                     (lets ((buff (move-arrow buff 'right #true))) buff))
                   buffp ind)))
          (else
             (error "Unknown AI: " ai)))))
@@ -1836,11 +1789,11 @@
             (log "cursor " (cons x y) ", offset " off ", event " msg)
             (tuple-case msg
                ((key x)
-                  (lets ((buff out (insert-handle-key buff x)))
-                     (output out)
-                     (if (and (closing-paren? x) (get-buffer-meta buff 'show-match #false))
-                        (led-buffer (highlight-match ll) buff undo mode)
-                        (led-buffer ll buff undo mode))))
+                  (lets ((buffp (insert-handle-key buff x)))
+                     (output (delta-update-screen buff buffp))
+                     (if (and (closing-paren? x) (get-buffer-meta buffp 'show-match #false))
+                        (led-buffer (highlight-match ll) buffp undo mode)
+                        (led-buffer ll buffp undo mode))))
                ((tab)
                   ;(led-buffer (ilist space-key space-key space-key ll) buff undo mode)
                   ;; expandtab = #false or tab width
@@ -1854,13 +1807,13 @@
                      (output (delta-update-screen buff buffp))
                      (led-buffer ll buffp undo mode)))
                ((backspace)
-                  (lets ((buff out (insert-backspace buff)))
-                     (output out)
-                     (led-buffer ll buff undo mode)))
+                  (lets ((buffp (insert-backspace buff)))
+                     (output (delta-update-screen buff buffp))
+                     (led-buffer ll buffp undo mode)))
                ((arrow dir)
-                  (lets ((buff out (move-arrow buff dir #t)))
-                     (output out)
-                     (led-buffer ll buff undo mode)))
+                  (lets ((buffp (move-arrow buff dir #t)))
+                     (delta-update-screen buff buffp)
+                     (led-buffer ll buffp undo mode)))
                ((end-of-text)
                   ; (output (update-screen buff)) ;; would clear overstrike
                   (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
