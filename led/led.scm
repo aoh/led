@@ -915,25 +915,29 @@
 
 (define (write-buffer buff path)
    (log "writing to " path)
-   (if path
-      (lets
-         ((port (open-output-file path))
-          (lst (buffer->bytes buff))
-          (n (length lst))
-          (res (if port (byte-stream->port lst port) #f)))
-         (close-port port)
-         (if res
-            (values #true
-               (foldr render null 
-                  (list "Wrote " n " bytes to '" path "'")))
-            (values #false
-               (foldr render null
-                  (list "Failed to write to '" path "'")))))
-      (begin
-         (log "no path")
+   (cond
+      ((not path)
          (values #false
             (foldr render null
-               (list "Give me a name for this"))))))
+               (list "Give me a name for this"))))
+      ((directory? path)
+         (values #false
+            (foldr render null
+               (list "'" path "' is a directory"))))
+      (else
+         (lets
+            ((port (open-output-file path))
+             (lst (buffer->bytes buff))
+             (n (length lst))
+             (res (if port (byte-stream->port lst port) #f)))
+            (close-port port)
+            (if res
+               (values #true
+                  (foldr render null 
+                     (list "Wrote " n " bytes to '" path "'")))
+               (values #false
+                  (foldr render null
+                     (list "Failed to write to '" path "'"))))))))
 
 (define (maybe-keep-y old-y old-y-pos new-y h)
    (lets ((delta (- new-y old-y))
@@ -1507,11 +1511,8 @@
           (w h ll (get-terminal-size ll))
           (buff (buffer u d l r x y w (max 1 (- h 1)) off meta))
           (buff (buffer-seek buff x y #false)))
-      ;(log "updated screen from size " (cons old-w old-h) " to " (cons w h))
-      ;(log "current left " l)
-      ;(log "current left len " (printable-length l))
-      ;(log "current right " r)
-      ;(log "current right len " (printable-length r))
+      (output (update-screen buff))
+      (notify buff (str (get-buffer-meta buff 'type "*scratch*") " " (buffer-path buff "")))
       (cont ll buff undo mode)))
 
 (define (key-value event)
@@ -1835,6 +1836,11 @@
                      ((eq? key 'arrow-right) (values ll buff undo mode 'right))
                      ((eq? key #\p) (values ll buff undo mode 'left))
                      ((eq? key #\n) (values ll buff undo mode 'right))
+                     ((eq? key #\w) 
+                        (command-save ll buff undo mode 1
+                           (lambda (ll buff undo mode msg)
+                              (if msg (notify buff msg))
+                              (led-buffer ll buff undo mode))))
                      (else
                         (log "ignoring control " key " in insert mode")
                         (led-buffer ll buff undo mode))))
@@ -1910,7 +1916,8 @@
    (lets ((contents (directory-contents path contents))
           (buff (buffer null (cdr contents) null (car contents) 1 1 w h (cons 0 0) 
                    (-> meta 
-                      (put 'type 'directory)))))
+                      (put 'type 'directory)
+                      (put 'path path)))))
       (tuple buff (initial-undo buff) 'command)))
 
 (define (notify-buffer-source left buff right)
