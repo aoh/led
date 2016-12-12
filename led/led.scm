@@ -1369,8 +1369,10 @@
          (lets ((n (string->integer (s/set *tabstop=// exp))))
             (notify buff (str "Tabstop = " n))
             (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
+      ((m/^search .*/ exp)
+         (values ll buff undo mode (tuple 'search (s/search // exp))))
       (else
-        (cont ll buff undo mode))))
+         (cont ll buff undo mode))))
 
 (define (command-enter-command ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))
