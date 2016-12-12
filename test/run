@@ -6,10 +6,10 @@ FAILURES=
 echo "Running tests"
 for foo in *.io
 do
-	echo " - $foo"
-	cat "$foo" | "$@" -c config > /dev/null 2>&1
-	cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; echo "WANTED:"; cat -A $foo.ok; echo "RESULT:"; cat -A $foo.out;FAILURES="$foo $FAILURES"; }
-	rm "$foo.out"
+   echo " - $foo"
+   cat "$foo" | "$@" -c config > /dev/null 2>&1
+   cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; echo "WANTED:"; cat -A $foo.ok; echo "RESULT:"; cat -A $foo.out;FAILURES="$foo $FAILURES"; }
+   rm "$foo.out"
 done
 
 rm config

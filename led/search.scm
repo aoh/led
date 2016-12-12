@@ -12,8 +12,12 @@
    
    (begin
 
-      (define search-timeout 10)
+      (define search-timeout 10) ;; timeout after which search is stopped
+     
+      (define max-file-results 1000) ;; max results per file (protect against result set blowup)
       
+      (define max-result-line-length 500) ;; match preview line maximum length
+       
       (define (match-prefix? data pfx)
          (cond
             ((null? pfx) #true)
@@ -21,17 +25,27 @@
             ((eq? (car pfx) (car data))
                (match-prefix? (cdr data) (cdr pfx)))
             (else #false)))
-            
+           
+      (define (safe-char x)
+         (cond
+            ((< x 32) #\.)
+            ((> x 126) #\.)
+            (else x)))
+      
       (define (file-results bs path data end tail)
-         (let loop ((data data) (x 1) (y 1) (l null) (tail tail))
+         (let loop ((data data) (x 1) (y 1) (n max-file-results) (l null) (tail tail))
             (cond
                ((null? data)
                   tail)
+               ((eq? n 0)
+                  (cons 
+                     (str "(stopping after " max-file-results " hits)")
+                      tail))
                ((match-prefix? data bs)
                   (lets
                      ((r _ (take-while (lambda (x) (not (eq? x 10))) data))
-                      (line (bytes->string (append (reverse l) r))))
-                     (loop (cdr data) (+ x 1) y
+                      (line (bytes->string (map safe-char (take (append (reverse l) r) max-result-line-length)))))
+                     (loop (cdr data) (+ x 1) y (- n 1)
                         (cons (car data) l)
                         (cons 
                            (str path "+" y "." x ": " line)
@@ -39,9 +53,9 @@
                ((eq? 10 (car data))
                   (if (> (time) end)
                      tail
-                     (loop (cdr data) 1 (+ y 1) null tail)))
+                     (loop (cdr data) 1 (+ y 1) n null tail)))
                (else
-                  (loop (cdr data) (+ x 1) y (cons (car data) l) tail)))))
+                  (loop (cdr data) (+ x 1) y n (cons (car data) l) tail)))))
          
       (define (search-results what where log ok? searched end)
          (if (not (null? where))
@@ -68,16 +82,21 @@
                (lambda (data)
                   (log (str "Searching from '" (car where) "'"))
                   (file-results what (car where) data end
-                     (search-results what (cdr where) log ok? (cons (car where) searched) end))))
+                     (lambda ()
+                        (search-results what (cdr where) log ok? (cons (car where) searched) end)))))
             (else
                (search-results what (cdr where) log ok? searched end))))
             
       (define (run-search what where log path-ok?)
-         (map string->list
-            (ilist
-               (str "Searched for '" what "'")
-               ""
-               (reverse
-                  (search-results (string->bytes what) (reverse where) log path-ok? null
-                     (+ (time) search-timeout))))))))
+         (if (equal? what "")
+            (list (string->list "Nothing to search"))
+            (map string->list
+               (ilist
+                  (str "Searched for '" what "'")
+                  ""
+                  (reverse
+                     (force-ll
+                        (search-results (string->bytes what) (reverse where) log path-ok? null
+                           (+ (time) search-timeout))))))))))
+
             
