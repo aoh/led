@@ -1632,6 +1632,7 @@
       (put 'arrow-right command-next-buffer)
       (put '#\p command-previous-buffer) ;; also available in insert mode
       (put '#\n command-next-buffer)     ;; ditto
+      (put #\w command-save)
       (put #\l command-update-screen)))
 
 ;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
@@ -2034,24 +2035,27 @@
                                  (log "failed to open " path)
                                  (led-buffers ll left state right #false)))))))
                ((search what)
-                  (lets
-                     ((index (last left #false))
-                      (ibuff (if index (ref index 1) #f))
-                      (w h (buffer-screen-size ibuff)))
-                     (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
-                        (begin
-                           (log "Searching for " what)
-                           (led-buffers ll (cons state left)
-                              (initial-state
-                                 (make-buffer-having w h 
-                                    (-> (buffer-meta ibuff) 
-                                       (put 'type 'search-results))
-                                    (run-search what (buffer->lines ibuff)
-                                       (lambda (msg) (notify ibuff msg))
-                                       (allowed-search-from buff))))
-                              right (str "Searched for '" what "'")))
-                        (led-buffers ll left state right
-                           "No index buffer found"))))
+                  (if (and what (> (string-length what) 0))
+                     (lets
+                        ((index (last left #false))
+                         (ibuff (if index (ref index 1) #f))
+                         (w h (buffer-screen-size buff)))
+                        (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
+                           (begin
+                              (log "Searching for " what)
+                              (led-buffers ll (cons state left)
+                                 (initial-state
+                                    (make-buffer-having w h 
+                                       (-> (buffer-meta ibuff) 
+                                          (put 'type 'search-results))
+                                       (run-search what (buffer->lines ibuff)
+                                          (lambda (msg) (notify ibuff msg))
+                                          (allowed-search-from buff))))
+                                 right (str "Searched for '" what "'")))
+                           (led-buffers ll left state right
+                              "No index buffer found")))
+                     (led-buffers ll left state right
+                        "Move cursor over something to search")))
                ((buffer n)
                   (log "Going to buffer " n)
                   (lets ((buffers (append (reverse left) (cons state right))))
