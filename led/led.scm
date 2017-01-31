@@ -579,9 +579,7 @@
           (line-pos (+ (- x 1) (car off)))
           (l r offset (seek-in-line line line-pos)))
         ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "', offset " offset) 
-        (values
-          (buffer u d l r (- x offset) y w h off meta)
-          (- x offset) y)))
+      (buffer u d l r (- x offset) y w h off meta)))
 
 ;; move line up within the same screen preserving cursor position if possible
 (define (line-up buff ip)
@@ -596,9 +594,7 @@
           (l r offset (seek-in-line line line-pos)))
         ;(log "line-up went to (x . y) " (cons x y))
         ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
-        (values
-          (buffer u d l r (- x offset) y w h off meta)
-          (- x offset) y)))
+      (buffer u d l r (- x offset) y w h off meta)))
  
 (define (move-arrow buff dir ip)
    (lets ((u d l r x y w h off meta buff))
@@ -618,7 +614,7 @@
                       buff)
                     (line-up buff ip))))
                (else
-                 (lets ((buff x y (line-up buff ip)))
+                 (lets ((buff (line-up buff ip)))
                     buff))))
          ((eq? dir 'down)
             (cond
@@ -630,9 +626,10 @@
                     (lets ;; dummy version
                       ((buff (move-arrow buff 'left ip))
                        (buff (move-arrow buff dir ip)))
-                    buff))))
+                      buff)
+                    (line-down buff ip))))
               (else
-                (lets ((buff x y (line-down buff ip)))
+                (lets ((buff (line-down buff ip)))
                    buff))))
          ((eq? dir 'left)
             (if (null? l)
