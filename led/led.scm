@@ -579,9 +579,7 @@
           (line-pos (+ (- x 1) (car off)))
           (l r offset (seek-in-line line line-pos)))
         ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "', offset " offset) 
-        (values
-          (buffer u d l r (- x offset) y w h off meta)
-          (- x offset) y)))
+      (buffer u d l r (- x offset) y w h off meta)))
 
 ;; move line up within the same screen preserving cursor position if possible
 (define (line-up buff ip)
@@ -596,9 +594,7 @@
           (l r offset (seek-in-line line line-pos)))
         ;(log "line-up went to (x . y) " (cons x y))
         ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
-        (values
-          (buffer u d l r (- x offset) y w h off meta)
-          (- x offset) y)))
+      (buffer u d l r (- x offset) y w h off meta)))
  
 (define (move-arrow buff dir ip)
    (lets ((u d l r x y w h off meta buff))
@@ -618,7 +614,7 @@
                       buff)
                     (line-up buff ip))))
                (else
-                 (lets ((buff x y (line-up buff ip)))
+                 (lets ((buff (line-up buff ip)))
                     buff))))
          ((eq? dir 'down)
             (cond
@@ -630,9 +626,10 @@
                     (lets ;; dummy version
                       ((buff (move-arrow buff 'left ip))
                        (buff (move-arrow buff dir ip)))
-                    buff))))
+                      buff)
+                    (line-down buff ip))))
               (else
-                (lets ((buff x y (line-down buff ip)))
+                (lets ((buff (line-down buff ip)))
                    buff))))
          ((eq? dir 'left)
             (if (null? l)
@@ -915,25 +912,29 @@
 
 (define (write-buffer buff path)
    (log "writing to " path)
-   (if path
-      (lets
-         ((port (open-output-file path))
-          (lst (buffer->bytes buff))
-          (n (length lst))
-          (res (if port (byte-stream->port lst port) #f)))
-         (close-port port)
-         (if res
-            (values #true
-               (foldr render null 
-                  (list "Wrote " n " bytes to '" path "'")))
-            (values #false
-               (foldr render null
-                  (list "Failed to write to '" path "'")))))
-      (begin
-         (log "no path")
+   (cond
+      ((not path)
          (values #false
             (foldr render null
-               (list "Give me a name for this"))))))
+               (list "Give me a name for this"))))
+      ((directory? path)
+         (values #false
+            (foldr render null
+               (list "'" path "' is a directory"))))
+      (else
+         (lets
+            ((port (open-output-file path))
+             (lst (buffer->bytes buff))
+             (n (length lst))
+             (res (if port (byte-stream->port lst port) #f)))
+            (close-port port)
+            (if res
+               (values #true
+                  (foldr render null 
+                     (list "Wrote " n " bytes to '" path "'")))
+               (values #false
+                  (foldr render null
+                     (list "Failed to write to '" path "'"))))))))
 
 (define (maybe-keep-y old-y old-y-pos new-y h)
    (lets ((delta (- new-y old-y))
@@ -1102,30 +1103,45 @@
       ((eq? n 0) (values l r))
       (else (line-right (cons (car r) l) (cdr r) (- n 1)))))
 
+(define (indented-depth nodes)
+   (let loop ((l nodes) (n 0))
+      (cond
+         ((null? l) n)
+         ((eq? (car l) #\space)
+            (loop (cdr l) (+ n 1)))
+         (else n))))
+
+;; indent to next multiple of 'tabstop
 (define (indent-lines buff n)
    (lets
       ((u d l r x y w h off meta buff)
+       (current (indented-depth (append (reverse l) r)))
+       (tabstop (get meta 'tabstop 3))
+       (shift-n (- tabstop (remainder current tabstop))) ;; move to next multiple of tabstop
+       (shift-lst (map (lambda (x) #\space) (iota 0 1 shift-n))) ;; content to add
        (l (append l shift-lst))
-       (l r (line-left l r 3))
-       (d (map-n (lambda (x)(append shift-lst x)) (- n 1) d)))
-      (buffer u d l r x y w h off meta)))
+       (l r (line-left l r shift-n)) ;; move cursor to make x valid again
+       (d (map-n (lambda (x) (append shift-lst x)) (- n 1) d)))
+      (values
+         (buffer u d l r x y w h off meta)
+         shift-n)))
    
 (define (command-indent ll buff undo mode n cont)
    (lets 
       ((range ll (uncons ll #false))
        (undop (push-undo undo buff)))
       (cond
-         ((equal? range (tuple 'key #\>)) ;; only line-based indenting for now
-            (lets ((buffp (indent-lines buff n)))
-               (cont (keys ll #\l 3) buffp undop mode)))
+         ((equal? range (tuple 'key #\>))
+            (lets ((buffp indented (indent-lines buff n)))
+               (cont (keys ll #\l indented) buffp undop mode)))
          ((equal? range (tuple 'key #\%))
             (lets ((dy dx (movement-matching-paren-forward buff))
-                   (buffp (indent-lines buff (+ dy 1)))) ;; current line + dy down
-               (cont (keys ll #\l 3) buffp undop mode)))
+                   (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
+               (cont (keys ll #\l indented) buffp undop mode)))
          ((equal? range (tuple 'key sexp-key))
             (lets ((dy dx (movement-matching-paren-forward buff))
-                   (buffp (indent-lines buff (+ dy 1)))) ;; current line + dy down
-               (cont (keys ll #\l 3) buffp undop mode)))
+                   (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
+               (cont (keys ll #\l indented ) buffp undop mode)))
          (else
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
@@ -1369,8 +1385,10 @@
          (lets ((n (string->integer (s/set *tabstop=// exp))))
             (notify buff (str "Tabstop = " n))
             (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
+      ((m/^search .*/ exp)
+         (values ll buff undo mode (tuple 'search (s/search // exp))))
       (else
-        (cont ll buff undo mode))))
+         (cont ll buff undo mode))))
 
 (define (command-enter-command ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))
@@ -1505,11 +1523,8 @@
           (w h ll (get-terminal-size ll))
           (buff (buffer u d l r x y w (max 1 (- h 1)) off meta))
           (buff (buffer-seek buff x y #false)))
-      ;(log "updated screen from size " (cons old-w old-h) " to " (cons w h))
-      ;(log "current left " l)
-      ;(log "current left len " (printable-length l))
-      ;(log "current right " r)
-      ;(log "current right len " (printable-length r))
+      (output (update-screen buff))
+      (notify buff (str (get-buffer-meta buff 'type "*scratch*") " " (buffer-path buff "")))
       (cont ll buff undo mode)))
 
 (define (key-value event)
@@ -1629,6 +1644,7 @@
       (put 'arrow-right command-next-buffer)
       (put '#\p command-previous-buffer) ;; also available in insert mode
       (put '#\n command-next-buffer)     ;; ditto
+      (put #\w command-save)
       (put #\l command-update-screen)))
 
 ;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
@@ -1833,6 +1849,11 @@
                      ((eq? key 'arrow-right) (values ll buff undo mode 'right))
                      ((eq? key #\p) (values ll buff undo mode 'left))
                      ((eq? key #\n) (values ll buff undo mode 'right))
+                     ((eq? key #\w) 
+                        (command-save ll buff undo mode 1
+                           (lambda (ll buff undo mode msg)
+                              (if msg (notify buff msg))
+                              (led-buffer ll buff undo mode))))
                      (else
                         (log "ignoring control " key " in insert mode")
                         (led-buffer ll buff undo mode))))
@@ -1908,7 +1929,8 @@
    (lets ((contents (directory-contents path contents))
           (buff (buffer null (cdr contents) null (car contents) 1 1 w h (cons 0 0) 
                    (-> meta 
-                      (put 'type 'directory)))))
+                      (put 'type 'directory)
+                      (put 'path path)))))
       (tuple buff (initial-undo buff) 'command)))
 
 (define (notify-buffer-source left buff right)
@@ -2025,24 +2047,27 @@
                                  (log "failed to open " path)
                                  (led-buffers ll left state right #false)))))))
                ((search what)
-                  (lets
-                     ((index (last left #false))
-                      (ibuff (if index (ref index 1) #f))
-                      (w h (buffer-screen-size ibuff)))
-                     (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
-                        (begin
-                           (log "Searching for " what)
-                           (led-buffers ll (cons state left)
-                              (initial-state
-                                 (make-buffer-having w h 
-                                    (-> (buffer-meta ibuff) 
-                                       (put 'type 'search-results))
-                                    (run-search what (buffer->lines ibuff)
-                                       (lambda (msg) (notify ibuff msg))
-                                       (allowed-search-from buff))))
-                              right (str "Searched for '" what "'")))
-                        (led-buffers ll left state right
-                           "No index buffer found"))))
+                  (if (and what (> (string-length what) 0))
+                     (lets
+                        ((index (last left #false))
+                         (ibuff (if index (ref index 1) #f))
+                         (w h (buffer-screen-size buff)))
+                        (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
+                           (begin
+                              (log "Searching for " what)
+                              (led-buffers ll (cons state left)
+                                 (initial-state
+                                    (make-buffer-having w h 
+                                       (-> (buffer-meta ibuff) 
+                                          (put 'type 'search-results))
+                                       (run-search what (buffer->lines ibuff)
+                                          (lambda (msg) (notify ibuff msg))
+                                          (allowed-search-from buff))))
+                                 right (str "Searched for '" what "'")))
+                           (led-buffers ll left state right
+                              "No index buffer found")))
+                     (led-buffers ll left state right
+                        "Move cursor over something to search")))
                ((buffer n)
                   (log "Going to buffer " n)
                   (lets ((buffers (append (reverse left) (cons state right))))

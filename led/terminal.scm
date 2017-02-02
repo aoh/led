@@ -255,7 +255,6 @@
                   ((eq? hd 21)  (cons (tuple 'nak) (loop ll))) ;; ^u
                   ((eq? hd 3)  (cons (tuple 'end-of-text) (loop ll))) ;; ^c
                   ((eq? hd 4)  (cons (tuple 'end-of-transmission) (loop ll))) ;; ^d
-                  ((eq? hd 23)  (cons (tuple 'end-of-transmission-block) (loop ll))) ;; ^w
                   ((eq? hd 1)  (cons (tuple 'ctrl-a) (loop ll))) ;; ^n
                   ((eq? hd 5)  (cons (tuple 'ctrl-e) (loop ll))) ;; ^w
                   ((eq? hd 6)  (cons (tuple 'ctrl #\f) (loop ll))) ;; switch to these
@@ -267,6 +266,7 @@
                   ((eq? hd 16)  (cons (tuple 'ctrl #\p) (loop ll)))
                   ((eq? hd 12) (cons (tuple 'ctrl #\l) (loop ll)))
                   ((eq? hd 24) (cons (tuple 'ctrl #\x) (loop ll)))
+                  ((eq? hd 23)  (cons (tuple 'ctrl #\w) (loop ll)))
                   ((eq? hd 22)
                      (lets ((val ll (uncons ll 0)))
                         (cons
