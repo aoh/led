@@ -1106,30 +1106,45 @@
       ((eq? n 0) (values l r))
       (else (line-right (cons (car r) l) (cdr r) (- n 1)))))
 
+(define (indented-depth nodes)
+   (let loop ((l nodes) (n 0))
+      (cond
+         ((null? l) n)
+         ((eq? (car l) #\space)
+            (loop (cdr l) (+ n 1)))
+         (else n))))
+
+;; indent to next multiple of 'tabstop
 (define (indent-lines buff n)
    (lets
       ((u d l r x y w h off meta buff)
+       (current (indented-depth (append (reverse l) r)))
+       (tabstop (get meta 'tabstop 3))
+       (shift-n (- tabstop (remainder current tabstop))) ;; move to next multiple of tabstop
+       (shift-lst (map (lambda (x) #\space) (iota 0 1 shift-n))) ;; content to add
        (l (append l shift-lst))
-       (l r (line-left l r 3))
-       (d (map-n (lambda (x)(append shift-lst x)) (- n 1) d)))
-      (buffer u d l r x y w h off meta)))
+       (l r (line-left l r shift-n)) ;; move cursor to make x valid again
+       (d (map-n (lambda (x) (append shift-lst x)) (- n 1) d)))
+      (values
+         (buffer u d l r x y w h off meta)
+         shift-n)))
    
 (define (command-indent ll buff undo mode n cont)
    (lets 
       ((range ll (uncons ll #false))
        (undop (push-undo undo buff)))
       (cond
-         ((equal? range (tuple 'key #\>)) ;; only line-based indenting for now
-            (lets ((buffp (indent-lines buff n)))
-               (cont (keys ll #\l 3) buffp undop mode)))
+         ((equal? range (tuple 'key #\>))
+            (lets ((buffp indented (indent-lines buff n)))
+               (cont (keys ll #\l indented) buffp undop mode)))
          ((equal? range (tuple 'key #\%))
             (lets ((dy dx (movement-matching-paren-forward buff))
-                   (buffp (indent-lines buff (+ dy 1)))) ;; current line + dy down
-               (cont (keys ll #\l 3) buffp undop mode)))
+                   (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
+               (cont (keys ll #\l indented) buffp undop mode)))
          ((equal? range (tuple 'key sexp-key))
             (lets ((dy dx (movement-matching-paren-forward buff))
-                   (buffp (indent-lines buff (+ dy 1)))) ;; current line + dy down
-               (cont (keys ll #\l 3) buffp undop mode)))
+                   (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
+               (cont (keys ll #\l indented ) buffp undop mode)))
          (else
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
