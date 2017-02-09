@@ -2,7 +2,6 @@ CC?=gcc
 OFLAGS=-O1
 CFLAGS=-O2 -Wall
 OWL=ol-0.1.13
-PREFIX=/usr/local
 OWLSHA=4dc2fe537f9d952d02e3c67564531c0466386b3d353a3
 OWLURL=https://github.com/aoh/owl-lisp/files/449350
 
@@ -24,15 +23,12 @@ led.c: led/led.scm led/terminal.scm
 	make bin/ol
 	bin/ol $(OFLAGS) -o led.c led/led.scm
 
-led.fasl: bin/ol led/*.scm
+led.fasl: bin/ol led/led.scm led/terminal.scm
+	make bin/ol
 	bin/ol -o led.fasl led/led.scm
 
 install: bin/led .parrot
-	mkdir -p $(PREFIX)/bin
-	install -m 755 bin/led $(PREFIX)/bin
-
-uninstall: bin/led .parrot
-	rm -v $(PREFIX)/bin/led
+	install -m 755 bin/led /usr/bin
 
 bin/ol:
 	mkdir -p bin tmp

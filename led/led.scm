@@ -324,6 +324,12 @@
                   (loop (car d) (cdr d) (+ y 1) 0 #t))))
          ((space-char? (car r))
             (loop (cdr r) d y (+ x 1) #t))
+         ((word-delim-char? (car r))
+            (if (eq? r start)
+               ;; consume the one delimiter char and potential whitespace
+               (loop (cdr r) d y (+ x 1) #true)
+               ;; otherwise stop here
+               (values r d y x)))
          (space?
             (values r d y x))
          (else
