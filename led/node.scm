@@ -21,6 +21,7 @@
       tab-node
       hex-node
       whitespace?
+      word-delim-char?
       drop-leading-whitespace)
    
    (import
@@ -49,6 +50,19 @@
       
       (define (space-char? x)
          (or (eq? x #\space) (eq? x 9)))
+    
+      (define word-delim-chars
+         (fold (lambda (ff x) (put ff x x))
+            empty
+            (string->list "\"'()[]{}")))
+       
+      (define (word-delim-char? x)
+         ;; node handling here is a temporary hack
+         (cond
+            ((eq? x lp-node) #true)
+            ((eq? x rp-node) #true)
+            (else
+               (get word-delim-chars x #false))))
      
       ;; representation of a real tab 
       (define tab-node 
