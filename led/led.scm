@@ -307,7 +307,7 @@
 ;;;
 
 ;; r d -> r' d' n-down n-from-left
-(define (next-word start d)
+(define (next-word start d n-left)
    (let loop ((r start) (d d) (y 0) (x 0) (space? #false))
       (log "loop " r "," y "," x "," space?)
       (cond
@@ -315,6 +315,9 @@
             (cond
                ((null? d)
                   (values null null y x))
+               ((eq? n-left 1)
+                  ;; do not eat the final newline after last word
+                  (values r d y x))
                ;(space?
                ;   (loop (car d) (cdr d) (+ y 1) 0 #t))
                (else
@@ -331,7 +334,7 @@
    (let loop((y 0) (x 0) (r r) (d d) (n n))
       (if (eq? n 0)
          (values y x r d)
-         (lets ((r d dy dx (next-word r d)))
+         (lets ((r d dy dx (next-word r d n)))
             (if (eq? dy 0)
                (loop y (+ x dx) r d (- n 1))
                (loop (+ y dy) dx r d (- n 1)))))))
