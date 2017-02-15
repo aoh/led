@@ -13,6 +13,8 @@
       set-buffer-meta
       put-buffer-meta
       get-buffer-meta
+      get-global-meta
+      put-global-meta
       buffer-path
       buffer-path-str
       buffer-x
@@ -49,6 +51,13 @@
    
       (define (get-buffer-meta buff key def)
          (get (buffer-meta buff) key def))
+   
+      (define (get-global-meta buff key def)
+         (get (get-buffer-meta buff 'global #empty) key def))
+      
+      (define (put-global-meta buff key val)
+         (put-buffer-meta buff 'global
+            (put (get-buffer-meta buff 'global #empty) key val)))
    
       (define (buffer-path buff default)
          (get-buffer-meta buff 'path default))

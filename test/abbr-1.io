@@ -1,0 +1,1 @@
+[10;10R[10;10R:ab foo FOOifoo foobar barfoo (foo):w abbr-1.io.out:q
