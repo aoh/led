@@ -51,3 +51,4 @@ mrproper:
 	make clean
 	rm -rf tmp
 
+.PHONY: mrproper clean test install uninstall fasltest everything
