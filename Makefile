@@ -4,6 +4,7 @@ CFLAGS=-O2 -Wall
 OWL=ol-0.1.13
 OWLSHA=4dc2fe537f9d952d02e3c67564531c0466386b3d353a3
 OWLURL=https://github.com/aoh/owl-lisp/files/449350
+PREFIX=/usr
 
 everything: bin/led .parrot
 
@@ -28,7 +29,10 @@ led.fasl: bin/ol led/led.scm led/terminal.scm
 	bin/ol -o led.fasl led/led.scm
 
 install: bin/led .parrot
-	install -m 755 bin/led /usr/bin
+	install -m 755 bin/led $(PREFIX)/bin
+
+uninstall:
+	rm -v $(PREFIX)/bin/led
 
 bin/ol:
 	mkdir -p bin tmp
