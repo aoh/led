@@ -1797,8 +1797,13 @@
          (drop-spaces (cdr lst) (- n 1)))
       (else lst))) ;; not touching other indents for now
 
+(define (repeat n val tail)
+   (if (eq? n 0)
+      tail
+      (cons val (repeat (- n 1) val tail))))
+
 ;; up -> l
-(define (artificial-intelligence u)
+(define (artificial-intelligence u tabstop)
    (if (null? u)
       null
       (lets
@@ -1809,9 +1814,9 @@
             ((eq? bal 0)
                lead)
             ((> bal 0)
-               (ilist #\space #\space #\space lead))
+               (repeat tabstop #\space lead))
             (else
-               (drop-spaces lead (* bal -3)))))))
+               (drop-spaces lead (* bal (- 0 tabstop))))))))
 
 (define (key x) 
    (tuple 'key x))
@@ -1827,7 +1832,7 @@
                buffp))
          ((eq? ai 'paren)
             (lets
-               ((ind (artificial-intelligence (cons (reverse l) u)))
+               ((ind (artificial-intelligence (cons (reverse l) u) (get meta 'tabstop 3)))
                 (buffp
                   (move-arrow 
                      (seek-line-start 
