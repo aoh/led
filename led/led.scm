@@ -1357,6 +1357,7 @@
          (map (convert-paren meta) (map string->list (force-ll (lines fd))))
          #false)))
 
+;; fixme: led-eval is silly
 (define (led-eval ll buff undo mode cont notify exp)
    (cond
       ((equal? exp "")
@@ -1469,6 +1470,9 @@
             (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
       ((m/^search .*/ exp)
          (values ll buff undo mode (tuple 'search (s/search // exp))))
+      ((m/settings/ exp)
+         ;; open a settings buffer
+         (values ll buff undo mode 'settings))
       (else
          (cont ll buff undo mode))))
 
@@ -1993,6 +1997,15 @@
           (buff (make-empty-buffer w h #empty)))
       (tuple buff (initial-undo buff) 'command)))
 
+(define (make-new-state-having buff type content)
+   (lets ((w h (buffer-screen-size buff))
+          (buff 
+             (make-buffer-having w h 
+                (-> #empty
+                   (put 'type type))
+                content)))
+      (tuple buff (initial-undo buff) 'command)))
+
 (define (make-file-state w h path meta)
    (log "making file state out out of " path)
    (cond
@@ -2109,6 +2122,10 @@
             (log "making new buffer")
             (lets ((new-state (make-new-state buff)))
                (led-buffers ll (cons state left) new-state right "new scratch buffer")))
+         ((eq? action 'settings)
+            (log "making a new settings buffer")
+            (lets ((new-state (make-new-state-having buff 'settings '((97 98 99)))))
+               (led-buffers ll (cons state left) new-state right "new settings buffer")))
          ((tuple? action)
             (tuple-case action
                ((open path)
