@@ -58,8 +58,8 @@
                   (loop (cdr data) (+ x 1) y n (cons (car data) l) tail)))))
          
       (define (search-results what where log ok? searched end)
-         (if (not (null? where))
-            (log (str "Considering '" (car where) "'")))
+         ;(if (not (null? where))
+         ;   (log (str "Considering '" (car where) "'")))
          (cond
             ((null? where)
                null)

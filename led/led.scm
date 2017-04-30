@@ -2136,7 +2136,7 @@
                   (if (and what (> (string-length what) 0))
                      (lets
                         ((index (last left #false))
-                         (ibuff (if index (ref index 1) #f))
+                         (ibuff (if index (ref index 1) buff))
                          (w h (buffer-screen-size buff)))
                         (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
                            (begin
