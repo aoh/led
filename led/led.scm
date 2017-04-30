@@ -1001,7 +1001,8 @@
              (lst (buffer->bytes buff))
              (n (length lst))
              (res (if port (byte-stream->port lst port) #f)))
-            (close-port port)
+            (if port 
+               (close-port port))
             (if res
                (values #true
                   (foldr render null 
