@@ -6,6 +6,9 @@ blab -l . -e 'led.prelude ":w hello.io.out\r:q\r"' > hello.io
 # write foo to a file
 blab -l . -e 'led.prelude "i" "foo" led.esc ":w foo.io.out\r:q\r"' > foo.io
 
+# abbreviations
+blab -l . -e 'led.prelude ":ab foo FOO\rifoo foobar barfoo (foo)" led.esc ":w abbr-1.io.out\r:q\r"' > abbr-1.io
+
 # line-based copy and paste
 blab -l . -e 'led.prelude "i" "foo\rbar" led.esc ":1\rddpp" led.esc ":w copy-1.io.out\r:q\r"' > copy-1.io
 

@@ -1,9 +1,5 @@
 #!/usr/bin/ol --run
 
-;; todo: buffer command notify should receive info whether it was an error
-;;  error -> break on config load 
-;;        -> otherwise highlight the message
-
 (import
   (led terminal)
   (led log)
@@ -193,14 +189,74 @@
          (font-normal)
          (cursor-restore)))))
 
+(define (notify buff txt)
+   (lets ((u d l r x y w h off meta buff))
+      (output
+         (tio
+            (set-cursor 1 (+ h 1))
+            (clear-line)
+            (font-dim)
+            (raw (if (string? txt) (render txt null) txt))
+            (font-normal)
+            (cursor-restore)
+            (set-cursor x y)))))
+
+(define test-abbrs 
+   (-> empty
+      (put #\l
+         (put empty #\z (reverse (string->list "λ"))))
+      (put #\e
+         (put empty #\z (list #x2205)))))
+
+(define (add-abbreviation abbrs sfrom sto)
+   (define (push tree chars val)
+      (if (null? chars)
+         (put tree 'abbreviation val)
+         (put tree (car chars)
+            (push (get tree (car chars) empty)
+               (cdr chars) val))))
+   (push abbrs (reverse (string->list sfrom))
+      (reverse (string->list sto))))
+            
+(define (buff-add-abbreviation buff from to)
+   (notify buff (str "abbreviating '" from "' -> '" to "'"))
+   (let ((abbs (get-global-meta buff 'abbreviations #empty)))
+      (put-global-meta buff 'abbreviations
+         (add-abbreviation 
+            (get-global-meta buff 'abbreviations #empty)
+            from to))))
+      
+(define (abbreviate l abs)
+   (log "abbreviate at " l " vs " abs)
+   (cond
+      ((eq? abs empty) #false)
+      ((or (null? l) (not (word-char? (car l))))
+         (let ((val (getf abs 'abbreviation)))
+            (log "abbreviation led to " val)
+            (if val
+               (append val l)
+               #false)))
+      ((getf abs (car l)) =>
+         (λ (val)
+            (abbreviate (cdr l) val)))
+      (else
+         #false)))
+         
+(define (maybe-unabbreviate buff l)
+   (or (abbreviate l (get-global-meta buff 'abbreviations #empty))
+       l))
+      
 (define (insert-handle-key buff k)
    (lets ((u d l r x y w h off meta buff))
       (lets ((node (key-node k meta))
              (nw (node-width node)))
          (log "adding node " node)
          (if (< (+ x nw) w)
-            (begin
-               (log "insert of key " k " at " (cons x y) " = " node)
+            (if (not (word-char? node))
+               (lets ((lp (maybe-unabbreviate buff l))
+                      (x (if (eq? l lp) x (+ 1 (text-width lp)))))
+                  ;(log "insert of key " k " at " (cons x y) " = " node)
+                  (buffer u d (cons node lp) r (+ x nw) y w h off meta))
                (buffer u d (cons node l) r (+ x nw) y w h off meta))
             (lets
                ((buff (scroll-right buff))
@@ -459,7 +515,7 @@
                            (log "no key")
                            (values ll #f #f))
                         ((get (get-buffer-meta buff 'marks #empty) k #false) =>
-                           (lambda (pos)
+                           (λ (pos)
                               (lets ((u d l r x y w h off meta buff)
                                      (dx dy off)
                                      (mx my pos)
@@ -758,19 +814,28 @@
                (loop (+ x 1) y (cdr r) d depth))))))
 
 
+;; (codepoint ...) regex x -> x' | #false
 
-;; regex is a ^... one
+(define (search-from-line code-points regex x)
+   ;(log "searching line " (list->string code-points))
+   (let loop ((l code-points) (x x))
+      ;(log "search at " (list->string l))
+      (cond
+         ((null? l) #false)
+         ((regex l) x)
+         (else (loop (cdr l) (+ x 1))))))
+
+;; node-list (node-list ...) regex x y -> x' y' | #f #f
+
 (define (search-from l ls regex x y)
    (cond
-      ((null? l)
-         (if (null? ls)
-            (values #f #f)
-            (search-from (car ls) (cdr ls) regex 0 (+ y 1))))
-      ((regex l)
-         (values x y))
+      ((search-from-line (line->code-points l) regex x) =>
+         (λ (x) (values x y)))
+      ((null? ls)
+         (values #f #f))
       (else
-         (search-from (cdr l) ls regex (+ x 1) y))))
-         
+         (search-from (car ls) (cdr ls) regex 0 (+ y 1)))))
+            
 (define (find-next buff)
    (lets ((u d l r x y w h off meta buff)
           (dx dy off)
@@ -966,7 +1031,7 @@
             buff))))
 
 (define (is? x) 
-   (lambda (y) (eq? x y)))
+   (λ (y) (eq? x y)))
 
 (define (maybe-seek-matching-paren buff)
    (lets ((u d l r x y w h off meta buff))
@@ -993,17 +1058,7 @@
 ;;; Command mode actions
 ;;;
 
-(define (notify buff txt)
-   (lets ((u d l r x y w h off meta buff))
-      (output
-         (tio
-            (set-cursor 1 (+ h 1))
-            (clear-line)
-            (font-dim)
-            (raw (if (string? txt) (render txt null) txt))
-            (font-normal)
-            (cursor-restore)
-            (set-cursor x y)))))
+
 
 (define (command-regex-search ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\/)))
@@ -1127,10 +1182,10 @@
        (current (indented-depth (append (reverse l) r)))
        (tabstop (get meta 'tabstop 3))
        (shift-n (- tabstop (remainder current tabstop))) ;; move to next multiple of tabstop
-       (shift-lst (map (lambda (x) #\space) (iota 0 1 shift-n))) ;; content to add
+       (shift-lst (map (λ (x) #\space) (iota 0 1 shift-n))) ;; content to add
        (l (append l shift-lst))
        (l r (line-left l r shift-n)) ;; move cursor to make x valid again
-       (d (map-n (lambda (x) (append shift-lst x)) (- n 1) d)))
+       (d (map-n (λ (x) (append shift-lst x)) (- n 1) d)))
       (values
          (buffer u d l r x y w h off meta)
          shift-n)))
@@ -1378,6 +1433,23 @@
          (notify buff "AI disabled")
          (log "AI -> none")
          (cont ll (put-buffer-meta buff 'ai 'none) undo mode))
+      ((m/set *noab/ exp)
+         (notify buff "abbreviations disabled")
+         (log "abbreviations -> off")
+         (cont ll (put-buffer-meta buff 'ab #false) undo mode))
+      ((m/set *ab/ exp)
+         (notify buff "abbreviations enabled")
+         (log "abbreviations -> on")
+         (cont ll (put-buffer-meta buff 'ab #true) undo mode))
+      ((m/ab / exp)
+         (lets ((parts (c/ +/ exp)))
+            (if (= (length parts) 3)
+               (cont ll
+                  (buff-add-abbreviation buff (cadr parts) (caddr parts))
+                  undo mode)
+               (begin
+                  (notify "no. ab [what] [replacement]")
+                  (cont ll buff undo mode)))))
       ((m/set *expandtab/ exp)
          (notify buff "Expanding tabs")
          (cont ll (put-buffer-meta buff 'expandtab #true) undo mode))
@@ -1476,7 +1548,7 @@
       ((next ll (uncons ll eof))
        (ll (cons (if (equal? next (tuple 'key #\c)) (tuple 'key #\d) next) ll)))
       (command-delete ll buff undo mode r
-         (lambda (ll buff undo mode)
+         (λ (ll buff undo mode)
             (cont ll buff undo 'insert)))))
 
 (define (command-move-words ll buff undo mode r cont)
@@ -1562,12 +1634,12 @@
                 (append (string->list prefix) '(#\/))))))
       (log "prefix list is " prefix)
       (map
-         (lambda (x)
+         (λ (x)
             (append prefix (string->list x)))
          contents)))
 
 (define word-chars 
-   (fold (lambda (ff x) (put ff x x))
+   (fold (λ (ff x) (put ff x x))
       #empty
       (string->list
          "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>")))
@@ -1628,7 +1700,7 @@
             (if (null? r)
                (cont ll buff undo mode)
                (lets
-                  ((r (map-n (lambda (x) k) ran r))
+                  ((r (map-n (λ (x) k) ran r))
                    (undo (push-undo undo buff))
                    (buffp
                       (buffer u d l r x y w h off meta)))
@@ -1704,7 +1776,7 @@
 (define (paren-balance lst)
    (fold + 0
       (map
-         (lambda (x) (if (left-paren? x) 1 (if (right-paren? x) -1 0)))
+         (λ (x) (if (left-paren? x) 1 (if (right-paren? x) -1 0)))
          lst)))
 
 (define (unclosed-parens? lst)
@@ -1725,8 +1797,13 @@
          (drop-spaces (cdr lst) (- n 1)))
       (else lst))) ;; not touching other indents for now
 
+(define (repeat n val tail)
+   (if (eq? n 0)
+      tail
+      (cons val (repeat (- n 1) val tail))))
+
 ;; up -> l
-(define (artificial-intelligence u)
+(define (artificial-intelligence u tabstop)
    (if (null? u)
       null
       (lets
@@ -1737,9 +1814,9 @@
             ((eq? bal 0)
                lead)
             ((> bal 0)
-               (ilist #\space #\space #\space lead))
+               (repeat tabstop #\space lead))
             (else
-               (drop-spaces lead (* bal -3)))))))
+               (drop-spaces lead (* bal (- 0 tabstop))))))))
 
 (define (key x) 
    (tuple 'key x))
@@ -1755,14 +1832,14 @@
                buffp))
          ((eq? ai 'paren)
             (lets
-               ((ind (artificial-intelligence (cons (reverse l) u)))
+               ((ind (artificial-intelligence (cons (reverse l) u) (get meta 'tabstop 3)))
                 (buffp
                   (move-arrow 
                      (seek-line-start 
                         (buffer u (cons (append ind r) d) l null x y w h off meta))
                      'down #true)))
                (fold
-                  (lambda (buff node)
+                  (λ (buff node)
                      (lets ((buff (move-arrow buff 'right #true))) buff))
                   buffp ind)))
          (else
@@ -1777,7 +1854,7 @@
    (values #false ll))
 
 (define (update-cont self buff)
-   (lambda (ll buffp undo mode . msg)
+   (λ (ll buffp undo mode . msg)
       (output (delta-update-screen buff buffp))
       (if (pair? msg)
          (let ((what (apply str msg)))
@@ -1788,7 +1865,7 @@
 (define (highlight-match ll)
    (ilist (tuple 'esc)
           (tuple 'key #\%)
-          (lambda ()
+          (λ ()
              (sleep 150)
              (ilist
                 (tuple 'key #\%)
@@ -1860,7 +1937,7 @@
                      ((eq? key #\n) (values ll buff undo mode 'right))
                      ((eq? key #\w) 
                         (command-save ll buff undo mode 1
-                           (lambda (ll buff undo mode msg)
+                           (λ (ll buff undo mode msg)
                               (if msg (notify buff msg))
                               (led-buffer ll buff undo mode))))
                      (else
@@ -1919,7 +1996,7 @@
    (log "making file state out out of " path)
    (cond
       ((path->lines path meta) =>
-         (lambda (data)
+         (λ (data)
             (let ((meta (-> meta (put 'path path) (put 'type 'file))))
                (if (pair? data)
                   (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) meta)
@@ -1948,7 +2025,7 @@
           (total (+ nth (length right)))
           (slider
              (map
-                (lambda (x) (if (eq? x nth) #\x #\space))
+                (λ (x) (if (eq? x nth) #\x #\space))
                 (iota 1 1 (+ total 1))))
           (msg
              (cond
@@ -1991,7 +2068,7 @@
          ((clojure-source? path) clojure-source?)
          ((c-source? path)       c-source?)
          ((web-source? path)     web-source?)
-         (else (lambda (x) #true)))))
+         (else (λ (x) #true)))))
       
          
 (define (led-buffers-action ll left state right action led-buffers)
@@ -2036,11 +2113,11 @@
                ((open path)
                   (cond
                      ((buffer-position left state right path) =>
-                        (lambda (pos)
+                        (λ (pos)
                            (log "Already open at " pos)
                            (led-buffers-action ll left state right (tuple 'buffer pos) led-buffers)))
                      ((led-dir->list path) =>
-                        (lambda (subs)
+                        (λ (subs)
                            (notify buff (str "Opening directory " path))
                            (lets
                               ((w h (buffer-screen-size buff)) 
@@ -2059,7 +2136,7 @@
                   (if (and what (> (string-length what) 0))
                      (lets
                         ((index (last left #false))
-                         (ibuff (if index (ref index 1) #f))
+                         (ibuff (if index (ref index 1) buff))
                          (w h (buffer-screen-size buff)))
                         (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
                            (begin
@@ -2070,11 +2147,11 @@
                                        (-> (buffer-meta ibuff) 
                                           (put 'type 'search-results))
                                        (run-search what (buffer->lines ibuff)
-                                          (lambda (msg) (notify ibuff msg))
+                                          (λ (msg) (notify ibuff msg))
                                           (allowed-search-from buff))))
                                  right (str "Searched for '" what "'")))
                            (led-buffers ll left state right
-                              "No index buffer found")))
+                              "search: no directory buffer at 1")))
                      (led-buffers ll left state right
                         "Move cursor over something to search")))
                ((buffer n)
@@ -2118,7 +2195,7 @@
       (if (null? paths)
          (append (reverse left) (cons state right))
          (led-buffers-action null left state right (tuple 'open (car paths))
-            (lambda (ll left state right result)
+            (λ (ll left state right result)
                (log "led-buffers-action response to opening " (car paths) " is " result)
                (if result
                   (loop left state right (cdr paths))
@@ -2133,11 +2210,11 @@
          (set-cursor 1 1)))
    '(output
       (fold
-         (lambda (out bg)
+         (λ (out bg)
             (fold
-               (lambda (out fg)
+               (λ (out fg)
                   (fold
-                     (lambda (out att)
+                     (λ (out att)
                         (tio*
                            (font-attrs att fg bg)
                            (raw (string->list (str att ";" fg ";" bg " ")))
@@ -2155,7 +2232,7 @@
          (disable-line-wrap))))
 
 (define sink 
-   (lambda x x))
+   (λ x x))
 
 ;; dict -> meta | #false
 (define (load-settings dict)
@@ -2172,13 +2249,13 @@
          ((not config-port)
             empty-config)
          ((force-ll (lines config-port)) =>
-            (lambda (lines)
+            (λ (lines)
                (buffer-meta
                   (fold
-                     (lambda (buff cmd)
+                     (λ (buff cmd)
                         (log "led eval: " cmd)
                         (led-eval null buff empty-undo 'command 
-                            (lambda (ll buff undo mode) buff)
+                            (λ (ll buff undo mode) buff)
                             sink cmd))
                      (make-empty-buffer 10 10 empty-config)
                      lines))))

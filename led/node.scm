@@ -10,17 +10,20 @@
       node-screen-width
       node-screen-representation
       node-width
+      text-width
       encode-node
           
       take-printable
       drop-printable
       printable-length
+      line->code-points
       render-node
       render-code-point
             
       tab-node
       hex-node
       whitespace?
+      word-char?
       word-delim-char?
       drop-leading-whitespace)
    
@@ -105,6 +108,15 @@
             ((eq? node tab-node) #true)
             (else #false)))
       
+      (define (word-char? node)
+         (cond
+            ((whitespace? node) #false)
+            ((tuple? node) #false)
+            ;; fixme: delimiter? + unify with other such ops
+            ((has? '(#\( #\) #\" #\[ #\] #\{ #\}) node)
+               #false)
+            (else #true)))
+      
       (define (drop-leading-whitespace lst)
          (cond
             ((null? lst) lst)
@@ -143,6 +155,9 @@
             ((tuple? x) (node-screen-width x))
             (else (error "node-width: " x))))
       
+      (define (text-width ns)
+         (fold (lambda (l n) (+ l (node-width n))) 0 ns))
+      
       (define (encode-node k tl)
          (cond 
             ((eq? (type k) type-fix+)
@@ -158,7 +173,7 @@
               (cond
                 ((eq? (type x) type-fix+)
                   ;; a printable unicode code point
-                  (if (eq? 0 (fxband x #x80))
+                  (if (eq? x (fxband x #x7f))
                     ;; a printable ascii range thingie (usual suspect)
                     (cons x (take-printable line (- n 1)))
                     (encode-point x
@@ -176,7 +191,29 @@
                   (error "take-printable: what is " x)))))
           (else
             null)))
-    
+   
+      (define (line->code-points line)
+         (foldr
+            (lambda (node tl)
+               (cond
+                  ((eq? (type node) type-fix+)
+                     (cons node tl))
+                  ((and (tuple? node) (eq? (ref node 1) 'replace))
+                     (append (ref node 2) tl))
+                  (else
+                     (error "line->code-points: what is " node))))
+            null line))
+       
+      ;; render as UTF-8 encoded actual data (not screen representation)
+      (define (render-node node tl)
+         (cond
+            ((eq? (type node) type-fix+)
+               (encode-point node tl))
+            ((and (tuple? node) (eq? (ref node 1) 'replace))
+               (foldr render-node tl (ref node 2)))
+            (else
+               (error "render-node: what is " node))))
+      
       ;; render as UTF-8 encoded actual data (not screen representation)
       (define (render-node node tl)
          (cond
