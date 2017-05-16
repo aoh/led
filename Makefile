@@ -20,11 +20,11 @@ bin/led: led.c
 	mkdir -p bin
 	$(CC) $(CFLAGS) -o bin/led led.c
 
-led.c: led/led.scm led/terminal.scm
+led.c: led/*.scm
 	make bin/ol
 	bin/ol $(OFLAGS) -o led.c led/led.scm
 
-led.fasl: bin/ol led/led.scm led/terminal.scm
+led.fasl: bin/ol led/*.scm
 	make bin/ol
 	bin/ol -o led.fasl led/led.scm
 
