@@ -80,7 +80,7 @@
                (search-results what (cdr where) log ok? searched end))
             ((file->list (car where)) =>
                (lambda (data)
-                  (log (str "Searching from '" (car where) "'"))
+                  ; (log (str "Searching from '" (car where) "'"))
                   (file-results what (car where) data end
                      (lambda ()
                         (search-results what (cdr where) log ok? (cons (car where) searched) end)))))
