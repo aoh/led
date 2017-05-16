@@ -48,7 +48,7 @@
                      (loop (cdr data) (+ x 1) y (- n 1)
                         (cons (car data) l)
                         (cons 
-                           (str path "+" y "." x ": " line)
+                           (str path ":" y ":" x ": " line)
                            tail))))
                ((eq? 10 (car data))
                   (if (> (time) end)
