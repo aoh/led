@@ -48,7 +48,7 @@
                      (loop (cdr data) (+ x 1) y (- n 1)
                         (cons (car data) l)
                         (cons 
-                           (str path "+" y "." x ": " line)
+                           (str path ":" y ":" x ": " line)
                            tail))))
                ((eq? 10 (car data))
                   (if (> (time) end)
@@ -80,7 +80,7 @@
                (search-results what (cdr where) log ok? searched end))
             ((file->list (car where)) =>
                (lambda (data)
-                  (log (str "Searching from '" (car where) "'"))
+                  ; (log (str "Searching from '" (car where) "'"))
                   (file-results what (car where) data end
                      (lambda ()
                         (search-results what (cdr where) log ok? (cons (car where) searched) end)))))

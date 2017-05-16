@@ -1001,7 +1001,8 @@
              (lst (buffer->bytes buff))
              (n (length lst))
              (res (if port (byte-stream->port lst port) #f)))
-            (close-port port)
+            (if port 
+               (close-port port))
             (if res
                (values #true
                   (foldr render null 
@@ -1154,6 +1155,14 @@
       ll
       (cons (tuple 'key key)
          (keys ll key (- n 1)))))
+
+(define (command-keys lst n)
+   (if (null? lst)
+      n
+      (cons (tuple 'esc)
+         (append
+            (map (λ (x) (tuple 'key x)) lst)
+            (cons (tuple 'enter) n)))))
 
 (define (line-left l r n)
    (cond
@@ -1356,6 +1365,7 @@
          (map (convert-paren meta) (map string->list (force-ll (lines fd))))
          #false)))
 
+;; fixme: led-eval is silly
 (define (led-eval ll buff undo mode cont notify exp)
    (cond
       ((equal? exp "")
@@ -1374,7 +1384,7 @@
       ((equal? exp "n")
         (values ll buff undo mode 'new))
       ((m/^n [^ ]+$/ exp)
-         (values ll buff undo mode (tuple 'open (s/n +// exp))))
+         (values ll buff undo mode (tuple 'open (s/n +// exp) null)))
       ((equal? exp "vi")
         (cont ll buff undo 'insert))
       ((m/^w / exp)
@@ -1468,6 +1478,9 @@
             (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
       ((m/^search .*/ exp)
          (values ll buff undo mode (tuple 'search (s/search // exp))))
+      ((m/settings/ exp)
+         ;; open a settings buffer
+         (values ll buff undo mode 'settings))
       (else
          (cont ll buff undo mode))))
 
@@ -1624,25 +1637,19 @@
                lst)))))
 
 (define (directory-contents prefix contents)
-   (lets 
-      ((prefix
-          (cond
-             ((equal? prefix ".") null)
-             ((equal? prefix "/") '(#\/))
-             ((m/.*\/$/ prefix) (string->list prefix))
-             (else 
-                (append (string->list prefix) '(#\/))))))
-      (log "prefix list is " prefix)
-      (map
-         (λ (x)
-            (append prefix (string->list x)))
-         contents)))
+   (map
+      (λ (x)
+         (string->list
+            (if (equal? prefix ".")
+               (s/^\.\/// x)
+               x)))
+      contents))
 
 (define word-chars 
    (fold (λ (ff x) (put ff x x))
       #empty
       (string->list
-         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>")))
+         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>.")))
 
 (define (word-char? x)
    (getf word-chars x))
@@ -1652,42 +1659,50 @@
           (r _ (take-while word-char? (nodes->code-points r))))
       (list->string (append (reverse l) r))))
 
+;; translate part after file link possibly into a command 
+;;   e.g. foo/bar.txt:8 -> suffix = "8" -> '(#\: #\8)
+;; arbitrary command are not allowed for security reasons
+(define (maybe-string->command s)
+   (cond
+      ((m/^[0-9]+$/ s)
+         (cons #\: (string->list s)))
+      ((m/^\/[a-zA-ZäöÄÖ0-9 _.-]*\/$/ s)
+         (reverse (cdr (reverse (string->list s)))))
+      (else null)))
+   
+;; todo: add a recursive-open flag
 (define (command-do ll buff undo mode r cont)
-   (lets ((u d l r x y w h off meta buff)
-          (type (get meta 'type 'file)))
+   (lets 
+      ((u d l r x y w h off meta buff)
+       (line (list->string (foldr render-node null (append (reverse l) r))))
+       (parts (c/:/ line)))
       (cond
-         ((eq? type 'directory)
-            (let ((line (list->string (foldr render-node null (append (reverse l) r)))))
-               (log "Opening '" line "' from directory buffer")
-               (cond
-                  ((file? line)
-                     (log "Opening or switching to file '" line "'")
-                     (values ll buff undo mode (tuple 'open line)))
-                  ((directory? line)
-                     (let ((dp (drop-dir-contents d line)))
-                        (log "dropping length " (length d) " -> " (length dp))
-                        (if (eq? dp d) ;; no prefixed lines, open it
-                           (let ((contents (led-dir->list line)))
-                              (if contents
-                                 (cont ll
-                                    (buffer u 
-                                       (append (directory-contents line contents) d)
-                                       l r x y w h off meta)
-                                    (push-undo undo buff) mode)
-                                 (begin
-                                    (notify buff (str "Cannot read '" line "'"))
-                                    (cont ll buff undo mode))))
-                           (let ((buffp (buffer u dp l r x y w h off meta)))
-                              (cont ll buffp (push-undo undo buff) mode)))))
-                  (else
-                     (notify buff (str "Cannot open '" line "'."))
-                     (cont ll buff undo mode)))))
-         ((eq? type 'file)
-            (let ((word (current-word l r)))
-               (values ll buff undo mode (tuple 'search word))))
+         ((and (pair? parts) (file? (car parts)))
+            (log "do: open file '" line "' with args " (cdr parts))
+            (values ll buff undo mode (tuple 'open (car parts) 
+               (if (pair? (cdr parts))
+                  (maybe-string->command (cadr parts))
+                  null))))
+         ((directory? line)
+            (let ((dp (drop-dir-contents d line)))
+               (log "dropping length " (length d) " -> " (length dp))
+               (if (eq? dp d) ;; no prefixed lines, open it
+                  (let ((contents (led-dir-recursive->list line)))
+                     (if contents
+                        (cont ll
+                           (buffer u 
+                              (append (map string->list contents) d)
+                              l r x y w h off meta)
+                           (push-undo undo buff) mode)
+                        (begin
+                           (notify buff (str "Cannot read '" line "'"))
+                           (cont ll buff undo mode))))
+                  (let ((buffp (buffer u dp l r x y w h off meta)))
+                     (cont ll buffp (push-undo undo buff) mode)))))
          (else
-            (notify buff (str "Cannot do in buffer of type '" type "' yet."))
-            (cont ll buff undo mode)))))
+            (let ((word (current-word l r)))
+               (log "Current word is " word)
+               (values ll buff undo mode (tuple 'search word)))))))
 
 (define (command-go-home ll buff undo mode ran cont)
    (values ll buff undo mode (tuple 'buffer 1)))
@@ -1992,6 +2007,15 @@
           (buff (make-empty-buffer w h #empty)))
       (tuple buff (initial-undo buff) 'command)))
 
+(define (make-new-state-having buff type content)
+   (lets ((w h (buffer-screen-size buff))
+          (buff 
+             (make-buffer-having w h 
+                (-> #empty
+                   (put 'type type))
+                content)))
+      (tuple buff (initial-undo buff) 'command)))
+
 (define (make-file-state w h path meta)
    (log "making file state out out of " path)
    (cond
@@ -2057,7 +2081,7 @@
 
 ;; somewhat hardcoded for now
 (define scheme-source?  m/\.scm$/)
-(define clojure-source? m/\.clj[cx]?$/)
+(define clojure-source? m/\.clj[cxs]?$/)
 (define c-source?       m/\.(c|cc|C|h|H|cpp|cxx)$/)
 (define web-source?     m/\.(js|x?html?|css)$/)
 
@@ -2108,14 +2132,18 @@
             (log "making new buffer")
             (lets ((new-state (make-new-state buff)))
                (led-buffers ll (cons state left) new-state right "new scratch buffer")))
+         ((eq? action 'settings)
+            (log "making a new settings buffer")
+            (lets ((new-state (make-new-state-having buff 'settings '((97 98 99)))))
+               (led-buffers ll (cons state left) new-state right "new settings buffer")))
          ((tuple? action)
             (tuple-case action
-               ((open path)
+               ((open path init)
                   (cond
                      ((buffer-position left state right path) =>
                         (λ (pos)
                            (log "Already open at " pos)
-                           (led-buffers-action ll left state right (tuple 'buffer pos) led-buffers)))
+                           (led-buffers-action (command-keys init ll) left state right (tuple 'buffer pos) led-buffers)))
                      ((led-dir->list path) =>
                         (λ (subs)
                            (notify buff (str "Opening directory " path))
@@ -2128,7 +2156,7 @@
                         (notify buff (str "opening " path "..."))
                         (lets ((new (path->buffer-state path (buffer-meta buff) buff)))
                            (if new
-                              (led-buffers ll (cons state left) new right "")
+                              (led-buffers (command-keys init ll) (cons state left) new right "")
                               (begin
                                  (log "failed to open " path)
                                  (led-buffers ll left state right #false)))))))
@@ -2194,7 +2222,7 @@
       (log "open all files loop " paths)
       (if (null? paths)
          (append (reverse left) (cons state right))
-         (led-buffers-action null left state right (tuple 'open (car paths))
+         (led-buffers-action null left state right (tuple 'open (car paths) null)
             (λ (ll left state right result)
                (log "led-buffers-action response to opening " (car paths) " is " result)
                (if result
