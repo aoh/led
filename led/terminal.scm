@@ -186,7 +186,7 @@
                (mail 'logger (tuple 'raw-in (car ll)))
                (cons (car ll) (logger (cdr ll))))
             (else
-               (lambda () (logger (ll))))))
+               (λ () (logger (ll))))))
 
       ;; convert this to a proper stream parser later
       (define (terminal-input . opt)
@@ -570,7 +570,7 @@
               (values x y w ll)))
 
       (define editable-readline 
-        (case-lambda
+        (case-lambda 
           (() 
             (lets ((x y w ll (get-dimensions (terminal-input))))
               (readline ll null x y w)))

@@ -71,7 +71,7 @@
       (define (buffer->lines buff) 
          (lets ((u d l r x y w h off meta buff))
             (log "buffer->lines bound")
-            (map (lambda (line) (list->string (foldr render-code-point null line)))
+            (map (λ (line) (list->string (foldr render-code-point null line)))
                (append (reverse u)
                   (cons (append (reverse l) r) d)))))
       ))

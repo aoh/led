@@ -55,7 +55,7 @@
          (or (eq? x #\space) (eq? x 9)))
     
       (define word-delim-chars
-         (fold (lambda (ff x) (put ff x x))
+         (fold (λ (ff x) (put ff x x))
             empty
             (string->list "\"'()[]{}")))
        
@@ -156,7 +156,7 @@
             (else (error "node-width: " x))))
       
       (define (text-width ns)
-         (fold (lambda (l n) (+ l (node-width n))) 0 ns))
+         (fold (λ (l n) (+ l (node-width n))) 0 ns))
       
       (define (encode-node k tl)
          (cond 
@@ -194,7 +194,7 @@
    
       (define (line->code-points line)
          (foldr
-            (lambda (node tl)
+            (λ (node tl)
                (cond
                   ((eq? (type node) type-fix+)
                      (cons node tl))

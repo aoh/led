@@ -20,7 +20,7 @@
 
       (define (get-key k)
          (get-key-if 
-            (lambda (x) (eq? x k))))
+            (λ (x) (eq? x k))))
       
       (define (lc-alpha? cp)
          (cond
@@ -36,17 +36,17 @@
 
       (define get-leading-digit
          (get-key-if
-            (lambda (x) (<= #\1 x #\9))))
+            (λ (x) (<= #\1 x #\9))))
          
       (define get-digit
          (get-key-if
-            (lambda (x) (<= #\0 x #\9))))
+            (λ (x) (<= #\0 x #\9))))
 
       (define get-integer
          (let-parses
             ((a get-leading-digit)
              (as (get-greedy* get-digit)))
-            (fold (lambda (x a) (+ (* x 10) (- a #\0))) 0 (cons a as))))
+            (fold (λ (x a) (+ (* x 10) (- a #\0))) 0 (cons a as))))
 
       (define (key-value key value)
          (let-parses
@@ -98,15 +98,15 @@
       (define (parse-command ll)
          (print "parsing " ll)
          (get-command ll
-            (lambda (data fail val pos)
+            (λ (data fail val pos)
                (values val data))
-            (lambda (pos reason)
+            (λ (pos reason)
                (values #false ll))
             0))
          
       (define (try str)
          (print "trying " str)
-         (lets ((res ll (parse-command (map (lambda (x) (tuple 'key x)) (string->list str)))))
+         (lets ((res ll (parse-command (map (λ (x) (tuple 'key x)) (string->list str)))))
             (print "'" str "' -> " res " + " ll)))
 
       (define (try-terminal)

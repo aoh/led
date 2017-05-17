@@ -13,7 +13,6 @@
 
 
 ;; temporary workaround until owl upgrade
-(define (directory? x) (list? (dir->list x)))
 (define (file? x) (let ((p (open-input-file x))) (if p (begin (close-port p) #true) #false)))
 
 (define version-str "led v0.1a")
@@ -54,11 +53,18 @@
                (raw (take-printable these w))
                (draw-lines-at-offset w dx (+ y dy) dy end (cdr lines))
                tl)))))
-                  
+
+(define (meta-dimensions meta)
+   (let ((glob (get meta 'global #empty)))
+      (values 
+         (get glob 'width 20)
+         (get glob 'height 10))))
+
 (define (update-screen buff)
    (log "FULL UPDATE SCREEN")
    (lets 
       ((u d l r x y w h off meta buff)
+       (w h (meta-dimensions meta))
        (this (append (reverse l) r)))
       (tio
           (clear-screen)
@@ -109,6 +115,7 @@
       (lets 
          ((ou od ol or ox oy ow oh ooff meta old)
           (nu nd nl nr nx ny w h noff meta new)
+          (w h (meta-dimensions meta))
           (old-this (append (reverse ol) or))
           (new-this (append (reverse nl) nr))
           (nu (cons new-this nu))
@@ -131,6 +138,7 @@
 (define (scroll-right buff)
    (lets 
       ((u d l r x y w h off meta buff)
+       (w h (meta-dimensions meta))
        (dx dy off)
        (step (* 2 (div w 3)))
        (buff (buffer u d l r (- x step) y w h (cons (+ dx step) dy) meta)))
@@ -139,6 +147,7 @@
 (define (scroll-left buff)
    (lets 
       ((u d l r x y w h off meta buff)
+       (w h (meta-dimensions meta))
        (dx dy off))
       (if (eq? dx 1)
         buff
@@ -150,6 +159,7 @@
 (define (scroll-down buff)
    (lets 
     ((u d l r x y w h off meta buff)
+     (w h (meta-dimensions meta))
      ;(step (+ 1 (* 2 (div h 3))))
      (step 1)
      (dx dy off)
@@ -160,6 +170,7 @@
 (define (scroll-up buff)
    (lets 
     ((u d l r x y w h off meta buff)
+     (w h (meta-dimensions meta))
      (dx dy off)
      ;(step (min dy (+ 1 (* 2 (div h 3)))))
      (step (min dy 1))
@@ -170,6 +181,7 @@
 (define (log-buff buff undo mode)
   (lets
     ((u d l r x y w h off meta buff)
+     (w h (meta-dimensions meta))
      (dx dy off)
      (x (+ dx x))
      (y (+ dy y))
@@ -247,7 +259,9 @@
        l))
       
 (define (insert-handle-key buff k)
-   (lets ((u d l r x y w h off meta buff))
+   (lets 
+      ((u d l r x y w h off meta buff)
+       (w h (meta-dimensions meta)))
       (lets ((node (key-node k meta))
              (nw (node-width node)))
          (log "adding node " node)
@@ -264,7 +278,9 @@
                buff)))))
 
 (define (insert-backspace buff)
-   (lets ((u d l r x y w h off meta buff))
+   (lets 
+      ((u d l r x y w h off meta buff)
+       (w h (meta-dimensions meta)))
       (if (null? l)
          ;; no-op (could also backspace to line above)
          (if (null? u)
@@ -343,6 +359,7 @@
             
 (define (seek-line-end buff)
    (lets ((u d l r x y w h off meta buff)
+          (w h (meta-dimensions meta))
           (step (>> w 1))
           (dx dy off))
       (if (null? r)
@@ -566,6 +583,7 @@
    (if (> (buffer-x buff) 0)
       buff
       (lets ((u d l r x y w h off meta buff)
+             (w h (meta-dimensions meta))
              (dx dy off))
          (let loop ((x x) (dx dx))
             (cond
@@ -635,6 +653,7 @@
 ;; move line down within the same screen preserving cursor position if possible
 (define (line-down buff ip)
    (lets ((u d l r x y w h off meta buff)
+          (w h (meta-dimensions meta))
           (dx dy off)
           (line (append (reverse l) r))
           (u (cons line u))
@@ -649,6 +668,7 @@
 ;; move line up within the same screen preserving cursor position if possible
 (define (line-up buff ip)
    (lets ((u d l r x y w h off meta buff)
+          (w h (meta-dimensions meta))
           (dx dy off)
           (line (append (reverse l) r))
           (d (cons line d))
@@ -662,7 +682,8 @@
       (buffer u d l r (- x offset) y w h off meta)))
  
 (define (move-arrow buff dir ip)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y w h off meta buff)
+          (w h (meta-dimensions meta)))
       (log "arrow " dir " from " (cons x y) ", dim " (cons w h))
       (cond
          ((eq? dir 'up)
@@ -1616,7 +1637,9 @@
           (x (+ (car off) (- x 1)))
           (w h ll (get-terminal-size ll))
           (buff (buffer u d l r x y w (max 1 (- h 1)) off meta))
-          (buff (buffer-seek buff x y #false)))
+          (buff (buffer-seek buff x y #false))
+          (buff (put-global-meta buff 'width w))
+          (buff (put-global-meta buff 'height h)))
       (output (update-screen buff))
       (notify buff (str (get-buffer-meta buff 'type "*scratch*") " " (buffer-path buff "")))
       (cont ll buff undo mode)))
@@ -1666,7 +1689,7 @@
    (cond
       ((m/^[0-9]+$/ s)
          (cons #\: (string->list s)))
-      ((m/^\/[a-zA-ZäöÄÖ0-9 _.-]*\/$/ s)
+      ((m/^\/[a-zA-ZäöÄÖ0-9 _.- !]*\/$/ s)
          (reverse (cdr (reverse (string->list s)))))
       (else null)))
    
@@ -2166,20 +2189,16 @@
                         ((index (last left #false))
                          (ibuff (if index (ref index 1) buff))
                          (w h (buffer-screen-size buff)))
-                        (if (and ibuff (eq? 'directory (get-buffer-meta ibuff 'type #false)))
-                           (begin
-                              (log "Searching for " what)
-                              (led-buffers ll (cons state left)
-                                 (initial-state
-                                    (make-buffer-having w h 
-                                       (-> (buffer-meta ibuff) 
-                                          (put 'type 'search-results))
-                                       (run-search what (buffer->lines ibuff)
-                                          (λ (msg) (notify ibuff msg))
-                                          (allowed-search-from buff))))
-                                 right (str "Searched for '" what "'")))
-                           (led-buffers ll left state right
-                              "search: no directory buffer at 1")))
+                        (log "Searching for " what)
+                        (led-buffers ll (cons state left)
+                           (initial-state
+                              (make-buffer-having w h 
+                                 (-> (buffer-meta ibuff) 
+                                    (put 'type 'search-results))
+                                 (run-search what (buffer->lines ibuff)
+                                    (λ (msg) (notify ibuff msg))
+                                    (allowed-search-from buff))))
+                           right (str "Searched for '" what "'")))
                      (led-buffers ll left state right
                         "Move cursor over something to search")))
                ((buffer n)
@@ -2203,7 +2222,17 @@
          (else
             (log "unknown buffer action " action)
             (led-buffers ll left state right #false)))))
-   
+
+(define (copy-global-settings old new)
+   (if (eq? old new)
+      new
+      (lets ((ob ou om old)
+             (nb nu nm new))
+          (tuple 
+             (put-buffer-meta nb 'global
+                (get-buffer-meta ob 'global #empty))
+             nu nm))))
+
 (define (led-buffers ll left state right msg)
    (lets ((buff undo mode state)
           (_ (output (update-screen buff)))
@@ -2211,7 +2240,12 @@
           (ll buff undo mode action (led-buffer ll buff undo mode))
           (state (tuple buff undo mode)))
       (log "led-buffers: action " action)
-      (led-buffers-action ll left state right action led-buffers)))
+      (led-buffers-action ll left state right action 
+         (λ (ll left statep right msg)
+            ;; copy global settings from the old buffer to the new one
+            (led-buffers ll left
+               (copy-global-settings state statep)
+               right msg)))))
 
 ; (define (led-buffers-action ll left state right action led-buffers)
    
@@ -2263,13 +2297,18 @@
    (λ x x))
 
 ;; dict -> meta | #false
-(define (load-settings dict)
+(define (load-settings dict terminal-width terminal-height)
    (lets/cc ret
       ((config-path 
          (or (getf dict 'config)
              (str (or (getenv "HOME") ".")
                   "/.ledrc")))
-       (empty-config #empty)
+       (empty-config 
+          (-> #empty
+             (put 'global
+                (-> #empty
+                   (put 'width terminal-width)
+                   (put 'height terminal-height)))))
        (config-port 
          (open-input-file config-path)))
       (log "loading config from " config-path)
@@ -2298,7 +2337,7 @@
     (log "dimensions " (cons w h))
     (initial-terminal-setup)
     (lets
-      ((meta (load-settings dict))
+      ((meta (load-settings dict w h))
        (states
          (open-all-files args w h meta)))
       (cond
