@@ -61,9 +61,9 @@
          (get glob 'height 10))))
 
 (define (update-screen buff)
-   (log "FULL UPDATE SCREEN")
+   ;(log "FULL UPDATE SCREEN")
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (w h (meta-dimensions meta))
        (this (append (reverse l) r)))
       (tio
@@ -113,8 +113,8 @@
          (log " - full share")
          null)
       (lets 
-         ((ou od ol or ox oy ow oh ooff meta old)
-          (nu nd nl nr nx ny w h noff meta new)
+         ((ou od ol or ox oy ooff meta old)
+          (nu nd nl nr nx ny noff meta new)
           (w h (meta-dimensions meta))
           (old-this (append (reverse ol) or))
           (new-this (append (reverse nl) nr))
@@ -137,50 +137,49 @@
     
 (define (scroll-right buff)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (w h (meta-dimensions meta))
        (dx dy off)
        (step (* 2 (div w 3)))
-       (buff (buffer u d l r (- x step) y w h (cons (+ dx step) dy) meta)))
+       (buff (buffer u d l r (- x step) y (cons (+ dx step) dy) meta)))
       buff))
 
 (define (scroll-left buff)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (w h (meta-dimensions meta))
        (dx dy off))
       (if (eq? dx 1)
         buff
         (lets
           ((step (min dx (* 2 (div w 3))))
-           (buff (buffer u d l r (+ x step) y w h (cons (- dx step) dy) meta)))
+           (buff (buffer u d l r (+ x step) y (cons (- dx step) dy) meta)))
           buff))))
 
 (define (scroll-down buff)
    (lets 
-    ((u d l r x y w h off meta buff)
+    ((u d l r x y off meta buff)
      (w h (meta-dimensions meta))
      ;(step (+ 1 (* 2 (div h 3))))
      (step 1)
      (dx dy off)
      (buff 
-      (buffer u d l r x (- y step) w h (cons dx (+ dy step)) meta)))
+      (buffer u d l r x (- y step) (cons dx (+ dy step)) meta)))
     buff))
 
 (define (scroll-up buff)
    (lets 
-    ((u d l r x y w h off meta buff)
+    ((u d l r x y off meta buff)
      (w h (meta-dimensions meta))
      (dx dy off)
-     ;(step (min dy (+ 1 (* 2 (div h 3)))))
      (step (min dy 1))
      (buff 
-      (buffer u d l r x (+ y step) w h (cons dx (- dy step)) meta)))
+      (buffer u d l r x (+ y step) (cons dx (- dy step)) meta)))
     buff))
 
 (define (log-buff buff undo mode)
   (lets
-    ((u d l r x y w h off meta buff)
+    ((u d l r x y off meta buff)
      (w h (meta-dimensions meta))
      (dx dy off)
      (x (+ dx x))
@@ -202,7 +201,9 @@
          (cursor-restore)))))
 
 (define (notify buff txt)
-   (lets ((u d l r x y w h off meta buff))
+   (lets 
+      ((u d l r x y off meta buff)
+       (w h (meta-dimensions meta)))
       (output
          (tio
             (set-cursor 1 (+ h 1))
@@ -260,7 +261,7 @@
       
 (define (insert-handle-key buff k)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (w h (meta-dimensions meta)))
       (lets ((node (key-node k meta))
              (nw (node-width node)))
@@ -270,8 +271,8 @@
                (lets ((lp (maybe-unabbreviate buff l))
                       (x (if (eq? l lp) x (+ 1 (text-width lp)))))
                   ;(log "insert of key " k " at " (cons x y) " = " node)
-                  (buffer u d (cons node lp) r (+ x nw) y w h off meta))
-               (buffer u d (cons node l) r (+ x nw) y w h off meta))
+                  (buffer u d (cons node lp) r (+ x nw) y off meta))
+               (buffer u d (cons node l) r (+ x nw) y off meta))
             (lets
                ((buff (scroll-right buff))
                 (buff (insert-handle-key buff k)))
@@ -279,7 +280,7 @@
 
 (define (insert-backspace buff)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (w h (meta-dimensions meta)))
       (if (null? l)
          ;; no-op (could also backspace to line above)
@@ -293,12 +294,12 @@
                    (q x (quotrem (+ line-len 1) w))
                    (xp (* q w))
                    (buffp
-                     (buffer u d (reverse line) r x (- y 1) w h (cons xp (cdr off)) meta)))
+                     (buffer u d (reverse line) r x (- y 1) (cons xp (cdr off)) meta)))
                   (log "backspace")
                   buffp)))
          (let ((cw (node-width (car l))))
            (if (> x cw)
-            (buffer u d (cdr l) r (- x cw) y w h off meta)
+            (buffer u d (cdr l) r (- x cw) y off meta)
             (lets 
                ((buff (scroll-left buff))
                 (buff (insert-backspace buff)))
@@ -358,7 +359,7 @@
             (step-zipper (cdr l) (cons (car l) r) (+ n 1))))))
             
 (define (seek-line-end buff)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (w h (meta-dimensions meta))
           (step (>> w 1))
           (dx dy off))
@@ -367,7 +368,7 @@
          (let loop ((l l) (r r) (x x) (dx dx))
             (cond
                ((null? (cdr r))
-                  (buffer u d l r x y w h (cons dx dy) meta))
+                  (buffer u d l r x y (cons dx dy) meta))
                ((eq? x w)
                   (loop l r (- x step) (+ dx step)))
                (else
@@ -420,7 +421,7 @@
 
 ;; buff movement-exp -> n | dy dx
 (define (movement buff n type)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (cond
          ((eq? type 'end-of-line)
             (values (- n 1) (length r)))
@@ -463,7 +464,7 @@
 
 ;; buff -> dy dx | #f #f, use new movement deltas
 (define (movement-matching-paren-forward buff)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (let loop ((x 0) (y 0) (r r) (d d) (depth 0))
          (cond
             ((null? r)
@@ -509,10 +510,10 @@
                ((eq? k #\l) 
                   (values ll 0 n))
                ((eq? k #\$)
-                  (lets ((u d l r x y w h off meta buff))
+                  (lets ((u d l r x y off meta buff))
                      (values ll 0 (length r))))
                ((eq? k #\w) 
-                  (lets ((u d l r x y w h off meta buff)
+                  (lets ((u d l r x y off meta buff)
                          (dy dx rp dp (next-words r d n)))
                       (values ll dy dx)))
                ((eq? k #\%) 
@@ -533,7 +534,7 @@
                            (values ll #f #f))
                         ((get (get-buffer-meta buff 'marks #empty) k #false) =>
                            (λ (pos)
-                              (lets ((u d l r x y w h off meta buff)
+                              (lets ((u d l r x y off meta buff)
                                      (dx dy off)
                                      (mx my pos)
                                      (tx (+ (- x 1) dx))
@@ -582,19 +583,19 @@
 (define (maybe-scroll-left buff)
    (if (> (buffer-x buff) 0)
       buff
-      (lets ((u d l r x y w h off meta buff)
+      (lets ((u d l r x y off meta buff)
              (w h (meta-dimensions meta))
              (dx dy off))
          (let loop ((x x) (dx dx))
             (cond
                ((> x 0)
-                  (buffer u d l r x y w h (cons dx dy) meta))
+                  (buffer u d l r x y (cons dx dy) meta))
                (else
                   (let ((step (min dx w)))
                      (loop (+ x step) (- dx step)))))))))
       
 (define (cut-relative-movement ll buff dy dx)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (cond
          ((eq? dy 0)
             (if (< dx 0)
@@ -603,48 +604,49 @@
                       (rcut l (split l (* dx -1))))
                   (values ll
                      (maybe-scroll-left 
-                        (buffer u d l r (+ 1 (- x (printable-length rcut))) y w h off meta))
+                        (buffer u d l r (+ 1 (- x (printable-length rcut))) y off meta))
                      (tuple 'sequence (reverse rcut))))
                ;; cut forwards, oneline
                (lets ((r d cut (cut-forward r d dy dx)))
-                  (values ll (buffer u d l r x y w h off meta) cut))))
+                  (values ll (buffer u d l r x y off meta) cut))))
          ((< dy 0)
             ;; cut backwards, multiple lines
             (lets 
                ((l r (step-zipper l r 1)) ;; include char at cursor if there
                 (u l cut (cut-backward-multiline u l (* -1 dy) dx)))
                ;; fixme, scrolling
-               (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut)))
+               (values ll (buffer u d l r (+ 1 (printable-length l)) y off meta) cut)))
          (else
             (lets 
                ((r d cut (cut-forward r d dy dx)))
                (log "cut forwards")
-               (values ll (buffer u d l r (+ 1 (printable-length l)) y w h off meta) cut))))))
+               (values ll (buffer u d l r (+ 1 (printable-length l)) y off meta) cut))))))
 
 (define (seek-line-start buff)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (dx dy off)
           (buffp 
-            (buffer u d null (append (reverse l) r) 1 y w h (cons 0 dy) meta)))
+            (buffer u d null (append (reverse l) r) 1 y (cons 0 dy) meta)))
          buffp))
 
 ;; row+1 = y + dy, dy = row + 1 - y
 (define (buffer-seek buff x y screen-y)
    (log "buffer seek" x "," y ", y row at " screen-y)
-   (lets ((u d l r old-x old-y w h off meta buff)
+   (lets ((u d l r old-x old-y off meta buff)
+          (w h (meta-dimensions meta))
           (lines (append (reverse u) (list (append (reverse l) r)) d))
           (u line d y (seek-line lines y))
           (step (>> w 1))
           (yp (or screen-y (if (< y h) (+ y 1) (>> h 1)))) ;; real or middle of screen
           (dy (- (+ y 1) yp))
-          (buff (buffer u d null line 1 yp w h off meta)))
+          (buff (buffer u d null line 1 yp off meta)))
          ;; seek right
          (let loop ((xp 1) (pos x) (l null) (r line) (dx 0))
             (cond
                ((>= xp w)
                   (loop (- xp step) pos l r (+ dx step)))
                ((eq? pos 0)
-                  (buffer u d l r xp yp w h (cons dx dy) meta))
+                  (buffer u d l r xp yp (cons dx dy) meta))
                ((null? r)
                   (loop xp 0 l r dx))
                (else
@@ -652,7 +654,7 @@
 
 ;; move line down within the same screen preserving cursor position if possible
 (define (line-down buff ip)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (w h (meta-dimensions meta))
           (dx dy off)
           (line (append (reverse l) r))
@@ -663,11 +665,11 @@
           (line-pos (+ (- x 1) (car off)))
           (l r offset (seek-in-line line line-pos)))
         ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "', offset " offset) 
-      (buffer u d l r (- x offset) y w h off meta)))
+      (buffer u d l r (- x offset) y off meta)))
 
 ;; move line up within the same screen preserving cursor position if possible
 (define (line-up buff ip)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (w h (meta-dimensions meta))
           (dx dy off)
           (line (append (reverse l) r))
@@ -679,12 +681,12 @@
           (l r offset (seek-in-line line line-pos)))
         ;(log "line-up went to (x . y) " (cons x y))
         ;(log "next line length is " (printable-length line) ", x=" x ", dx=" (car off) ", l='" (list->string l) "', r='" (list->string r) "'")
-      (buffer u d l r (- x offset) y w h off meta)))
+      (buffer u d l r (- x offset) y off meta)))
  
 (define (move-arrow buff dir ip)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (w h (meta-dimensions meta)))
-      (log "arrow " dir " from " (cons x y) ", dim " (cons w h))
+      ;(log "arrow " dir " from " (cons x y) ", dim " (cons w h))
       (cond
          ((eq? dir 'up)
             (cond
@@ -726,13 +728,13 @@
                        ((buff (scroll-left buff))
                         (buff (move-arrow buff dir ip)))
                         buff)
-                     (buffer u d (cdr l) (cons (car l) r) (- x step) y w h off meta)))))
+                     (buffer u d (cdr l) (cons (car l) r) (- x step) y off meta)))))
          ((eq? dir 'right)
             (if (null? r)
                buff
                (let ((step (node-width (car r))))
                   (if (< (+ x step) w)
-                     (buffer u d (cons (car r) l) (cdr r) (+ x step) y w h off meta)
+                     (buffer u d (cons (car r) l) (cdr r) (+ x step) y off meta)
                      (lets
                        ((buff (scroll-right buff))
                         (buff (move-arrow buff dir ip)))
@@ -742,7 +744,7 @@
                buff
                (let ((step (node-width (car r))))
                   (if (< (+ x step) w)
-                     (buffer u d (cons (car r) l) (cdr r) (+ x step) y w h off meta)
+                     (buffer u d (cons (car r) l) (cdr r) (+ x step) y off meta)
                      (lets
                        ((buff (scroll-right buff))
                         (buff (move-arrow buff dir ip)))
@@ -753,7 +755,7 @@
 
 (define (cut-lines ll buff n)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (d (cons (append (reverse l) r) d))
        (taken d (split d n))
        (l null))
@@ -761,16 +763,16 @@
          ;; need to move up, unless u is null
          (if (null? u)
             (values ll
-               (buffer u d null null 1 1 w h '(0 . 0) meta)
+               (buffer u d null null 1 1 '(0 . 0) meta)
                (tuple 'lines taken))
             (lets ((buff (move-arrow buff 'up #f))
-                   (u d l r x y w h off meta buff))
+                   (u d l r x y off meta buff))
                (values ll
-                  (buffer u (cdr d) l r x y w h off meta)
+                  (buffer u (cdr d) l r x y off meta)
                   (tuple 'lines taken))))
          (lets ((r d (uncons d null)))
             (values ll
-               (buffer u d l r 1 y w h (cons 0 (cdr off)) meta)
+               (buffer u d l r 1 y (cons 0 (cdr off)) meta)
                (tuple 'lines taken))))))
    
 ;; ll buff rep self -> ll' buff' tob|#false
@@ -799,7 +801,7 @@
 
 ;; buff → (x . y) | #false
 (define (seek-matching-paren-back buff left? right?)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (let loop 
          ((x (length l)) (y (+ (cdr off) (- y 1))) (l l) (u u) (depth 1))
          (cond
@@ -817,7 +819,7 @@
                (loop (- x 1) y (cdr l) u depth))))))
 
 (define (seek-matching-paren-forward buff left? right?)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (let loop 
          ((x (length l)) (y (+ (cdr off) (- y 1))) (r r) (d d) (depth 0))
          (cond
@@ -858,7 +860,7 @@
          (search-from (car ls) (cdr ls) regex 0 (+ y 1)))))
             
 (define (find-next buff)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (dx dy off)
           (regex (get meta 'search-regex (λ (x) #false)))
           (row (+ (length u) 1))
@@ -880,7 +882,7 @@
 (define (nodes->code-points nodes) (foldr render-code-point null nodes))
 
 (define (buffer->bytes buff)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (nodes->bytes
          (foldr 
             (λ (line tl)
@@ -889,16 +891,16 @@
             (append (reverse u) (list (append (reverse l) r)) d)))))
 
 (define (paste-lines-below buff lines)
-   (lets ((u d l r x y w h off meta buff))
-      (buffer u (append lines d) l r x y w h off meta)))
+   (lets ((u d l r x y off meta buff))
+      (buffer u (append lines d) l r x y off meta)))
 
 (define (paste-sequence buff lst)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (if (null? r)
-         (buffer u d l lst x y w h off meta)
+         (buffer u d l lst x y off meta)
          (lets ((this r r))
             ;; paste after cursor
-            (buffer u d l (cons this (append lst r)) x y w h off meta)))))
+            (buffer u d l (cons this (append lst r)) x y off meta)))))
 
 (define (maybe-join-partials a b d)
    (let ((new (append a b)))
@@ -908,7 +910,7 @@
    
 ;; paste 0-n lines with partial ones at both ends
 (define (paste-line-sequence buff lst)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (this lst (uncons lst null))
           (fulls lasts (split lst (- (length lst) 1)))
           (last _ (uncons lasts null)))
@@ -918,11 +920,11 @@
          (if (null? r)
             (buffer u
                (append fulls (maybe-join-partials last r d))
-               l this x y w h off meta)
+               l this x y off meta)
             (lets ((current r r)) ;; paste after cursor if content
                (buffer u 
                   (append fulls (maybe-join-partials last r d))
-                  l (cons current this) x y w h off meta))))))
+                  l (cons current this) x y off meta))))))
                
 ;;
 ;; Data structures
@@ -962,19 +964,19 @@
 ;; cut forward, for backward move to corresponding open paren and use this
 ;; buff -> buff' msg
 (define (buffer-cut-sexp buff)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (sexp lines (cut-sexp r d 0)))
       (if sexp
          (lets 
             ((r d (uncons lines null))
-             (buff (buffer u d l r x y w h off meta)))
+             (buff (buffer u d l r x y off meta)))
             (values
                (put-buffer-meta buff 'yank (lines->yank sexp))
                "Copied to yank"))
          (values buff "Bad range"))))
 
 (define (paste-yank buff)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (data (getf meta 'yank)))
       (cond
          ((not data)
@@ -996,7 +998,7 @@
  
 (define (mark-position buff char)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (dx dy off)
        (mark-x (+ (- x 1) dx))
        (mark-y (+ (- y 1) dy))
@@ -1042,7 +1044,8 @@
 
 (define (paren-hunter buff seeker left? right?)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
+       (w h (meta-dimensions meta))
        (yp (+ (cdr off) (- y 1))))      ;; yp is at row y on screen currently
       (lets ((match (seeker buff left? right?)))
          (log "matching open paren result " match)
@@ -1056,7 +1059,7 @@
    (λ (y) (eq? x y)))
 
 (define (maybe-seek-matching-paren buff)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (cond
          ((null? r)
             buff)
@@ -1208,7 +1211,7 @@
 ;; indent to next multiple of 'tabstop
 (define (indent-lines buff n)
    (lets
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (current (indented-depth (append (reverse l) r)))
        (tabstop (get meta 'tabstop 3))
        (shift-n (- tabstop (remainder current tabstop))) ;; move to next multiple of tabstop
@@ -1217,7 +1220,7 @@
        (l r (line-left l r shift-n)) ;; move cursor to make x valid again
        (d (map-n (λ (x) (append shift-lst x)) (- n 1) d)))
       (values
-         (buffer u d l r x y w h off meta)
+         (buffer u d l r x y off meta)
          shift-n)))
    
 (define (command-indent ll buff undo mode n cont)
@@ -1254,13 +1257,13 @@
 
 (define (unindent-lines buff n)
    (lets
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (rlp (drop-prefix (reverse l) shift-lst)))
       (if rlp
          (lets ((l (reverse rlp))
                 (l r (line-right l r 3))
                 (d (map-n unindent (- n 1) d))
-                (buffp (buffer u d l r x y w h off meta)))
+                (buffp (buffer u d l r x y off meta)))
              buffp)
           buff)))
          
@@ -1289,13 +1292,13 @@
 (define (command-delete-char ll buff undo mode r cont)
    (lets
       ((undo (push-undo undo buff))
-       (u d l r x y w h off meta buff))
+       (u d l r x y off meta buff))
       (if (null? r)
          (if (null? l)
             (cont ll buff undo mode)
             (lets ((buff (insert-backspace buff)))
                (cont ll buff undo mode)))
-         (lets ((buffp (buffer u d l (cdr r) x y w h off meta)))
+         (lets ((buffp (buffer u d l (cdr r) x y off meta)))
             (cont ll buffp undo mode)))))
 
 (define (command-join-lines ll buff undo mode n cont)
@@ -1303,11 +1306,11 @@
       ((undo (push-undo undo buff))
        (buff (seek-line-end buff))
        (n (if (number? n) n 1)) ;; fixme: no interval handling
-       (u d l r x y w h off meta buff))
+       (u d l r x y off meta buff))
       (let loop ((r r) (d d) (n n))
          (cond
             ((or (null? d) (eq? n 0))
-               (let ((buffp (buffer u d l r x y w h off meta)))
+               (let ((buffp (buffer u d l r x y off meta)))
                   (cont ll buffp undo mode)))
             (else   
                (lets
@@ -1369,7 +1372,7 @@
 
 (define (command-go-to-last-line ll buff undo mode cont)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (last (+ 1 (+ (length u) (length d))))
        (buff (buffer-seek buff 0 last #false)))
       (cont ll buff undo mode "last line")))
@@ -1563,7 +1566,7 @@
    (cont (ilist (tuple 'key #\0) (tuple 'key #\i) ll) buff undo mode))
 
 (define (select-lines ll buff n)
-   (lets ((u d l r x y w h off meta buff))
+   (lets ((u d l r x y off meta buff))
       (if (eq? n 1)
          (values ll (length l) 0 (length r) 0)
          (values ll (length l) 0 (- n 1) 0))))
@@ -1605,9 +1608,9 @@
    (cont ll buff undo mode))
 
 (define (command-change-rest-of-line ll buff undo mode r cont)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (undo (push-undo undo buff))
-          (buff (buffer u d l null x y w h off meta)))
+          (buff (buffer u d l null x y off meta)))
          ;; not having to repaint over these when switching modes reduces flicker for now
          ;(output
          ;   (tio 
@@ -1619,14 +1622,16 @@
          (cont ll buff undo 'insert)))
 
 (define (command-step-forward ll buff undo mode r cont)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
+          (w h (meta-dimensions meta))
           (y (+ (cdr off) (- y 1)))
           (buff (buffer-seek buff (- x 1) (+ y (max 1 (- h 3))) 1)))
       (log "buffer seeking to " (cons x (+ y (max 1 (- h 3)))) " with y at " y)
       (cont ll buff undo mode)))
 
 (define (command-step-backward ll buff undo mode r cont)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
+          (w h (meta-dimensions meta))
           (y (+ (cdr off) (- y 1)))
           (buff (buffer-seek buff (- x 1) (- y (min (- h 3) y)) 1)))
       (cont ll buff undo mode)))
@@ -1696,7 +1701,7 @@
 ;; todo: add a recursive-open flag
 (define (command-do ll buff undo mode r cont)
    (lets 
-      ((u d l r x y w h off meta buff)
+      ((u d l r x y off meta buff)
        (line (list->string (foldr render-node null (append (reverse l) r))))
        (parts (c/:/ line)))
       (cond
@@ -1715,12 +1720,12 @@
                         (cont ll
                            (buffer u 
                               (append (map string->list contents) d)
-                              l r x y w h off meta)
+                              l r x y off meta)
                            (push-undo undo buff) mode)
                         (begin
                            (notify buff (str "Cannot read '" line "'"))
                            (cont ll buff undo mode))))
-                  (let ((buffp (buffer u dp l r x y w h off meta)))
+                  (let ((buffp (buffer u dp l r x y off meta)))
                      (cont ll buffp (push-undo undo buff) mode)))))
          (else
             (let ((word (current-word l r)))
@@ -1734,14 +1739,14 @@
    (lets ((val ll (uncons ll #false))
           (k (key-value val)))
       (if k
-         (lets ((u d l r x y w h off meta buff))
+         (lets ((u d l r x y off meta buff))
             (if (null? r)
                (cont ll buff undo mode)
                (lets
                   ((r (map-n (λ (x) k) ran r))
                    (undo (push-undo undo buff))
                    (buffp
-                      (buffer u d l r x y w h off meta)))
+                      (buffer u d l r x y off meta)))
                   (cont ll buffp undo mode))))
          (cont ll buff undo mode))))
 
@@ -1860,12 +1865,12 @@
    (tuple 'key x))
 
 (define (insert-enter buff)
-   (lets ((u d l r x y w h off meta buff)
+   (lets ((u d l r x y off meta buff)
           (ai (get meta 'ai 'none)))
       (cond
          ((eq? ai 'none)
             (lets
-               ((buffp (buffer u (cons r d) l null x y w h off meta))
+               ((buffp (buffer u (cons r d) l null x y off meta))
                 (buffp (move-arrow (seek-line-start buffp) 'down #true)))
                buffp))
          ((eq? ai 'paren)
@@ -1874,7 +1879,7 @@
                 (buffp
                   (move-arrow 
                      (seek-line-start 
-                        (buffer u (cons (append ind r) d) l null x y w h off meta))
+                        (buffer u (cons (append ind r) d) l null x y off meta))
                      'down #true)))
                (fold
                   (λ (buff node)
@@ -1925,7 +1930,7 @@
       ((eq? mode 'insert)
          (lets
             ((msg ll (uncons ll #false))
-             (u d l r x y w h off meta buff))
+             (u d l r x y off meta buff))
             (log "cursor " (cons x y) ", offset " off ", event " msg)
             (tuple-case msg
                ((key x)
@@ -2046,10 +2051,10 @@
          (λ (data)
             (let ((meta (-> meta (put 'path path) (put 'type 'file))))
                (if (pair? data)
-                  (buffer null (cdr data) null (car data) 1 1 w h (cons 0 0) meta)
-                  (buffer null null null null 1 1 w h (cons 0 0) meta)))))
+                  (buffer null (cdr data) null (car data) 1 1 (cons 0 0) meta)
+                  (buffer null null null null 1 1 (cons 0 0) meta)))))
       (else
-         (buffer null null null null 1 1 w h (cons 0 0) (put meta 'path path)))))
+         (buffer null null null null 1 1 (cons 0 0) (put meta 'path path)))))
 
 (define (path->buffer-state path meta buff)
    (lets ((w h (buffer-screen-size buff))
@@ -2060,7 +2065,7 @@
 
 (define (make-directory-buffer path contents meta w h)
    (lets ((contents (directory-contents path contents))
-          (buff (buffer null (cdr contents) null (car contents) 1 1 w h (cons 0 0) 
+          (buff (buffer null (cdr contents) null (car contents) 1 1 (cons 0 0) 
                    (-> meta 
                       (put 'type 'directory)
                       (put 'path path)))))
@@ -2331,12 +2336,12 @@
             #false))))
 
 (define (start-led dict args ll)
-  (log "start-led " dict ", " args)
-  (lets ((w h ll (get-terminal-size ll))
-         (h (max (- h 1) 1)))
-    (log "dimensions " (cons w h))
-    (initial-terminal-setup)
-    (lets
+   (log "start-led " dict ", " args)
+   (lets ((w h ll (get-terminal-size ll))
+          (h (max (- h 1) 1)))
+   (log "dimensions " (cons w h))
+   (initial-terminal-setup)
+   (lets
       ((meta (load-settings dict w h))
        (states
          (open-all-files args w h meta)))
@@ -2386,23 +2391,25 @@
             (terminal-input stdin)))))
 
 (define (start-led-threads dict args)
-  (cond
-    ((getf dict 'help)
-      (print usage-text)
-      (print (format-rules command-line-rules))
-      0)
-    ((getf dict 'version)
-      (print version-str)
-      0)
-    (else
-      (log "started " dict ", " args)
-      (fork-linked-server 'logger (λ () (start-log dict)))
-      (fork-linked-server 'led (λ () (start-led dict args (led-input-stream dict))))
-      (log "started")
-      (trampoline))))
+   (cond
+      ((getf dict 'help)
+         (print usage-text)
+         (print (format-rules command-line-rules))
+         0)
+      ((getf dict 'version)
+         (print version-str)
+         0)
+      (else
+         (log "started " dict ", " args)
+         (fork-linked-server 'logger (λ () (start-log dict)))
+         (fork-linked-server 'led (λ () (start-led dict args (led-input-stream dict))))
+         (log "started")
+         (trampoline))))
+
 
 (define (main args)
-  (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
+   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
+
 
 main
 
