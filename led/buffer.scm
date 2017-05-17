@@ -49,7 +49,7 @@
       (define (get-global-meta buff key def)
          (get (get-buffer-meta buff 'global #empty) key def))
       
-      (define (screen-width buff) (get-global-meta buff 'widht 10))
+      (define (screen-width buff) (get-global-meta buff 'width 10))
       (define (screen-height buff) (get-global-meta buff 'height 10))
       
       (define (buffer-screen-size buff)
