@@ -894,13 +894,29 @@
    (lets ((u d l r x y off meta buff))
       (buffer u (append lines d) l r x y off meta)))
 
-(define (paste-sequence buff lst)
+(define (paste-lines-above buff lines)
+   (if (null? lines)
+      buff
+      (lets 
+         ((u d l r x y off meta buff)
+          (this (append (reverse l) r))
+          (dx dy off)
+          (d (cons this d)))
+         (buffer u (append (cdr lines) d) null (car lines) 1 y 
+            (cons 0 dy)
+            meta))))
+
+(define (paste-sequence-after buff lst)
    (lets ((u d l r x y off meta buff))
       (if (null? r)
          (buffer u d l lst x y off meta)
          (lets ((this r r))
             ;; paste after cursor
             (buffer u d l (cons this (append lst r)) x y off meta)))))
+
+(define (paste-sequence-before buff lst)
+   (lets ((u d l r x y off meta buff))
+      (buffer u d l (append lst r) x y off meta)))
 
 (define (maybe-join-partials a b d)
    (let ((new (append a b)))
@@ -916,7 +932,7 @@
           (last _ (uncons lasts null)))
       (if (and (null? fulls) (null? last))
           ;; special case, no new lines
-         (paste-sequence buff this)
+         (paste-sequence-after buff this)
          (if (null? r)
             (buffer u
                (append fulls (maybe-join-partials last r d))
@@ -926,12 +942,9 @@
                   (append fulls (maybe-join-partials last r d))
                   l (cons current this) x y off meta))))))
                
-;;
-;; Data structures
 ;;   yank = #(lines <buffer lines>)
 ;;        | #(sequence <sequence of line data>)
 ;;        | #(range <end of line>|#false <buffer lines> <line start>|#false)
-;;
 
 ;; line lines depth -> sexp-lines lines'
 (define (cut-sexp line lines depth)
@@ -952,14 +965,12 @@
             (loop (cdr l) ls (cons (car l) cl) cls
                (+ d (if (left-paren? (car l)) 1 0)))))))
 
-;; fixme: placeholds
 (define (lines->yank lines)
    (cond
       ((null? (cdr lines))
           (tuple 'sequence (car lines)))
        (else
           (tuple 'lines lines))))
-   
    
 ;; cut forward, for backward move to corresponding open paren and use this
 ;; buff -> buff' msg
@@ -987,7 +998,7 @@
                buff))
          ((eq? 'sequence (ref data 1))
             (log "appending sequence from buffer")
-            (lets ((buff (paste-sequence buff (ref data 2))))
+            (lets ((buff (paste-sequence-after buff (ref data 2))))
                buff))
          ((eq? 'line-sequence (ref data 1))
             (log "appending line sequence " (ref data 2) " from buffer")
@@ -1151,10 +1162,28 @@
    (lets ((buff (maybe-seek-matching-paren buff))) 
       (cont ll buff undo mode)))
 
-(define (command-paste ll buff undo mode r cont)
+(define (command-paste-after ll buff undo mode r cont)
    (lets ((undo (push-undo undo buff))
           (buffp (paste-yank buff)))
       (cont ll buffp undo mode "pasted")))
+
+(define blank-yank
+   (tuple 'sequence null))
+
+(define (command-paste-before ll buff undo mode r cont)
+   (tuple-case (get-global-meta buff 'yank blank-yank)
+      ((sequence nodes)
+         (lets
+            ((undo (push-undo undo buff))
+             (buff (paste-sequence-before buff nodes)))
+            (cont ll buff undo mode "pasted")))
+      ((lines ls)
+         (lets
+            ((undo (push-undo undo buff))
+             (buff (paste-lines-above buff ls)))
+            (cont ll buff undo mode "pasted")))
+      (else
+         (log "unknown yank buffer type in paste-before"))))
 
 (define (command-add-line-below ll buff undo mode r cont)
    (cont (ilist (tuple 'key #\A) (tuple 'enter) ll) buff undo mode))
@@ -1789,7 +1818,8 @@
       (put #\l command-move-right)
       (put #\r command-replace-char)
       (put #\h command-move-left)
-      (put #\p command-paste)
+      (put #\P command-paste-before)
+      (put #\p command-paste-after)
       (put #\o command-add-line-below)
       (put #\O command-add-line-above)
       (put #\' command-go-to-mark)
