@@ -1295,10 +1295,14 @@
       (if (null? r)
          (if (null? l)
             (cont ll buff undo mode)
-            (lets ((buff (insert-backspace buff)))
-               (cont ll buff undo mode)))
+            (lets ((buffp (insert-backspace buff)))
+               (cont ll 
+                  (put-global-meta buffp 'yank (tuple 'sequence (list (car l))))
+                  undo mode)))
          (lets ((buffp (buffer u d l (cdr r) x y off meta)))
-            (cont ll buffp undo mode)))))
+            (cont ll 
+               (put-global-meta buffp 'yank (tuple 'sequence (list (car r))))
+               undo mode)))))
 
 (define (command-join-lines ll buff undo mode n cont)
    (lets
