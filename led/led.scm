@@ -894,6 +894,18 @@
    (lets ((u d l r x y off meta buff))
       (buffer u (append lines d) l r x y off meta)))
 
+(define (paste-lines-above buff lines)
+   (if (null? lines)
+      buff
+      (lets 
+         ((u d l r x y off meta buff)
+          (this (append (reverse l) r))
+          (dx dy off)
+          (d (cons this d)))
+         (buffer u (append (cdr lines) d) null (car lines) 1 y 
+            (cons 0 dy)
+            meta))))
+
 (define (paste-sequence-after buff lst)
    (lets ((u d l r x y off meta buff))
       (if (null? r)
@@ -930,12 +942,9 @@
                   (append fulls (maybe-join-partials last r d))
                   l (cons current this) x y off meta))))))
                
-;;
-;; Data structures
 ;;   yank = #(lines <buffer lines>)
 ;;        | #(sequence <sequence of line data>)
 ;;        | #(range <end of line>|#false <buffer lines> <line start>|#false)
-;;
 
 ;; line lines depth -> sexp-lines lines'
 (define (cut-sexp line lines depth)
@@ -956,14 +965,12 @@
             (loop (cdr l) ls (cons (car l) cl) cls
                (+ d (if (left-paren? (car l)) 1 0)))))))
 
-;; fixme: placeholds
 (define (lines->yank lines)
    (cond
       ((null? (cdr lines))
           (tuple 'sequence (car lines)))
        (else
           (tuple 'lines lines))))
-   
    
 ;; cut forward, for backward move to corresponding open paren and use this
 ;; buff -> buff' msg
@@ -1166,15 +1173,15 @@
 (define (command-paste-before ll buff undo mode r cont)
    (tuple-case (get-global-meta buff 'yank blank-yank)
       ((sequence nodes)
-         ;; move left, paste, move right
          (lets
             ((undo (push-undo undo buff))
              (buff (paste-sequence-before buff nodes)))
             (cont ll buff undo mode "pasted")))
-      ((lines nodes)
-         (command-paste-after ll (move-arrow buff 'up #f) undo mode r 
-            (λ (ll buff undo mode msg)
-               (cont ll (move-arrow buff 'down #f) undo mode msg))))
+      ((lines ls)
+         (lets
+            ((undo (push-undo undo buff))
+             (buff (paste-lines-above buff ls)))
+            (cont ll buff undo mode "pasted")))
       (else
          (log "unknown yank buffer type in paste-before"))))
 
