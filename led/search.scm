@@ -43,7 +43,7 @@
                       tail))
                ((match-prefix? data bs)
                   (lets
-                     ((r _ (take-while (lambda (x) (not (eq? x 10))) data))
+                     ((r _ (take-while (λ (x) (not (eq? x 10))) data))
                       (line (bytes->string (map safe-char (take (append (reverse l) r) max-result-line-length)))))
                      (loop (cdr data) (+ x 1) y (- n 1)
                         (cons (car data) l)
@@ -57,35 +57,35 @@
                (else
                   (loop (cdr data) (+ x 1) y n (cons (car data) l) tail)))))
          
-      (define (search-results what where log ok? searched end)
-         ;(if (not (null? where))
-         ;   (log (str "Considering '" (car where) "'")))
+      (define (search-results what where status ok? searched end)
+         (if (not (null? where))
+            (log (str "search '" (car where) "'")))
          (cond
             ((null? where)
                null)
             ((mem equal? searched (car where))
-               (search-results what (cdr where) log ok? searched end))
+               (search-results what (cdr where) status ok? searched end))
             ((> (time) end)
                (list "" "SEARCH TIMEOUT" "Search took too long. Maybe you want to remove some less relevant directories from buffer 1?"))
             ((led-dir->list (car where)) =>
-               (lambda (paths)
-                  (log "Including contents")
+               (λ (paths)
+                  (log (str (car where) " has " paths))
+                  (status (str (car where) "..."))
                   (search-results what
-                     (append
-                        (map (lambda (x) (str (car where) "/" x)) paths)
-                        (cdr where))
-                     log ok? (cons (car where) searched) end)))
+                     (append paths (cdr where))
+                     status ok? (cons (car where) searched) end)))
             ((not (ok? (car where)))
-               (log (str "Skipping '" (car where) "'"))
-               (search-results what (cdr where) log ok? searched end))
+               (status (str "Skipping '" (car where) "'"))
+               (search-results what (cdr where) status ok? searched end))
             ((file->list (car where)) =>
-               (lambda (data)
-                  ; (log (str "Searching from '" (car where) "'"))
+               (λ (data)
+                  (status (car where))
+                  ; (status (str "Searching from '" (car where) "'"))
                   (file-results what (car where) data end
-                     (lambda ()
-                        (search-results what (cdr where) log ok? (cons (car where) searched) end)))))
+                     (λ ()
+                        (search-results what (cdr where) status ok? (cons (car where) searched) end)))))
             (else
-               (search-results what (cdr where) log ok? searched end))))
+               (search-results what (cdr where) status ok? searched end))))
             
       (define (run-search what where log path-ok?)
          (if (equal? what "")

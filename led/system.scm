@@ -1,6 +1,7 @@
 (define-library (led system)
    
    (export
+      directory? ;; temporary
       led-dir->list
       led-dir-recursive->list)
    

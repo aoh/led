@@ -27,24 +27,18 @@
 
    (begin      
 
-      (define (buffer up down left right x y w h off meta)
-         (tuple up down left right x y w h off meta))
+      (define (buffer up down left right x y off meta)
+         (tuple up down left right x y off meta))
    
       (define (make-buffer-having w h meta data)
          (lets ((r d (uncons data null)))
-            (buffer null d null r  1 1 w h (cons 0 0) meta)))
+            (buffer null d null r  1 1 (cons 0 0) meta)))
       
       (define (make-empty-buffer w h meta)
          (make-buffer-having w h meta null))
       
-      (define (buffer-screen-size buff)
-         (lets ((u d l r x y w h off meta buff))
-            (values w h)))
-      
-      (define (buffer-meta buff) (ref buff 10))
-      (define (set-buffer-meta buff meta) (set buff 10 meta))
-      (define (screen-width buff) (ref buff 7))
-      (define (screen-height buff) (ref buff 8))
+      (define (buffer-meta buff) (ref buff 8))
+      (define (set-buffer-meta buff meta) (set buff 8 meta))
    
       (define (put-buffer-meta buff key val)
          (set-buffer-meta buff (put (buffer-meta buff) key val)))
@@ -54,6 +48,14 @@
    
       (define (get-global-meta buff key def)
          (get (get-buffer-meta buff 'global #empty) key def))
+      
+      (define (screen-width buff) (get-global-meta buff 'width 10))
+      (define (screen-height buff) (get-global-meta buff 'height 10))
+      
+      (define (buffer-screen-size buff)
+         (values
+            (get-global-meta buff 'width 20)
+            (get-global-meta buff 'height 10)))
       
       (define (put-global-meta buff key val)
          (put-buffer-meta buff 'global
@@ -69,9 +71,9 @@
       (define (buffer-y buff) (ref buff 6))
       
       (define (buffer->lines buff) 
-         (lets ((u d l r x y w h off meta buff))
+         (lets ((u d l r x y off meta buff))
             (log "buffer->lines bound")
-            (map (lambda (line) (list->string (foldr render-code-point null line)))
+            (map (λ (line) (list->string (foldr render-code-point null line)))
                (append (reverse u)
                   (cons (append (reverse l) r) d)))))
       ))
