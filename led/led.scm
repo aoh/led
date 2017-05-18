@@ -971,13 +971,12 @@
             ((r d (uncons lines null))
              (buff (buffer u d l r x y off meta)))
             (values
-               (put-buffer-meta buff 'yank (lines->yank sexp))
+               (put-global-meta buff 'yank (lines->yank sexp))
                "Copied to yank"))
          (values buff "Bad range"))))
 
 (define (paste-yank buff)
-   (lets ((u d l r x y off meta buff)
-          (data (getf meta 'yank)))
+   (lets ((data (get-global-meta buff 'yank #false)))
       (cond
          ((not data)
             buff)
@@ -1576,7 +1575,7 @@
           (ll buffp tob (cut-movement ll buff r #\d)))
        (log "deleted " tob)
        (if tob
-          (cont ll (put-buffer-meta buffp 'yank tob) undop mode)
+          (cont ll (put-global-meta buffp 'yank tob) undop mode)
           (cont ll buff undo mode))))
  
 (define (command-change ll buff undo mode r cont)
@@ -1601,7 +1600,7 @@
        (if tob
           (begin
              (log "cut data " tob)
-             (cont ll (put-buffer-meta buff 'yank tob) undop mode "yanked"))
+             (cont ll (put-global-meta buff 'yank tob) undop mode "yanked"))
           (cont ll buff undo mode))))
  
 (define (command-no-op ll buff undo mode r cont)
