@@ -894,13 +894,17 @@
    (lets ((u d l r x y off meta buff))
       (buffer u (append lines d) l r x y off meta)))
 
-(define (paste-sequence buff lst)
+(define (paste-sequence-after buff lst)
    (lets ((u d l r x y off meta buff))
       (if (null? r)
          (buffer u d l lst x y off meta)
          (lets ((this r r))
             ;; paste after cursor
             (buffer u d l (cons this (append lst r)) x y off meta)))))
+
+(define (paste-sequence-before buff lst)
+   (lets ((u d l r x y off meta buff))
+      (buffer u d l (append lst r) x y off meta)))
 
 (define (maybe-join-partials a b d)
    (let ((new (append a b)))
@@ -916,7 +920,7 @@
           (last _ (uncons lasts null)))
       (if (and (null? fulls) (null? last))
           ;; special case, no new lines
-         (paste-sequence buff this)
+         (paste-sequence-after buff this)
          (if (null? r)
             (buffer u
                (append fulls (maybe-join-partials last r d))
@@ -987,7 +991,7 @@
                buff))
          ((eq? 'sequence (ref data 1))
             (log "appending sequence from buffer")
-            (lets ((buff (paste-sequence buff (ref data 2))))
+            (lets ((buff (paste-sequence-after buff (ref data 2))))
                buff))
          ((eq? 'line-sequence (ref data 1))
             (log "appending line sequence " (ref data 2) " from buffer")
@@ -1151,10 +1155,28 @@
    (lets ((buff (maybe-seek-matching-paren buff))) 
       (cont ll buff undo mode)))
 
-(define (command-paste ll buff undo mode r cont)
+(define (command-paste-after ll buff undo mode r cont)
    (lets ((undo (push-undo undo buff))
           (buffp (paste-yank buff)))
       (cont ll buffp undo mode "pasted")))
+
+(define blank-yank
+   (tuple 'sequence null))
+
+(define (command-paste-before ll buff undo mode r cont)
+   (tuple-case (get-global-meta buff 'yank blank-yank)
+      ((sequence nodes)
+         ;; move left, paste, move right
+         (lets
+            ((undo (push-undo undo buff))
+             (buff (paste-sequence-before buff nodes)))
+            (cont ll buff undo mode "pasted")))
+      ((lines nodes)
+         (command-paste-after ll (move-arrow buff 'up #f) undo mode r 
+            (λ (ll buff undo mode msg)
+               (cont ll (move-arrow buff 'down #f) undo mode msg))))
+      (else
+         (log "unknown yank buffer type in paste-before"))))
 
 (define (command-add-line-below ll buff undo mode r cont)
    (cont (ilist (tuple 'key #\A) (tuple 'enter) ll) buff undo mode))
@@ -1789,7 +1811,8 @@
       (put #\l command-move-right)
       (put #\r command-replace-char)
       (put #\h command-move-left)
-      (put #\p command-paste)
+      (put #\P command-paste-before)
+      (put #\p command-paste-after)
       (put #\o command-add-line-below)
       (put #\O command-add-line-above)
       (put #\' command-go-to-mark)
