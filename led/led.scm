@@ -918,6 +918,21 @@
    (lets ((u d l r x y off meta buff))
       (buffer u d l (append lst r) x y off meta)))
 
+(define (paste-line-sequence-before buff lst)
+   (if (null? lst)
+      (error "empty line sequnce: " lst)
+      (lets 
+         ((u d l r x y off meta buff)
+          (first-tail lst (uncons lst null))
+          (last-head lstr (uncons (reverse lst) null)))
+         (buffer
+            u 
+            (append (reverse lstr)
+               (cons (append last-head r) d))
+            l
+            first-tail 
+            x y off meta))))
+
 (define (maybe-join-partials a b d)
    (let ((new (append a b)))
       (if (null? new)
@@ -1170,6 +1185,7 @@
 (define blank-yank
    (tuple 'sequence null))
 
+;; todo: support r
 (define (command-paste-before ll buff undo mode r cont)
    (tuple-case (get-global-meta buff 'yank blank-yank)
       ((sequence nodes)
@@ -1181,6 +1197,11 @@
          (lets
             ((undo (push-undo undo buff))
              (buff (paste-lines-above buff ls)))
+            (cont ll buff undo mode "pasted")))
+      ((line-sequence ls)
+         (lets
+            ((undo (push-undo undo buff))
+             (buff (paste-line-sequence-before buff ls)))
             (cont ll buff undo mode "pasted")))
       (else
          (log "unknown yank buffer type in paste-before"))))
