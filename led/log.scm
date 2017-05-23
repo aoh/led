@@ -2,6 +2,7 @@
    
    (export
       start-log ;; cmdline-dict -> logger thread, or terminate everything
+      start-recorder
       log)
    
    (import
@@ -15,7 +16,11 @@
       (define (log-to port)
          (print-to port (ref (wait-mail) 2))
          (log-to port))
-                 
+              
+      (define (record-to port)
+         (write-bytes port (list (ref (wait-mail) 2)))
+         (record-to port))
+      
       (define (start-log meta)
          (let ((log-path (getf meta 'log)))
             (if log-path
@@ -27,6 +32,14 @@
                      (begin
                         (print-to stderr "could not open log file " log-path)
                         (car 'logger-error)))) ;; for now, just terminate led via error
+               (sink #f))))
+      
+      (define (start-recorder meta)
+         (let ((rec-path (getf meta 'record)))
+            (if rec-path
+               (let ((port (open-output-file rec-path)))
+                  (if port
+                     (record-to port)))
                (sink #f))))
       
       (define (log . what)

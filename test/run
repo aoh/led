@@ -3,11 +3,11 @@
 echo "" > config
 test -f failures && rm failures
 
-echo "Startins tests"
+echo "Starting tests"
 for foo in *.io
 do
    echo " - $foo"
-   (cat "$foo" | "$@" -c config > /dev/null 2>&1;
+   ("$@" --terminal "$foo" -c config > /dev/null 2>&1;
     cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; echo "WANTED:"; cat -A $foo.ok; echo "RESULT:"; cat -A $foo.out;echo "$foo" >> failures; };
     rm "$foo.out") &
 done
