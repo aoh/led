@@ -105,8 +105,6 @@
          (lets ((x d (uncons d empty-buffer-line)))
             (same-line (cons x u) d (+ dy 1))))))
 
-;; note: delta updates could be used to work around lack of clear-line-upto and allow
-
 (define (delta-update-screen old new)
    (if (eq? old new)
       (begin
@@ -214,13 +212,6 @@
             (cursor-restore)
             (set-cursor x y)))))
 
-(define test-abbrs 
-   (-> empty
-      (put #\l
-         (put empty #\z (reverse (string->list "λ"))))
-      (put #\e
-         (put empty #\z (list #x2205)))))
-
 (define (add-abbreviation abbrs sfrom sto)
    (define (push tree chars val)
       (if (null? chars)
@@ -240,12 +231,10 @@
             from to))))
       
 (define (abbreviate l abs)
-   (log "abbreviate at " l " vs " abs)
    (cond
       ((eq? abs empty) #false)
       ((or (null? l) (not (word-char? (car l))))
          (let ((val (getf abs 'abbreviation)))
-            (log "abbreviation led to " val)
             (if val
                (append val l)
                #false)))
@@ -2390,9 +2379,15 @@
             (print-to stderr "Bad data in config")
             #false))))
 
+(define (led-get-terminal-size ll dict)
+   (if (getf dict 'faketerm)
+      ;; fake terminal in use - do not try to chat with it   
+      (values 80 24 ll)
+      (get-terminal-size ll)))
+
 (define (start-led dict args ll)
    (log "start-led " dict ", " args)
-   (lets ((w h ll (get-terminal-size ll))
+   (lets ((w h ll (led-get-terminal-size ll dict))
           (h (max (- h 1) 1)))
    (log "dimensions " (cons w h))
    (initial-terminal-setup)
@@ -2417,7 +2412,9 @@
       (version "-V" "--version" comment "show program version")
       (log "-L" "--log" has-arg comment "debug log file")
       (config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
-      (faketerm "-I" "--input" has-arg comment "fake terminal input stream source"))))
+      (faketerm #f "--terminal" has-arg comment "fake terminal input stream source")
+      (record #f "--record" has-arg comment "record all terminal input to file")
+      )))
 
 (define (trampoline)
   (let ((env (wait-mail)))
@@ -2434,16 +2431,34 @@
         (wait 100)
         (halt 1)))))
 
+(define (record-input-stream ll fd)
+   (log "record at " ll)
+   (cond
+      ((pair? ll)
+         (write-bytes (list (car ll)) fd)
+         (cons (car ll)
+            (record-input-stream (cdr ll) fd)))
+      ((null? ll)
+         (close-port fd)
+         null)
+      (else
+         (λ () 
+            (log "stream forced")
+            (let ((val (ll)))
+               (print " - forced to " val)
+               (record-input-stream val fd))))))
+         
 (define (led-input-stream dict)
-   (let ((path (getf dict 'faketerm)))
-      (if path
-         (let ((port (open-input-file path)))
-            (if port
-               (terminal-input port)
-               null))
-         (begin
-            (set-terminal-rawness #true)
-            (terminal-input stdin)))))
+   (cond
+      ((getf dict 'faketerm) =>
+         (λ (path)
+            (let ((port (open-input-file path)))
+               (if port
+                  (terminal-input port)
+                  null))))
+      (else
+         (set-terminal-rawness #true)
+         (terminal-input stdin))))
 
 (define (start-led-threads dict args)
    (cond
@@ -2457,6 +2472,7 @@
       (else
          (log "started " dict ", " args)
          (fork-linked-server 'logger (λ () (start-log dict)))
+         (fork-linked-server 'recorder (λ () (start-recorder dict)))
          (fork-linked-server 'led (λ () (start-led dict args (led-input-stream dict))))
          (log "started")
          (trampoline))))
