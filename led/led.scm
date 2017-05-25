@@ -469,6 +469,39 @@
             (else
                (loop (+ x 1) y (cdr r) d depth))))))
 
+(define (movement-matching-paren-backward buff)
+   (lets ((u d l r x y off meta buff))
+      (let loop ((x 0) (y 0) (l l) (u u) (depth 1))
+         (log " - seek x, y " (list x y) ", depth " depth)
+         (cond
+            ((null? l)
+               (if (null? u)
+                  (values #f #f)
+                  (loop (+ 1 (length (car u))) (- y 1) (reverse (car u)) (cdr u) depth)))
+            ((left-paren? (car l))
+               (log " - seek , (, depth " depth)
+               (if (eq? depth 1)
+                  (values y (- x 2))
+                  (loop (- x 1) y (cdr l) u (- depth 1))))
+            ((right-paren? (car l))
+               (log " - seek , ), depth " depth)
+               (loop (- x 1) y (cdr l) u (+ depth 1)))
+            (else
+               (log " - seek, at " (car l))
+               (loop (- x 1) y (cdr l) u depth))))))
+
+(define (movement-matching-paren buff)
+   (lets ((u d l r x y off meta buff)
+          (this r (uncons r #false)))
+      (cond
+         ((left-paren? this)
+            (movement-matching-paren-forward buff))
+         ((right-paren? this)
+            (log "searching back")
+            (movement-matching-paren-backward buff))
+         (else
+            (values #f #f)))))
+
 (define sexp-key #\s)
 
 (define eof (tuple 'eof))
@@ -506,7 +539,7 @@
                          (dy dx rp dp (next-words r d n)))
                       (values ll dy dx)))
                ((eq? k #\%) 
-                  (lets ((dy dx (movement-matching-paren-forward buff)))
+                  (lets ((dy dx (movement-matching-paren buff)))
                      (if dy
                         (values ll dy dx)
                         (values ll #f #f))))
@@ -1270,11 +1303,11 @@
             (lets ((buffp indented (indent-lines buff n)))
                (cont (keys ll #\l indented) buffp undop mode)))
          ((equal? range (tuple 'key #\%))
-            (lets ((dy dx (movement-matching-paren-forward buff))
+            (lets ((dy dx (movement-matching-paren buff))
                    (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
                (cont (keys ll #\l indented) buffp undop mode)))
          ((equal? range (tuple 'key sexp-key))
-            (lets ((dy dx (movement-matching-paren-forward buff))
+            (lets ((dy dx (movement-matching-paren buff))
                    (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
                (cont (keys ll #\l indented ) buffp undop mode)))
          (else
@@ -1313,7 +1346,7 @@
                (log "foo")
                (cont (keys ll #\h 3) buffp (push-undo undo buff) mode)))
          ((equal? range (tuple 'key #\%))
-            (lets ((dy dx (movement-matching-paren-forward buff))
+            (lets ((dy dx (movement-matching-paren buff))
                    (buffp (unindent-lines buff (+ dy 1)))) ;; current line + dy down
                (if (eq? buff buffp)
                   (cont ll buff undo mode)
