@@ -1102,14 +1102,14 @@
 (define (command-regex-search ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\/)))
    (lets ((search-history 
-            (get (buffer-meta buff) 'search-history null))
+            (get-global-meta buff 'search-history null))
           (ll res (readline ll search-history
                      2 (+ 1 (screen-height buff)) (screen-width buff))))
          (if res
             (lets
                ((buff 
                   (if (equal? res "") buff
-                     (put-buffer-meta buff 'search-history 
+                     (put-global-meta buff 'search-history 
                         (cons res search-history))))
                 (regex ;; note: ^ and $ need special handling later
                   (string->regex (str "m/^" res "/"))))
@@ -1554,15 +1554,14 @@
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))
    (lets
       ((metadata (buffer-meta buff))
+       (command-history (get-global-meta buff 'command-history null))
        (ll res 
-          (readline ll 
-            (get (buffer-meta buff) 'command-history null) 
+          (readline ll command-history
             2 (+ 1 (screen-height buff) 1) (screen-width buff)))
        (buff
          (if res
-            (set-buffer-meta buff
-              (put metadata 'command-history
-                (cons res (get metadata 'command-history null))))
+            (put-global-meta buff 'command-history
+               (cons res command-history))
             buff)))
       (log (str "readline returned '" res "'"))
       (output
