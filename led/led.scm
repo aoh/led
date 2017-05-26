@@ -8,6 +8,7 @@
   (led node)
   (led system)
   (led search)
+  (led parse)
   (owl sys)
   (owl args))
 
@@ -1464,7 +1465,6 @@
          (map (convert-paren meta) (map string->list (force-ll (lines fd))))
          #false)))
 
-;; fixme: led-eval is silly
 (define (led-eval ll buff undo mode cont notify exp)
    (cond
       ((equal? exp "")

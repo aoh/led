@@ -1,16 +1,16 @@
+;;;
+;;; Ex mode command parser
+;;;
+
 (define-library (led parse)
 
-   (export
-      get-command)
+   (export led-parse)   ;; str → #false | command-tuple
 
    (import
       (owl base)
-      (led terminal)
       (owl parse))
    
    (begin
-
-      ;; note: could expose notify to get parser state based feedback
 
       (define (get-key-if pred)
          (let-parses
@@ -18,111 +18,42 @@
              (verify (and (tuple? x) (eq? (ref x 1) 'key) (pred (ref x 2))) #false))
             (ref x 2)))
 
-      (define (get-key k)
-         (get-key-if 
-            (λ (x) (eq? x k))))
-      
-      (define (lc-alpha? cp)
-         (cond
-            ((< cp #\a) #false)
-            ((> cp #\z) #false)
-            (else #true)))
-            
-      (define get-buffer-name
-         (let-parses
-            ((skip (get-key #\"))
-             (name (get-key-if lc-alpha?)))
-            name))
-
-      (define get-leading-digit
-         (get-key-if
-            (λ (x) (<= #\1 x #\9))))
-         
       (define get-digit
-         (get-key-if
-            (λ (x) (<= #\0 x #\9))))
+         (let-parses
+            ((x (get-byte-if (λ (x) (<= #\0 x #\9)))))
+            (- x #\0)))
 
       (define get-integer
          (let-parses
-            ((a get-leading-digit)
-             (as (get-greedy* get-digit)))
-            (fold (λ (x a) (+ (* x 10) (- a #\0))) 0 (cons a as))))
+            ((as (get-kleene+ get-digit)))
+            (fold (λ (x a) (+ (* x 10) a)) 0 as)))
 
-      (define (key-value key value)
-         (let-parses
-            ((x (get-key key)))
-            value))
+      (define get-position
+         (get-either
+            get-integer
+            (let-parses
+               ((skip (get-imm #\.)))
+               'dot)))
       
-      (define get-movement
-         (get-any-of
-            (key-value #\w 'word)
-            (key-value #\b 'word-back)
-            (key-value #\c 'char)
-            (key-value #\h 'left)
-            ;(key-value #\j 'down)
-            ;(key-value #\k 'up)
-            ;(key-value #\l 'right)
-            ;(key-value #\( 'sentence-back)
-            ;(key-value #\) 'sentence)
-            ;(key-value #\} 'paragraph)
-            ;(key-value #\{ 'paragraph-back)
-            ;(key-value #\0 'line-first)
-            ;(key-value #\^ 'line-first-character) ;; non-whitespace
-            ;(key-value #\+ 'next-line-first-character)
-            ;(key-value #\+ 'previous-line-first-character)
-            ;(key-value #\$ 'line-end)
-            ;(key-value #\H 'screen-first)
-            ;(key-value #\M 'screen-middle)
-            ;(key-value #\L 'screen-last)
-            ;(let-parses ((n get-integer) (skip (get-key #\|))) (tuple 'char-at n))
-            ;(let-parses ((n get-integer) (skip (get-key #\H))) (tuple 'screen-first-plus n))
-            ;(let-parses ((n get-integer) (skip (get-key #\L))) (tuple 'screen-last-minus n))
-            ))
-      
-      (define (optional parser default)
-         (get-either parser (get-epsilon default)))
-      
-      (define get-delete
-         (let-parses
-            ((buff (optional get-buffer-name 'yank))
-             (rep  (optional get-integer 1))
-             (cmd  (get-key #\d))
-             (move get-movement))
-            (tuple 'delete buff rep move)))
-     
       (define get-command 
-         ;(get-any-of get-delete)
-         get-movement
-         )
+         get-position)
 
-      (define (parse-command ll)
-         (print "parsing " ll)
-         (get-command ll
-            (λ (data fail val pos)
-               (values val data))
-            (λ (pos reason)
-               (values #false ll))
-            0))
+      (define (any->ll x)
+         (cond
+            ((string? x) (str-iter x))
+            ((vector? x) (vec-iter x))
+            (else x)))
+     
+      (define (empty-ll? x)
+         (cond
+            ((null? x) #true)
+            ((pair? x) #false)
+            (else (empty-ll? (x)))))
          
-      (define (try str)
-         (print "trying " str)
-         (lets ((res ll (parse-command (map (λ (x) (tuple 'key x)) (string->list str)))))
-            (print "'" str "' -> " res " + " ll)))
+      ;; iterable → #false | parse-result
+       
+      (define (led-parse thing)
+         (try-parse get-command thing #f #f #f))
 
-      (define (try-terminal)
-         (set-terminal-rawness #true)
-         (let loop ((ll (terminal-input)) (row 1))
-            (lets ((res ll (parse-command ll)))
-               (write-bytes stdout
-                  (tio
-                     (set-cursor 1 row)
-                     (clear-line)
-                     (output res)
-                     (set-cursor 1 (+ row 1))))
-               (if res
-                  (loop ll (+ 1 (modulo row 10)))
-                  (set-terminal-rawness #false)))))
-                  
-      ;(try "\"x42dw***")
-
-      (try-terminal)))
+      (print (led-parse (any->ll ".")))
+))
