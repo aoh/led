@@ -25,19 +25,50 @@
 
       (define get-integer
          (let-parses
-            ((as (get-kleene+ get-digit)))
+            ((as (get-greedy+ get-digit)))
             (fold (λ (x a) (+ (* x 10) a)) 0 as)))
 
-      (define get-position
-         (get-either
-            get-integer
-            (let-parses
-               ((skip (get-imm #\.)))
-               'dot)))
-      
-      (define get-command 
-         get-position)
 
+      (define (get-imm-as imm value)
+         (let-parses
+            ((skip (get-imm imm)))
+            value))
+      
+      (define get-dot
+         (get-imm-as #\. 'dot))
+      
+      (define get-end-position
+         (get-imm-as #\$ 'end))
+      
+      (define get-position
+         (get-any-of
+            get-integer
+            get-dot
+            get-end-position))
+
+      (define get-interval-everything
+         (get-imm-as #\% 
+            (tuple 'interval 1 'end)))
+      
+      (define get-dotted-interval
+         (let-parses
+            ((start get-position)
+             (skip (get-imm #\,))
+             (end get-position))
+            (tuple 'interval start end)))
+     
+      (define get-interval
+         (get-any-of
+            get-dotted-interval
+            get-interval-everything))
+             
+      (define get-command 
+         (get-either
+            get-interval
+            get-position))
+
+      ;; --------------------------
+                  
       (define (any->ll x)
          (cond
             ((string? x) (str-iter x))
@@ -56,4 +87,7 @@
          (try-parse get-command thing #f #f #f))
 
       (print (led-parse (any->ll ".")))
+      (print (led-parse (any->ll "3,$")))
+      (print (led-parse (any->ll "%")))
+      (print (led-parse (any->ll ".,$")))
 ))
