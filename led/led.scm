@@ -898,18 +898,6 @@
                   (values (buffer-seek buff mx my #false) "search wrapped")
                   (values buff "no matches"))))))
 
-(define (nodes->bytes nodes)       (foldr render-node null nodes))
-
-(define (nodes->code-points nodes) (foldr render-code-point null nodes))
-
-(define (buffer->bytes buff)
-   (lets ((u d l r x y off meta buff))
-      (nodes->bytes
-         (foldr 
-            (λ (line tl)
-               (append line (cons #\newline tl)))
-            null
-            (append (reverse u) (list (append (reverse l) r)) d)))))
 
 (define (paste-lines-below buff lines)
    (lets ((u d l r x y off meta buff))
@@ -1053,32 +1041,7 @@
       (put-buffer-meta buff 'marks
          (put marks char (cons mark-x mark-y)))))
 
-(define (write-buffer buff path)
-   (log "writing to " path)
-   (cond
-      ((not path)
-         (values #false
-            (foldr render null
-               (list "Give me a name for this"))))
-      ((directory? path)
-         (values #false
-            (foldr render null
-               (list "'" path "' is a directory"))))
-      (else
-         (lets
-            ((port (open-output-file path))
-             (lst (buffer->bytes buff))
-             (n (length lst))
-             (res (if port (byte-stream->port lst port) #f)))
-            (if port 
-               (close-port port))
-            (if res
-               (values #true
-                  (foldr render null 
-                     (list "Wrote " n " bytes to '" path "'")))
-               (values #false
-                  (foldr render null
-                     (list "Failed to write to '" path "'"))))))))
+
 
 (define (maybe-keep-y old-y old-y-pos new-y h)
    (lets ((delta (- new-y old-y))
@@ -1464,122 +1427,131 @@
          #false)))
 
 (define (led-eval ll buff undo mode cont notify exp)
-   (cond
-      ((equal? exp "")
-        (notify buff "canceled")
-        (cont ll buff undo mode))
-      ((equal? exp "q")
-         (if (dirty-buffer? buff undo)
-            (begin
-               (notify buff "Unsaved changes. q! quits anyway.")
-               (cont ll buff undo mode))
-            (values ll buff undo mode 'close)))
-      ((equal? exp "q!")
-        (values ll buff undo mode 'close))
-      ((equal? exp "Q!")
-        (values ll buff undo mode 'close-all))
-      ((equal? exp "n")
-        (values ll buff undo mode 'new))
-      ((m/^n [^ ]+$/ exp)
-         (values ll buff undo mode (tuple 'open (s/n +// exp) null)))
-      ((equal? exp "vi")
-        (cont ll buff undo 'insert))
-      ((m/^w / exp)
-        (let ((path (s/^w +// exp)))
-           (lets ((ok? write-msg (write-buffer buff path)))
-              (cont ll 
-                 (put-buffer-meta buff 'path path)
-                 (mark-saved undo buff (time-ms))
-                 mode (list->string write-msg)))))
-      ((m/^r +[^ ]/ exp)
-         (lets ((path (s/^r +// exp))
-                (lines (path->lines path (buffer-meta buff))))
-            (log "read" lines "from" path)
-            (if lines
-               (lets ((undo (push-undo undo buff))
-                      (buff (paste-lines-below buff lines)))
-                  (output (update-screen buff))
-                  (notify buff (str "Read " (length lines) " lines from '" path "'"))
-                  (cont ll buff undo mode))
-               (begin
-                  (notify buff (str "Failed to read '" path "'"))
-                  (cont ll buff undo mode)))))
-      ((m/^w$/ exp)
-        (let ((path (buffer-path buff #false)))
-           (if path
-              (lets ((ok? write-tio (write-buffer buff path)))
-                 (notify buff write-tio)
-                 (cont ll buff 
-                    (mark-saved undo buff (time-ms))
-                    mode))
-              (cont ll buff undo mode))))
-      ((m/^x$/ exp)
-         (lets ((path (buffer-path buff #false))
-                (ok? msg (write-buffer buff path)))
-            (if ok?
-               ;; exit to led-buffers
-               (values ll buff undo mode 'close)
-               (begin
-                  (notify buff msg)
-                  (cont ll buff undo mode)))))
-      ((m/^[0-9]+$/ exp)
-        (lets ((line (max 0 (- (string->number exp 10) 1)))
-               (buff (buffer-seek buff 0 line #false)))
-           (output (update-screen buff))
-           (cont ll buff undo mode)))
-      ((m/^move +[0-9]+$/ exp)
-          (let ((n (string->number (s/^move +// exp))))
-            (values ll buff undo mode (tuple 'move n))))
-      ((equal? exp "$")
-         (command-go-to-last-line ll buff undo mode cont))
-      ((m/set *ai/ exp)
-         (notify buff "AI enabled")
-         (log "AI -> paren")
-         (cont ll (put-buffer-meta buff 'ai 'paren) undo mode))
-      ((m/set *noai/ exp)
-         (notify buff "AI disabled")
-         (log "AI -> none")
-         (cont ll (put-buffer-meta buff 'ai 'none) undo mode))
-      ((m/set *noab/ exp)
-         (notify buff "abbreviations disabled")
-         (log "abbreviations -> off")
-         (cont ll (put-buffer-meta buff 'ab #false) undo mode))
-      ((m/set *ab/ exp)
-         (notify buff "abbreviations enabled")
-         (log "abbreviations -> on")
-         (cont ll (put-buffer-meta buff 'ab #true) undo mode))
-      ((m/ab / exp)
-         (lets ((parts (c/ +/ exp)))
-            (if (= (length parts) 3)
-               (cont ll
-                  (buff-add-abbreviation buff (cadr parts) (caddr parts))
-                  undo mode)
-               (begin
-                  (notify "no. ab [what] [replacement]")
-                  (cont ll buff undo mode)))))
-      ((m/set *expandtab/ exp)
-         (notify buff "Expanding tabs")
-         (cont ll (put-buffer-meta buff 'expandtab #true) undo mode))
-      ((m/set *noexpandtab/ exp)
-         (notify buff "Not expanding tabs")
-         (cont ll (put-buffer-meta buff 'expandtab #false) undo mode))
-      ((m/set *noshowmatch/ exp)
-         (notify buff "Not showing matching parens")
-         (cont ll (put-buffer-meta buff 'show-match #false) undo mode))
-      ((m/set *showmatch/ exp)
-         (notify buff "Showing matching parens")
-         (cont ll (put-buffer-meta buff 'show-match #true) undo mode))
-      ((m/set *tabstop=[1-9][0-9]*/ exp)
-         (lets ((n (string->integer (s/set *tabstop=// exp))))
-            (notify buff (str "Tabstop = " n))
-            (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
-      ((m/^search .*/ exp)
-         (values ll buff undo mode (tuple 'search (s/search // exp))))
-      ((m/settings/ exp)
-         ;; open a settings buffer
-         (values ll buff undo mode 'settings))
-      (else
-         (cont ll buff undo mode))))
+   (let ((parsed (led-parse exp)))
+      (if parsed
+         ;; shiny new eval
+         (lets ((buffp undo msg (led-eval-command buff undo parsed)))
+            (if msg 
+               (notify buff msg))
+            (cont ll buffp undo mode))
+         
+         ;; silly legacy eval
+         (cond
+            ((equal? exp "")
+              (notify buff "canceled")
+              (cont ll buff undo mode))
+            ((equal? exp "q")
+               (if (dirty-buffer? buff undo)
+                  (begin
+                     (notify buff "Unsaved changes. q! quits anyway.")
+                     (cont ll buff undo mode))
+                  (values ll buff undo mode 'close)))
+            ((equal? exp "q!")
+              (values ll buff undo mode 'close))
+            ((equal? exp "Q!")
+              (values ll buff undo mode 'close-all))
+            ((equal? exp "n")
+              (values ll buff undo mode 'new))
+            ((m/^n [^ ]+$/ exp)
+               (values ll buff undo mode (tuple 'open (s/n +// exp) null)))
+            ((equal? exp "vi")
+              (cont ll buff undo 'insert))
+            ((m/^w / exp)
+              (let ((path (s/^w +// exp)))
+                 (lets ((ok? write-msg (write-buffer buff path)))
+                    (cont ll 
+                       (put-buffer-meta buff 'path path)
+                       (mark-saved undo buff (time-ms))
+                       mode (list->string write-msg)))))
+            ((m/^r +[^ ]/ exp)
+               (lets ((path (s/^r +// exp))
+                      (lines (path->lines path (buffer-meta buff))))
+                  (log "read" lines "from" path)
+                  (if lines
+                     (lets ((undo (push-undo undo buff))
+                            (buff (paste-lines-below buff lines)))
+                        (output (update-screen buff))
+                        (notify buff (str "Read " (length lines) " lines from '" path "'"))
+                        (cont ll buff undo mode))
+                     (begin
+                        (notify buff (str "Failed to read '" path "'"))
+                        (cont ll buff undo mode)))))
+            ((m/^w$/ exp)
+              (let ((path (buffer-path buff #false)))
+                 (if path
+                    (lets ((ok? write-tio (write-buffer buff path)))
+                       (notify buff write-tio)
+                       (cont ll buff 
+                          (mark-saved undo buff (time-ms))
+                          mode))
+                    (cont ll buff undo mode))))
+            ((m/^x$/ exp)
+               (lets ((path (buffer-path buff #false))
+                      (ok? msg (write-buffer buff path)))
+                  (if ok?
+                     ;; exit to led-buffers
+                     (values ll buff undo mode 'close)
+                     (begin
+                        (notify buff msg)
+                        (cont ll buff undo mode)))))
+            ((m/^[0-9]+$/ exp)
+              (lets ((line (max 0 (- (string->number exp 10) 1)))
+                     (buff (buffer-seek buff 0 line #false)))
+                 (output (update-screen buff))
+                 (cont ll buff undo mode)))
+            ((m/^move +[0-9]+$/ exp)
+                (let ((n (string->number (s/^move +// exp))))
+                  (values ll buff undo mode (tuple 'move n))))
+            ((equal? exp "$")
+               (command-go-to-last-line ll buff undo mode cont))
+            ((m/set *ai/ exp)
+               (notify buff "AI enabled")
+               (log "AI -> paren")
+               (cont ll (put-buffer-meta buff 'ai 'paren) undo mode))
+            ((m/set *noai/ exp)
+               (notify buff "AI disabled")
+               (log "AI -> none")
+               (cont ll (put-buffer-meta buff 'ai 'none) undo mode))
+            ((m/set *noab/ exp)
+               (notify buff "abbreviations disabled")
+               (log "abbreviations -> off")
+               (cont ll (put-buffer-meta buff 'ab #false) undo mode))
+            ((m/set *ab/ exp)
+               (notify buff "abbreviations enabled")
+               (log "abbreviations -> on")
+               (cont ll (put-buffer-meta buff 'ab #true) undo mode))
+            ((m/ab / exp)
+               (lets ((parts (c/ +/ exp)))
+                  (if (= (length parts) 3)
+                     (cont ll
+                        (buff-add-abbreviation buff (cadr parts) (caddr parts))
+                        undo mode)
+                     (begin
+                        (notify "no. ab [what] [replacement]")
+                        (cont ll buff undo mode)))))
+            ((m/set *expandtab/ exp)
+               (notify buff "Expanding tabs")
+               (cont ll (put-buffer-meta buff 'expandtab #true) undo mode))
+            ((m/set *noexpandtab/ exp)
+               (notify buff "Not expanding tabs")
+               (cont ll (put-buffer-meta buff 'expandtab #false) undo mode))
+            ((m/set *noshowmatch/ exp)
+               (notify buff "Not showing matching parens")
+               (cont ll (put-buffer-meta buff 'show-match #false) undo mode))
+            ((m/set *showmatch/ exp)
+               (notify buff "Showing matching parens")
+               (cont ll (put-buffer-meta buff 'show-match #true) undo mode))
+            ((m/set *tabstop=[1-9][0-9]*/ exp)
+               (lets ((n (string->integer (s/set *tabstop=// exp))))
+                  (notify buff (str "Tabstop = " n))
+                  (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
+            ((m/^search .*/ exp)
+               (values ll buff undo mode (tuple 'search (s/search // exp))))
+            ((m/settings/ exp)
+               ;; open a settings buffer
+               (values ll buff undo mode 'settings))
+            (else
+               (cont ll buff undo mode))))))
 
 (define (command-enter-command ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\:)))

@@ -2,6 +2,7 @@
 
    (import
       (owl base)
+      (owl sys)
       (led log)
       (led node))
    
@@ -23,6 +24,8 @@
       buffer-screen-size
       buffer-y
       buffer->lines
+      
+      write-buffer
       )
 
    (begin      
@@ -76,4 +79,46 @@
             (map (λ (line) (list->string (foldr render-code-point null line)))
                (append (reverse u)
                   (cons (append (reverse l) r) d)))))
+
+
+      ;; buffer writing
+            
+      (define (nodes->bytes nodes)       (foldr render-node null nodes))
+
+
+      (define (buffer->bytes buff)
+         (lets ((u d l r x y off meta buff))
+            (nodes->bytes
+               (foldr 
+                  (λ (line tl)
+                     (append line (cons #\newline tl)))
+                  null
+                  (append (reverse u) (list (append (reverse l) r)) d)))))
+      
+      (define (write-buffer buff path)
+         (log "writing to " path)
+         (cond
+            ((not path)
+               (values #false
+                  (foldr render null
+                     (list "Give me a name for this"))))
+            ((directory? path)
+               (values #false
+                  (foldr render null
+                     (list "'" path "' is a directory"))))
+            (else
+               (lets
+                  ((port (open-output-file path))
+                   (lst (buffer->bytes buff))
+                   (n (length lst))
+                   (res (if port (byte-stream->port lst port) #f)))
+                  (if port 
+                     (close-port port))
+                  (if res
+                     (values #true
+                        (foldr render null 
+                           (list "Wrote " n " bytes to '" path "'")))
+                     (values #false
+                        (foldr render null
+                           (list "Failed to write to '" path "'"))))))))
       ))

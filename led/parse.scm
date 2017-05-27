@@ -126,7 +126,7 @@
          (try-parse get-command (any->ll thing) #f #f #f))
 
       (example
-         (led-parse "1,2w foo.txt") = '(write (interval 1 2) "foo.txt")
-         (led-parse "%w! bar.txt") = '(write! (interval 1 end) "bar.txt")
+         (led-parse "1,2w foo.txt") = '(write  (interval 1 2)   "foo.txt")
+         (led-parse "%w! bar.txt")  = '(write! (interval 1 end) "bar.txt")
       )
 ))
