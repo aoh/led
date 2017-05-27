@@ -8,16 +8,34 @@
 
    (import
       (owl base)
-      (owl parse))
+      (owl parse)
+      (owl proof))
    
    (begin
 
-      (define (get-key-if pred)
+      (define (get-imm-as imm value)
          (let-parses
-            ((x get-byte) ;; in this case a terminal event
-             (verify (and (tuple? x) (eq? (ref x 1) 'key) (pred (ref x 2))) #false))
-            (ref x 2)))
+            ((skip (get-imm imm)))
+            value))
+      
+      (define (maybe-get-imm-as imm was wasnt)
+         (get-either
+            (get-imm-as imm was)
+            (get-epsilon wasnt)))
+            
+      (define (get-optionally parser default)
+         (get-either parser 
+            (get-epsilon default)))
+     
+      ;; ------------------------
 
+      (define allow-whitespace
+         (get-greedy*
+            (get-byte-if
+               (λ (byte)
+                  (or (eq? byte #\space)
+                      (eq? byte #\tab))))))
+                  
       (define get-digit
          (let-parses
             ((x (get-byte-if (λ (x) (<= #\0 x #\9)))))
@@ -27,13 +45,7 @@
          (let-parses
             ((as (get-greedy+ get-digit)))
             (fold (λ (x a) (+ (* x 10) a)) 0 as)))
-
-
-      (define (get-imm-as imm value)
-         (let-parses
-            ((skip (get-imm imm)))
-            value))
-      
+             
       (define get-dot
          (get-imm-as #\. 'dot))
       
@@ -46,29 +58,56 @@
             get-dot
             get-end-position))
 
+      (define interval-everything
+         (list 'interval 1 'end))
+            
       (define get-interval-everything
-         (get-imm-as #\% 
-            (tuple 'interval 1 'end)))
-      
+         (get-imm-as #\% interval-everything)) 
+
       (define get-dotted-interval
          (let-parses
             ((start get-position)
              (skip (get-imm #\,))
              (end get-position))
-            (tuple 'interval start end)))
+            (list 'interval start end)))
      
       (define get-interval
          (get-any-of
             get-dotted-interval
             get-interval-everything))
-             
-      (define get-command 
-         (get-either
-            get-interval
-            get-position))
+     
+      ;; write command =  #(write[!] range path)
+
+      (define get-path
+         (let-parses
+            ((chars
+               (get-greedy+
+                  (get-rune-if ;; allow-8
+                     (λ (x) (not (eq? x #\space)))))))
+            (list->string chars)))
+      
+      (define get-write
+         (let-parses
+            ((interval 
+               (get-optionally get-interval interval-everything))
+             (skip (get-imm #\w))
+             (operation (maybe-get-imm-as #\! 'write! 'write))
+             (skip allow-whitespace)
+             (path get-path))
+            (list operation interval path)))
 
       ;; --------------------------
                   
+      (define get-command 
+         (let-parses
+            ((skip allow-whitespace)
+             (command 
+                get-write)
+             (skip allow-whitespace))
+            command))
+          
+      ;; --------------------------
+
       (define (any->ll x)
          (cond
             ((string? x) (str-iter x))
@@ -84,10 +123,10 @@
       ;; iterable → #false | parse-result
        
       (define (led-parse thing)
-         (try-parse get-command thing #f #f #f))
+         (try-parse get-command (any->ll thing) #f #f #f))
 
-      (print (led-parse (any->ll ".")))
-      (print (led-parse (any->ll "3,$")))
-      (print (led-parse (any->ll "%")))
-      (print (led-parse (any->ll ".,$")))
+      (example
+         (led-parse "1,2w foo.txt") = '(write (interval 1 2) "foo.txt")
+         (led-parse "%w! bar.txt") = '(write! (interval 1 end) "bar.txt")
+      )
 ))
