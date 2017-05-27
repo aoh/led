@@ -12,10 +12,6 @@
    
    (begin
 
-      ;; remove after owl upgrade
-      (define (directory? path)
-         (list? (dir->list path)))
-
       (define (sort-paths paths)
          (sort string<?
             (remove m/^\./ paths)))
