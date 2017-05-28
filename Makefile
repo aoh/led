@@ -1,9 +1,9 @@
 CC?=gcc
 OFLAGS=-O1
 CFLAGS=-O2 -Wall
-OWL=ol-0.1.13
-OWLSHA=4dc2fe537f9d952d02e3c67564531c0466386b3d353a3
-OWLURL=https://github.com/aoh/owl-lisp/files/449350
+OWL=ol-0.1.14
+OWLSHA=8df96fcb16d666700984ba9db2767dbceba6f6d027623a19be72ea87ce44e15a
+OWLURL=https://github.com/aoh/owl-lisp/releases/download/v0.1.14
 PREFIX=/usr
 
 everything: bin/led .parrot

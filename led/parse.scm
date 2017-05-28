@@ -1,128 +1,222 @@
+;;;
+;;; Ex mode command parser
+;;;
+
 (define-library (led parse)
 
-   (export
-      get-command)
+   (export led-parse)   ;; str → #false | command-tuple
 
    (import
       (owl base)
-      (led terminal)
-      (owl parse))
+      (owl parse)
+      (owl proof)
+      (led log)
+      )
    
    (begin
 
-      ;; note: could expose notify to get parser state based feedback
-
-      (define (get-key-if pred)
+      (define (get-imm-as imm value)
          (let-parses
-            ((x get-byte) ;; in this case a terminal event
-             (verify (and (tuple? x) (eq? (ref x 1) 'key) (pred (ref x 2))) #false))
-            (ref x 2)))
-
-      (define (get-key k)
-         (get-key-if 
-            (λ (x) (eq? x k))))
+            ((skip (get-imm imm)))
+            value))
       
-      (define (lc-alpha? cp)
-         (cond
-            ((< cp #\a) #false)
-            ((> cp #\z) #false)
-            (else #true)))
+      (define (maybe-get-imm-as imm was wasnt)
+         (get-either
+            (get-imm-as imm was)
+            (get-epsilon wasnt)))
             
-      (define get-buffer-name
-         (let-parses
-            ((skip (get-key #\"))
-             (name (get-key-if lc-alpha?)))
-            name))
+      (define (get-optionally parser default)
+         (get-either parser 
+            (get-epsilon default)))
+      
+      (define (get-imm-optionally value)
+         (get-either (get-imm value)
+            (get-epsilon #false)))
+     
+      ;; ------------------------
 
-      (define get-leading-digit
-         (get-key-if
-            (λ (x) (<= #\1 x #\9))))
-         
+      (define whitespace-char?
+         (λ (byte)
+            (or (eq? byte #\space)
+                (eq? byte #\tab))))
+       
+      (define allow-whitespace
+         (get-greedy*
+            (get-byte-if whitespace-char?)))
+                  
       (define get-digit
-         (get-key-if
-            (λ (x) (<= #\0 x #\9))))
+         (let-parses
+            ((x (get-byte-if (λ (x) (<= #\0 x #\9)))))
+            (- x #\0)))
 
       (define get-integer
          (let-parses
-            ((a get-leading-digit)
-             (as (get-greedy* get-digit)))
-            (fold (λ (x a) (+ (* x 10) (- a #\0))) 0 (cons a as))))
-
-      (define (key-value key value)
+            ((as (get-greedy+ get-digit)))
+            (fold (λ (x a) (+ (* x 10) a)) 0 as)))
+             
+      (define get-dot
+         (get-imm-as #\. 'dot))
+      
+      (define get-end-position
+         (get-imm-as #\$ 'end))
+      
+      (define get-sign
+         (get-either
+            (get-imm-as #\+ '+)
+            (get-imm-as #\- '-)))
+      
+      (define get-delta
          (let-parses
-            ((x (get-key key)))
-            value))
+            ((sign get-sign)
+             (n get-integer))
+            (list sign 'dot n)))
+     
+      (define (lowercase-char? x)
+         (<= #\a x #\z))
       
-      (define get-movement
+      (define get-label
+         (let-parses
+            ((skip (get-imm #\'))
+             (label 
+                (get-either 
+                   (get-byte-if lowercase-char?)
+                   (get-imm  #\'))))
+            (list 'label label)))
+         
+      (define get-position
          (get-any-of
-            (key-value #\w 'word)
-            (key-value #\b 'word-back)
-            (key-value #\c 'char)
-            (key-value #\h 'left)
-            ;(key-value #\j 'down)
-            ;(key-value #\k 'up)
-            ;(key-value #\l 'right)
-            ;(key-value #\( 'sentence-back)
-            ;(key-value #\) 'sentence)
-            ;(key-value #\} 'paragraph)
-            ;(key-value #\{ 'paragraph-back)
-            ;(key-value #\0 'line-first)
-            ;(key-value #\^ 'line-first-character) ;; non-whitespace
-            ;(key-value #\+ 'next-line-first-character)
-            ;(key-value #\+ 'previous-line-first-character)
-            ;(key-value #\$ 'line-end)
-            ;(key-value #\H 'screen-first)
-            ;(key-value #\M 'screen-middle)
-            ;(key-value #\L 'screen-last)
-            ;(let-parses ((n get-integer) (skip (get-key #\|))) (tuple 'char-at n))
-            ;(let-parses ((n get-integer) (skip (get-key #\H))) (tuple 'screen-first-plus n))
-            ;(let-parses ((n get-integer) (skip (get-key #\L))) (tuple 'screen-last-minus n))
-            ))
+            get-integer
+            get-delta
+            get-dot
+            get-end-position
+            get-label))
+
+      (define interval-everything
+         (list 'interval 1 'end))
+            
+      (define interval-current-line
+         (list 'interval 'dot 'dot))
       
-      (define (optional parser default)
-         (get-either parser (get-epsilon default)))
+      (define get-interval-everything
+         (get-imm-as #\% interval-everything)) 
+
+      (define get-dotted-interval
+         (let-parses
+            ((start get-position)
+             (skip (get-imm #\,))
+             (end get-position))
+            (list 'interval start end)))
+
+      (define get-single-line-position
+         (let-parses
+            ((pos get-position))
+            (list 'interval pos pos)))
+           
+      (define get-interval
+         (get-any-of
+            get-dotted-interval
+            get-interval-everything
+            get-single-line-position))
+     
+      ;; write command =  #(write[!] range path)
+
+      (define get-path
+         (let-parses
+            ((chars
+               (get-greedy+
+                  (get-rune-if ;; allow-8
+                     (λ (x) (not (eq? x #\space)))))))
+            (list->string chars)))
       
+      (define get-write
+         (let-parses
+            ((interval 
+               (get-optionally get-interval interval-everything))
+             (skip allow-whitespace)
+             (skip (get-imm #\w)) ; todo: add command abbreviations later
+             (operation (maybe-get-imm-as #\! 'write! 'write))
+             (skip allow-whitespace)
+             (path get-path))
+            (list operation interval path)))
+
       (define get-delete
          (let-parses
-            ((buff (optional get-buffer-name 'yank))
-             (rep  (optional get-integer 1))
-             (cmd  (get-key #\d))
-             (move get-movement))
-            (tuple 'delete buff rep move)))
-     
-      (define get-command 
-         ;(get-any-of get-delete)
-         get-movement
-         )
+            ((interval 
+               (get-optionally get-interval interval-current-line))
+             (skip allow-whitespace)
+             (skip (get-imm #\d))
+             (skip allow-whitespace)
+             (target (get-either (get-byte-if lowercase-char?) ;; optional buffer name
+                                 (get-epsilon 'yank))))
+            (list 'delete interval target)))
 
-      (define (parse-command ll)
-         (print "parsing " ll)
-         (get-command ll
-            (λ (data fail val pos)
-               (values val data))
-            (λ (pos reason)
-               (values #false ll))
-            0))
+      (define get-put
+         (let-parses
+            ((place (get-optionally get-position 'dot))
+             (skip allow-whitespace)
+             (skip (get-imm #\p))
+             (skip (get-imm #\u))
+             (skip (get-imm-optionally #\t))
+             (skip allow-whitespace)
+             (reg (get-either (get-byte-if lowercase-char?)
+                              (get-epsilon 'yank))))
+            (list 'put place reg)))
          
-      (define (try str)
-         (print "trying " str)
-         (lets ((res ll (parse-command (map (λ (x) (tuple 'key x)) (string->list str)))))
-            (print "'" str "' -> " res " + " ll)))
-
-      (define (try-terminal)
-         (set-terminal-rawness #true)
-         (let loop ((ll (terminal-input)) (row 1))
-            (lets ((res ll (parse-command ll)))
-               (write-bytes stdout
-                  (tio
-                     (set-cursor 1 row)
-                     (clear-line)
-                     (output res)
-                     (set-cursor 1 (+ row 1))))
-               (if res
-                  (loop ll (+ 1 (modulo row 10)))
-                  (set-terminal-rawness #false)))))
+      (define get-lisp
+         (let-parses
+            ((place 
+               (get-optionally get-interval interval-current-line))
+             (skip allow-whitespace)
+             (skip (get-imm #\l))
+             (skip allow-whitespace)
+             (name (get-greedy+ (get-rune-if (λ (x) (not (whitespace-char? x)))))))
+            (list 'lisp place (list->string name))))
+      
+      ;; --------------------------
                   
-      ;(try "\"x42dw***")
+      (define get-command 
+         (let-parses
+            ((skip allow-whitespace)
+             (command 
+                (get-any-of
+                  get-write
+                  get-delete
+                  get-put
+                  get-lisp))
+             (skip allow-whitespace))
+            command))
+          
+      ;; --------------------------
 
-      (try-terminal)))
+      (define (any->ll x)
+         (cond
+            ((string? x) (str-iter x))
+            ((vector? x) (vec-iter x))
+            (else x)))
+     
+      (define (empty-ll? x)
+         (cond
+            ((null? x) #true)
+            ((pair? x) #false)
+            (else (empty-ll? (x)))))
+         
+      ;; iterable → #false | parse-result
+       
+      (define (led-parse thing)
+         (log "parsing " thing)
+         (let ((res (try-parse get-command (any->ll thing) #f #f #f)))
+            (log "parsed " res)
+            res))
+
+      (example
+         (led-parse "1,2w foo.txt") = '(write  (interval 1 2)   "foo.txt")
+         (led-parse "% w! bar.txt") = '(write! (interval 1 end) "bar.txt")
+         (led-parse "-1,+2wx")      = '(write (interval (- dot 1) (+ dot 2)) "x")
+         (led-parse "'a,'bwx")      = '(write (interval (label #\a) (label #\b)) "x")
+         (led-parse ".,$ da")       = '(delete (interval dot end) #\a)
+         (led-parse "%d")           = '(delete (interval 1 end) yank)
+         (led-parse "put")          = '(put dot yank)
+         (led-parse "-3pux")        = '(put (- dot 3) #\x)
+         (led-parse "'a,. l sort")  = '(lisp (interval (label #\a) dot) "sort")
+      )
+))

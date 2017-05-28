@@ -1,3 +1,7 @@
+;;;
+;;; Definitions related to character nodes held in buffers
+;;;
+
 (define-library (led node)
    (export
       key-node
@@ -19,7 +23,9 @@
       line->code-points
       render-node
       render-code-point
-            
+  
+      nodes->code-points
+                
       tab-node
       hex-node
       whitespace?
@@ -251,6 +257,9 @@
                   (error "drop-printable: what is " x)))))
           (else
             null)))
+      
+      (define (nodes->code-points nodes) 
+         (foldr render-code-point null nodes))
       
       (define (printable-length line)
          (fold (λ (n x) (+ n (node-width x))) 0 line))))
