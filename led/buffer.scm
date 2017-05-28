@@ -84,23 +84,7 @@
                (append (reverse u)
                   (cons (append (reverse l) r) d)))))
 
-      (define (interpret-position pos dot end)
-         (cond
-            ((number? pos) 
-               (cond
-                  ((< pos 0)
-                     (max 1 (- dot pos)))
-                  ((> pos end)
-                     end)
-                  ((= pos 0)
-                     ;; first line is 1
-                     1)
-                  (else pos)))
-            ((eq? pos 'dot) dot)
-            ((eq? pos 'end) end)
-            (else 
-               (log "ERROR: interpret-position " pos)
-               #false)))
+      
 
 
       ;; buffer writing
@@ -138,12 +122,7 @@
          
        ;; buff start end → (byte ...)
       (define (buffer-range->bytes buff start end)
-         (lets ((u d l r x y off meta buff)
-                (dx dy off)
-                (row (+ y dy))
-                (nlines (+ (length u) 1 (length d)))
-                (start (interpret-position start row nlines))
-                (end (interpret-position end row nlines)))
+         (lets ((u d l r x y off meta buff))
             (if (and start end (<= start end))
                (lines->bytes
                   (pick-lines
