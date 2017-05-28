@@ -54,8 +54,6 @@
                (draw-lines-at-offset w dx (+ y dy) dy end (cdr lines))
                tl)))))
 
-
-
 (define (update-screen buff)
    ;(log "FULL UPDATE SCREEN")
    (lets 
@@ -816,7 +814,6 @@
 ;;;
 
 
-
 (define (command-regex-search ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\/)))
    (lets ((search-history 
@@ -1446,7 +1443,7 @@
    (fold (λ (ff x) (put ff x x))
       #empty
       (string->list
-         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>.")))
+         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>.:")))
 
 (define (word-char? x)
    (getf word-chars x))
@@ -2041,7 +2038,7 @@
                      #false)))))))
 
 (define (initial-terminal-setup)
-   (output
+   '(output
       (tio
          (clear-screen)
          (set-cursor 1 1)))

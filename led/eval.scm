@@ -6,8 +6,10 @@
    (import
       (owl base)
       (led buffer)
+      (only (led node) nodes->code-points)
       (led ops)
       (led log)
+      (led extra)
       (led undo))
    
    (begin
@@ -138,6 +140,27 @@
                         (values buffp 
                            (push-undo undo buff)
                            "pasted"))))
+               ((eq? op 'lisp)
+                  (lets ((range name (largs command))
+                         (from to (eval-interval buff range))
+                         (func (find-extra name))
+                         (buffp (op-delete-lines buff from to 'lisp)))
+                     (cond
+                        ((eq? buff buffp)
+                           ;; could not cut the range
+                           (values buff undo "bad range"))
+                        ((not func)
+                           (values buff undo "unknown extra"))
+                        (else
+                           (lets 
+                              ((node (get-copy-buffer buffp 'lisp (tuple 'lines null)))
+                               (lines (map nodes->code-points (ref node 2)))
+                               (data (func lines))
+                               (buffp (put-copy-buffer buffp 'lisp-result (tuple 'lines data))))
+                              (values
+                                 (op-paste-register buffp (- from 1) 'lisp-result)
+                                 (push-undo undo buff)
+                                 "evaluated"))))))
                (else
                   (values buff undo "led-eval is confused")))))))
                   

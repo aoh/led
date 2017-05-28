@@ -35,12 +35,14 @@
      
       ;; ------------------------
 
+      (define whitespace-char?
+         (λ (byte)
+            (or (eq? byte #\space)
+                (eq? byte #\tab))))
+       
       (define allow-whitespace
          (get-greedy*
-            (get-byte-if
-               (λ (byte)
-                  (or (eq? byte #\space)
-                      (eq? byte #\tab))))))
+            (get-byte-if whitespace-char?)))
                   
       (define get-digit
          (let-parses
@@ -159,7 +161,17 @@
              (reg (get-either (get-byte-if lowercase-char?)
                               (get-epsilon 'yank))))
             (list 'put place reg)))
-          
+         
+      (define get-lisp
+         (let-parses
+            ((place 
+               (get-optionally get-interval interval-current-line))
+             (skip allow-whitespace)
+             (skip (get-imm #\l))
+             (skip allow-whitespace)
+             (name (get-greedy+ (get-rune-if (λ (x) (not (whitespace-char? x)))))))
+            (list 'lisp place (list->string name))))
+      
       ;; --------------------------
                   
       (define get-command 
@@ -169,7 +181,8 @@
                 (get-any-of
                   get-write
                   get-delete
-                  get-put))
+                  get-put
+                  get-lisp))
              (skip allow-whitespace))
             command))
           
@@ -204,6 +217,6 @@
          (led-parse "%d")           = '(delete (interval 1 end) yank)
          (led-parse "put")          = '(put dot yank)
          (led-parse "-3pux")        = '(put (- dot 3) #\x)
-          
+         (led-parse "'a,. l sort")  = '(lisp (interval (label #\a) dot) "sort")
       )
 ))
