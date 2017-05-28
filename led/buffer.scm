@@ -26,6 +26,7 @@
       buffer->lines
       
       write-buffer
+      buffer-range->bytes
       )
 
    (begin      
@@ -80,21 +81,61 @@
                (append (reverse u)
                   (cons (append (reverse l) r) d)))))
 
+      (define (interpret-position pos dot end)
+         (cond
+            ((number? pos) 
+               (cond
+                  ((< pos 0)
+                     (max 1 (- dot pos)))
+                  ((> pos end)
+                     end)
+                  ((= pos 0)
+                     ;; first line is 1
+                     1)
+                  (else pos)))
+            ((eq? pos 'dot) dot)
+            ((eq? pos 'end) end)
+            (else 
+               (log "ERROR: interpret-position " pos)
+               #false)))
+
 
       ;; buffer writing
             
-      (define (nodes->bytes nodes)       (foldr render-node null nodes))
+      (define (nodes->bytes nodes)
+         (foldr render-node null nodes))
 
-
+      (define (lines->bytes ls)
+         (nodes->bytes
+            (foldr
+               (λ (line tl)
+                  (append line (cons #\newline tl)))
+               null ls)))
+       
       (define (buffer->bytes buff)
          (lets ((u d l r x y off meta buff))
-            (nodes->bytes
-               (foldr 
-                  (λ (line tl)
-                     (append line (cons #\newline tl)))
-                  null
-                  (append (reverse u) (list (append (reverse l) r)) d)))))
-      
+            (lines->bytes
+               (append (reverse u) (list (append (reverse l) r)) d))))
+
+      (define (pick-lines ls start end)
+         (let ((off (- start 1)))
+            (take (drop ls off) (- end off))))
+         
+       ;; buff start end → (byte ...)
+      (define (buffer-range->bytes buff start end)
+         (lets ((u d l r x y off meta buff)
+                (dx dy off)
+                (row (+ y dy))
+                (nlines (+ (length u) 1 (length d)))
+                (start (interpret-position start row nlines))
+                (end (interpret-position end row nlines)))
+            (if (and start end (<= start end))
+               (lines->bytes
+                  (pick-lines
+                     (append (reverse u) (list (append (reverse l) r)) d)
+                     start end))
+               #false)))
+           
       (define (write-buffer buff path)
          (log "writing to " path)
          (cond
