@@ -1036,12 +1036,13 @@
        (dx dy off)
        (mark-x (+ (- x 1) dx))
        (mark-y (+ (- y 1) dy))
-       (marks (get meta 'marks #empty)))
+       (marks (get meta 'marks #empty))
+       (mark (cons mark-x mark-y)))
       (log "marked" (list->string (list char)) " as " (cons mark-x mark-y))
       (put-buffer-meta buff 'marks
-         (put marks char (cons mark-x mark-y)))))
-
-
+         (-> marks
+            (put char mark)
+            (put #\' mark))))) ;; always save last mark as #\'
 
 (define (maybe-keep-y old-y old-y-pos new-y h)
    (lets ((delta (- new-y old-y))
