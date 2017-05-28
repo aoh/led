@@ -6,6 +6,7 @@
    (import
       (owl base)
       (led buffer)
+      (led ops)
       (led log)
       (led undo))
    
@@ -71,6 +72,16 @@
                (log "ERROR: interpret-position " pos)
                #false)))
 
+      ;; position-or-interval → start|#false end|#false
+      (define (eval-interval buff pos)
+         (if (eq? (maybe-car pos #f) 'interval)
+            (lets ((from to (largs pos)))
+               (values
+                  (eval-position buff from)
+                  (eval-position buff to)))
+            (let ((res (eval-position buff pos)))
+               (values res res))))
+      
       ;; bytes path → bool
       (define (bytes->file bytes path)
          (let ((port (open-output-file path)))
@@ -108,6 +119,15 @@
                                        "saved range"
                                        "failed to save range")))
                               (values buff undo "bad range"))))))
+               ((eq? op 'delete)
+                  (lets ((range to-buffer (largs command))
+                         (from to (eval-interval buff range)))
+                      (if (and from to (<= from to))
+                         (values 
+                            (op-delete-lines buff from to to-buffer)
+                            (push-undo undo buff)
+                            "deleted")
+                         (values buff undo "bad range"))))
                (else
                   (values buff undo "led-eval is confused")))))))
                   

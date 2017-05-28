@@ -6,6 +6,7 @@
   (led buffer)
   (led undo)
   (led node)
+  (led ops)
   (led system)
   (led search)
   (led eval)
@@ -53,11 +54,7 @@
                (draw-lines-at-offset w dx (+ y dy) dy end (cdr lines))
                tl)))))
 
-(define (meta-dimensions meta)
-   (let ((glob (get meta 'global #empty)))
-      (values 
-         (get glob 'width 20)
-         (get glob 'height 10))))
+
 
 (define (update-screen buff)
    ;(log "FULL UPDATE SCREEN")
@@ -320,19 +317,6 @@
             (values l line))
          (else
             (loop (cdr line) (- pos 1) (cons (car line) l))))))
-
-;; lines → u line d y
-(define (seek-line lines end)
-   (let loop ((lines lines) (pos end) (u null))
-      (cond
-         ((null? lines)
-            (values u null lines (- end pos)))
-         ((null? (cdr lines))
-            (values u (car lines) (cdr lines) (- end pos)))
-         ((eq? pos 0)
-            (values u (car lines) (cdr lines) end))
-         (else
-            (loop (cdr lines) (- pos 1) (cons (car lines) u))))))
 
 (define (step-zipper l r n)
    (cond
@@ -650,28 +634,6 @@
             (buffer u d null (append (reverse l) r) 1 y (cons 0 dy) meta)))
          buffp))
 
-;; row+1 = y + dy, dy = row + 1 - y
-(define (buffer-seek buff x y screen-y)
-   (log "buffer seek" x "," y ", y row at " screen-y)
-   (lets ((u d l r old-x old-y off meta buff)
-          (w h (meta-dimensions meta))
-          (lines (append (reverse u) (list (append (reverse l) r)) d))
-          (u line d y (seek-line lines y))
-          (step (>> w 1))
-          (yp (or screen-y (if (< y h) (+ y 1) (>> h 1)))) ;; real or middle of screen
-          (dy (- (+ y 1) yp))
-          (buff (buffer u d null line 1 yp off meta)))
-         ;; seek right
-         (let loop ((xp 1) (pos x) (l null) (r line) (dx 0))
-            (cond
-               ((>= xp w)
-                  (loop (- xp step) pos l r (+ dx step)))
-               ((eq? pos 0)
-                  (buffer u d l r xp yp (cons dx dy) meta))
-               ((null? r)
-                  (loop xp 0 l r dx))
-               (else
-                  (loop (+ xp (node-width (car r))) (- pos 1) (cons (car r) l) (cdr r) dx))))))
 
 ;; move line down within the same screen preserving cursor position if possible
 (define (line-down buff ip)
@@ -1006,12 +968,12 @@
             ((r d (uncons lines null))
              (buff (buffer u d l r x y off meta)))
             (values
-               (put-global-meta buff 'yank (lines->yank sexp))
+               (put-copy-buffer buff 'yank (lines->yank sexp))
                "Copied to yank"))
          (values buff "Bad range"))))
 
 (define (paste-yank buff)
-   (lets ((data (get-global-meta buff 'yank #false)))
+   (lets ((data (get-copy-buffer buff 'yank #false)))
       (cond
          ((not data)
             buff)
@@ -1172,7 +1134,7 @@
 
 ;; todo: support r
 (define (command-paste-before ll buff undo mode r cont)
-   (tuple-case (get-global-meta buff 'yank blank-yank)
+   (tuple-case (get-copy-buffer buff 'yank blank-yank)
       ((sequence nodes)
          (lets
             ((undo (push-undo undo buff))
@@ -1332,11 +1294,11 @@
             (cont ll buff undo mode)
             (lets ((buffp (insert-backspace buff)))
                (cont ll 
-                  (put-global-meta buffp 'yank (tuple 'sequence (list (car l))))
+                  (put-copy-buffer buffp 'yank (tuple 'sequence (list (car l))))
                   undo mode)))
          (lets ((buffp (buffer u d l (cdr r) x y off meta)))
             (cont ll 
-               (put-global-meta buffp 'yank (tuple 'sequence (list (car r))))
+               (put-copy-buffer buffp 'yank (tuple 'sequence (list (car r))))
                undo mode)))))
 
 (define (command-join-lines ll buff undo mode n cont)
@@ -1429,6 +1391,7 @@
 
 (define (led-eval ll buff undo mode cont notify exp)
    (let ((parsed (led-parse exp)))
+      (log "led-eval parsed " parsed)
       (if parsed
          ;; shiny new eval
          (lets ((buffp undo msg (led-eval-command buff undo parsed)))
@@ -1621,7 +1584,7 @@
           (ll buffp tob (cut-movement ll buff r #\d)))
        (log "deleted " tob)
        (if tob
-          (cont ll (put-global-meta buffp 'yank tob) undop mode)
+          (cont ll (put-copy-buffer buffp 'yank tob) undop mode)
           (cont ll buff undo mode))))
  
 (define (command-change ll buff undo mode r cont)
@@ -1646,7 +1609,7 @@
        (if tob
           (begin
              (log "cut data " tob)
-             (cont ll (put-global-meta buff 'yank tob) undop mode "yanked"))
+             (cont ll (put-copy-buffer buff 'yank tob) undop mode "yanked"))
           (cont ll buff undo mode))))
  
 (define (command-no-op ll buff undo mode r cont)

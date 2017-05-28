@@ -19,6 +19,8 @@
       buffer-path
       buffer-path-str
       buffer-x
+      put-copy-buffer
+      get-copy-buffer
       screen-width
       screen-height
       buffer-screen-size
@@ -67,6 +69,13 @@
       (define (put-global-meta buff key val)
          (put-buffer-meta buff 'global
             (put (get-buffer-meta buff 'global #empty) key val)))
+  
+      (define (put-copy-buffer buff key val)
+         (put-global-meta buff 'copy
+            (put (get-global-meta buff 'copy #empty) key val)))
+      
+      (define (get-copy-buffer buff key def)
+         (get (get-global-meta buff 'copy #empty) key def))
    
       (define (buffer-path buff default)
          (get-buffer-meta buff 'path default))
@@ -156,4 +165,6 @@
                      (values #false
                         (foldr render null
                            (list "Failed to write to '" path "'"))))))))
+     
+
       ))

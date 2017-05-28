@@ -9,7 +9,9 @@
    (import
       (owl base)
       (owl parse)
-      (owl proof))
+      (owl proof)
+      (led log)
+      )
    
    (begin
 
@@ -86,6 +88,9 @@
       (define interval-everything
          (list 'interval 1 'end))
             
+      (define interval-current-line
+         (list 'interval 'dot 'dot))
+      
       (define get-interval-everything
          (get-imm-as #\% interval-everything)) 
 
@@ -95,11 +100,17 @@
              (skip (get-imm #\,))
              (end get-position))
             (list 'interval start end)))
-     
+
+      (define get-single-line-position
+         (let-parses
+            ((pos get-position))
+            (list 'interval pos pos)))
+           
       (define get-interval
          (get-any-of
             get-dotted-interval
-            get-interval-everything))
+            get-interval-everything
+            get-single-line-position))
      
       ;; write command =  #(write[!] range path)
 
@@ -115,19 +126,33 @@
          (let-parses
             ((interval 
                (get-optionally get-interval interval-everything))
-             (skip (get-imm #\w))
+             (skip allow-whitespace)
+             (skip (get-imm #\w)) ; todo: add command abbreviations later
              (operation (maybe-get-imm-as #\! 'write! 'write))
              (skip allow-whitespace)
              (path get-path))
             (list operation interval path)))
 
+      (define get-delete
+         (let-parses
+            ((interval 
+               (get-optionally get-interval interval-current-line))
+             (skip allow-whitespace)
+             (skip (get-imm #\d))
+             (skip allow-whitespace)
+             (target (get-either (get-byte-if lowercase-char?) ;; optional buffer name
+                                 (get-epsilon 'yank))))
+            (list 'delete interval target)))
+      
       ;; --------------------------
                   
       (define get-command 
          (let-parses
             ((skip allow-whitespace)
              (command 
-                get-write)
+                (get-any-of
+                  get-write
+                  get-delete))
              (skip allow-whitespace))
             command))
           
@@ -148,12 +173,17 @@
       ;; iterable → #false | parse-result
        
       (define (led-parse thing)
-         (try-parse get-command (any->ll thing) #f #f #f))
+         (log "parsing " thing)
+         (let ((res (try-parse get-command (any->ll thing) #f #f #f)))
+            (log "parsed " res)
+            res))
 
       (example
          (led-parse "1,2w foo.txt") = '(write  (interval 1 2)   "foo.txt")
-         (led-parse "%w! bar.txt")  = '(write! (interval 1 end) "bar.txt")
+         (led-parse "% w! bar.txt") = '(write! (interval 1 end) "bar.txt")
          (led-parse "-1,+2wx")      = '(write (interval (- dot 1) (+ dot 2)) "x")
          (led-parse "'a,'bwx")      = '(write (interval (label #\a) (label #\b)) "x")
+         (led-parse ".,$ da")       = '(delete (interval dot end) #\a)
+         (led-parse "%d")           = '(delete (interval 1 end) yank)
       )
 ))
