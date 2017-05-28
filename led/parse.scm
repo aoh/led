@@ -62,13 +62,23 @@
             ((sign get-sign)
              (n get-integer))
             (list sign 'dot n)))
-             
+     
+      (define (lowercase-char? x)
+         (<= #\a x #\z))
+      
+      (define get-label
+         (let-parses
+            ((skip (get-imm #\'))
+             (label (get-byte-if lowercase-char?)))
+            (list 'label label)))
+         
       (define get-position
          (get-any-of
             get-integer
             get-delta
             get-dot
-            get-end-position))
+            get-end-position
+            get-label))
 
       (define interval-everything
          (list 'interval 1 'end))
@@ -141,5 +151,6 @@
          (led-parse "1,2w foo.txt") = '(write  (interval 1 2)   "foo.txt")
          (led-parse "%w! bar.txt")  = '(write! (interval 1 end) "bar.txt")
          (led-parse "-1,+2wx")      = '(write (interval (- dot 1) (+ dot 2)) "x")
+         (led-parse "'a,'bwx")      = '(write (interval (label #\a) (label #\b)) "x")
       )
 ))
