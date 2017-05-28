@@ -6,6 +6,7 @@
    
    (export 
        op-delete-lines   ;; buff from to target → buff'
+       op-paste-register ;; buff where reg → buff'
        
        buffer-seek seek-line meta-dimensions paste-register ;; temp exports
        scroll-right scroll-left move-arrow seek-line-start 
@@ -320,5 +321,13 @@
       (define (op-delete-lines buff from to target)
          (lets ((buff (buffer-seek buff 0 (- from 1) #false)))
             (delete-lines-below buff (+ 1 (- to from)) target)))
+     
+      (define (op-paste-register buff where reg)
+         (let ((data (get-copy-buffer buff reg #false)))
+            (if data
+               (paste-register
+                  (buffer-seek buff 0 (- where 1) #false)
+                  reg)
+               buff)))
 ))
 

@@ -131,9 +131,13 @@
                          (values buff undo "bad range"))))
                ((eq? op 'put)
                   (lets ((where reg (largs command))
-                         (where (eval-position buff where)))
-                     (values buff undo 
-                        (str "Would paste register " reg " to " where))))
+                         (where (eval-position buff where))
+                         (buffp (op-paste-register buff where reg)))
+                     (if (eq? buff buffp)
+                        (values buff undo #false)
+                        (values buffp 
+                           (push-undo undo buff)
+                           "pasted"))))
                (else
                   (values buff undo "led-eval is confused")))))))
                   
