@@ -15,13 +15,23 @@
          (if (pair? exp)
             (car exp) 
             default))
-      
+    
+      ;; the usual binary case  
       (define (largs sexp)
          (if (= (length sexp) 3)
             (values (cadr sexp) (caddr sexp))
             (values #f #f)))
-     
-      ;; todo: allow arithmetic 
+    
+      (define (apply-position op a b) 
+         (cond
+            ((not a) #false)
+            ((not b) #false)
+            ((eq? op '+) (+ a b))
+            ((eq? op '-) (- a b))
+            (else 
+               (log "ERROR: apply-position: " op)
+               #false)))
+         
       (define (eval-position buff pos)
          (cond
             ((number? pos) 
@@ -36,6 +46,11 @@
                (buffer-current-line buff))
             ((eq? pos 'end) 
                (buffer-line-count buff))
+            ((and (list? pos) (= (length pos) 3))
+               (lets ((a b (largs pos)))
+                  (apply-position (car pos)
+                     (eval-position buff a)
+                     (eval-position buff b))))
             (else 
                (log "ERROR: interpret-position " pos)
                #false)))
