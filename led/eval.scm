@@ -53,6 +53,7 @@
       (define (led-eval-command buff undo command)
          (let ((op (maybe-car command #false)))
             (cond
+               ;; fixme: write and write! are treated equally
                ((or (eq? op 'write) (eq? op 'write!))
                   (lets ((range path (largs command)))
                      (if (equal? range '(interval 1 end))

@@ -52,9 +52,21 @@
       (define get-end-position
          (get-imm-as #\$ 'end))
       
+      (define get-sign
+         (get-either
+            (get-imm-as #\+ '+)
+            (get-imm-as #\- '-)))
+      
+      (define get-delta
+         (let-parses
+            ((sign get-sign)
+             (n get-integer))
+            (list sign 'dot n)))
+             
       (define get-position
          (get-any-of
             get-integer
+            get-delta
             get-dot
             get-end-position))
 
@@ -128,5 +140,6 @@
       (example
          (led-parse "1,2w foo.txt") = '(write  (interval 1 2)   "foo.txt")
          (led-parse "%w! bar.txt")  = '(write! (interval 1 end) "bar.txt")
+         (led-parse "-1,+2wx")      = '(write (interval (- dot 1) (+ dot 2)) "x")
       )
 ))
