@@ -28,6 +28,10 @@
       (define (get-optionally parser default)
          (get-either parser 
             (get-epsilon default)))
+      
+      (define (get-imm-optionally value)
+         (get-either (get-imm value)
+            (get-epsilon #false)))
      
       ;; ------------------------
 
@@ -143,7 +147,19 @@
              (target (get-either (get-byte-if lowercase-char?) ;; optional buffer name
                                  (get-epsilon 'yank))))
             (list 'delete interval target)))
-      
+
+      (define get-put
+         (let-parses
+            ((place (get-optionally get-position 'dot))
+             (skip allow-whitespace)
+             (skip (get-imm #\p))
+             (skip (get-imm #\u))
+             (skip (get-imm-optionally #\t))
+             (skip allow-whitespace)
+             (reg (get-either (get-byte-if lowercase-char?)
+                              (get-epsilon 'yank))))
+            (list 'put place reg)))
+          
       ;; --------------------------
                   
       (define get-command 
@@ -152,7 +168,8 @@
              (command 
                 (get-any-of
                   get-write
-                  get-delete))
+                  get-delete
+                  get-put))
              (skip allow-whitespace))
             command))
           
@@ -185,5 +202,8 @@
          (led-parse "'a,'bwx")      = '(write (interval (label #\a) (label #\b)) "x")
          (led-parse ".,$ da")       = '(delete (interval dot end) #\a)
          (led-parse "%d")           = '(delete (interval 1 end) yank)
+         (led-parse "put")          = '(put dot yank)
+         (led-parse "-3pux")        = '(put (- dot 3) #\x)
+          
       )
 ))
