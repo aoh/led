@@ -69,7 +69,10 @@
       (define get-label
          (let-parses
             ((skip (get-imm #\'))
-             (label (get-byte-if lowercase-char?)))
+             (label 
+                (get-either 
+                   (get-byte-if lowercase-char?)
+                   (get-imm  #\'))))
             (list 'label label)))
          
       (define get-position
