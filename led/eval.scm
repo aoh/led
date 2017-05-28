@@ -16,24 +16,40 @@
             (car exp) 
             default))
     
-      ;; the usual binary case  
+      ;; unary/binary temporary helper
       (define (largs sexp)
-         (if (= (length sexp) 3)
-            (values (cadr sexp) (caddr sexp))
-            (values #f #f)))
-    
-      (define (apply-position op a b) 
          (cond
+            ((= (length sexp) 3)
+               (values (cadr sexp) (caddr sexp)))
+            ((= (length sexp) 2)
+               (values (cadr sexp) #false))
+            (else
+               (values #f #f))))
+
+      ;; buff label-char → line | #false
+      (define (label-line buff mark)
+         (let ((pos (get (get-buffer-meta buff 'marks #empty) mark #false)))
+            (if pos
+               (+ 1 (cdr pos)) ;; absolute offset → line number
+               #false)))         
+     
+      (define (apply-position buff op a b) 
+         (cond
+            ;; unary ones
             ((not a) #false)
+            ((eq? op 'label)
+               (label-line buff a))
+            ;; binary ones
             ((not b) #false)
             ((eq? op '+) (+ a b))
             ((eq? op '-) (- a b))
             (else 
                (log "ERROR: apply-position: " op)
                #false)))
-         
+     
       (define (eval-position buff pos)
          (cond
+            ((not pos) pos)
             ((number? pos) 
                (cond
                   ((< pos 0)
@@ -46,9 +62,9 @@
                (buffer-current-line buff))
             ((eq? pos 'end) 
                (buffer-line-count buff))
-            ((and (list? pos) (= (length pos) 3))
+            ((and (pair? pos) (list? pos))
                (lets ((a b (largs pos)))
-                  (apply-position (car pos)
+                  (apply-position buff (car pos)
                      (eval-position buff a)
                      (eval-position buff b))))
             (else 
@@ -60,12 +76,12 @@
          (let ((port (open-output-file path)))
             (if port
                (let ((outcome (write-bytes port bytes)))
-                  (log "write -> " outcome)
                   (close-port port)
                   outcome)
                #false)))
       
       (define (led-eval-command buff undo command)
+         (log "eval: " command)
          (let ((op (maybe-car command #false)))
             (cond
                ;; fixme: write and write! are treated equally
