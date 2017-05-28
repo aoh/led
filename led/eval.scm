@@ -90,7 +90,8 @@
                   (close-port port)
                   outcome)
                #false)))
-      
+     
+      ;; todo: add an env to avoid this blowing up 
       (define (led-eval-command buff undo command)
          (log "eval: " command)
          (let ((op (maybe-car command #false)))
@@ -128,6 +129,11 @@
                             (push-undo undo buff)
                             "deleted")
                          (values buff undo "bad range"))))
+               ((eq? op 'put)
+                  (lets ((where reg (largs command))
+                         (where (eval-position buff where)))
+                     (values buff undo 
+                        (str "Would paste register " reg " to " where))))
                (else
                   (values buff undo "led-eval is confused")))))))
                   
