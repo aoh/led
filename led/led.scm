@@ -585,7 +585,33 @@
             (values ll
                (buffer u d l r 1 y (cons 0 (cdr off)) meta)
                (tuple 'lines taken))))))
+
+(define (more-indented? ref lst)
+   (cond
+      ((null? lst) #false)
+      ((null? ref)
+         (whitespace? (car lst)))
+      ((whitespace? (car ref))
+         (if (equal? (car ref) (car lst))
+            (more-indented? (cdr ref) (cdr lst))
+            #false))
+      ((whitespace? (car lst))
+         #true)
+      (else #false)))
+
+(define (count-more-indented ref ls n)
+   (cond
+      ((null? ls) n)
+      ((more-indented? ref (car ls))
+         (count-more-indented ref (cdr ls) (+ n 1)))
+      (else n)))
    
+(define (sub-lines-ahead buff)
+   (lets 
+      ((u d l r x y off meta buff)
+       (l (append (reverse l) r)))
+      (count-more-indented l d 0)))
+
 ;; ll buff rep self -> ll' buff' tob|#false
 (define (cut-movement ll buff r self)
    (lets ((np ll (maybe-get-count ll 1))
@@ -596,8 +622,10 @@
              (cond
                 ((eq? self k)
                    ;; cut lines via shortcut
-                   (log "cut-lines")
                    (cut-lines ll buff n))
+                ((eq? #\| k)
+                   (cut-lines ll buff
+                      (+ 1 (sub-lines-ahead buff))))
                 (else
                    (lets ((ll dy dx (get-relative-movement (cons op ll) buff n self)))
                       (log "relative movement for cut is " (cons dy dx))
@@ -961,6 +989,7 @@
             (loop (cdr l) (+ n 1)))
          (else n))))
 
+
 ;; indent to next multiple of 'tabstop
 (define (indent-lines buff n)
    (lets
@@ -988,6 +1017,10 @@
             (lets ((dy dx (movement-matching-paren buff))
                    (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
                (cont (keys ll #\l indented) buffp undop mode)))
+         ((equal? range (tuple 'key #\|))
+            (lets ((n (sub-lines-ahead buff))
+                   (buffp indentend (indent-lines buff (+ n 1))))
+               (cont ll buffp undop mode)))
          ((equal? range (tuple 'key sexp-key))
             (lets ((dy dx (movement-matching-paren buff))
                    (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
@@ -1011,12 +1044,10 @@
 (define (unindent-lines buff n)
    (lets
       ((u d l r x y off meta buff)
-       (rlp (drop-prefix (reverse l) shift-lst)))
-      (if rlp
-         (lets ((l (reverse rlp))
-                (l r (line-right l r 3))
-                (d (map-n unindent (- n 1) d))
-                (buffp (buffer u d l r x y off meta)))
+       (line (drop-prefix (append (reverse l) r) shift-lst)))
+      (if line
+         (lets ((d (map-n unindent (- n 1) d))
+                (buffp (buffer u d null line 1 y off meta)))
              buffp)
           buff)))
          
@@ -1039,6 +1070,10 @@
                (if (eq? buff buffp)
                   (cont ll buff undo mode)
                   (cont (keys ll #\h 3) buffp (push-undo undo buff) mode))))
+         ((equal? range (tuple 'key #\|))
+            (lets ((n (sub-lines-ahead buff))
+                   (buffp (unindent-lines buff (+ n 1))))
+               (cont ll buffp (push-undo undo buff) mode)))
          (else
             (cont ll buff undo mode "unsupported range")))))
 
