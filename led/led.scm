@@ -287,6 +287,34 @@
 ;;; Text range operations
 ;;;
 
+(define (blank-line? l)
+   (cond
+      ((null? l) #true)
+      ((whitespace? (car l))
+         (blank-line? (cdr l)))
+      (else #false)))
+
+;; l r d -> n lines down (n >= 1)
+(define (next-paragraphs l r d n)
+   (define (next ls state dy) ; → ls' dy'
+      (cond
+         ((null? ls)
+            (values ls dy))
+         ((blank-line? (car ls))
+            (if (eq? state 'init)
+               (next (cdr ls) state (+ dy 1))
+               (values ls dy)))
+         ((eq? state 'body)
+            (next (cdr ls) state (+ dy 1)))
+         (else
+            (next ls 'body dy))))
+   (let loop ((ls (cons (append l r) d)) (dy 0) (n n))
+      (if (= n 0)
+         (values ls dy)
+         (lets ((ls dy (next ls 'init dy)))
+            (loop ls dy (- n 1))))))
+         
+               
 ;; r d -> r' d' n-down n-from-left
 (define (next-word start d n-left)
    (let loop ((r start) (d d) (y 0) (x 0) (space? #false))
@@ -337,6 +365,12 @@
          ((eq? type 'word)
             (lets ((y x r d (next-words r d n)))
                (values y x)))
+         ((eq? type 'paragraph)
+            (lets ((d dy (next-paragraphs l r d n)))
+               (values dy 0)))
+         ((eq? type 'paragraph-back)
+            (lets ((d dy (next-paragraphs l r u n)))
+               (values (- 0 dy) 0)))
          (else
             (log "unknown movement type " type)
             (values #f #f)))))
@@ -434,6 +468,11 @@
 (define (increase n)
    (+ n (if (> n 0) +1 -1)))
 
+(define (as-count x)
+   (if (number? x)
+      x
+      1))
+
 (define (get-relative-movement ll buff r self)
    (lets ((np ll (maybe-get-count ll 1))
           (n (* np r)) ;; 6dw = d6w = 3d2w
@@ -461,6 +500,16 @@
                      (if dy
                         (values ll dy dx)
                         (values ll #f #f))))
+               ((eq? k #\}) 
+                  (lets ((dy dx (movement buff (as-count r) 'paragraph)))
+                     (if dy
+                        (values ll dy dx)
+                        (values ll #f #f))))
+               ((eq? k #\{) 
+                  (lets ((dy dx (movement buff (as-count r) 'paragraph-back)))
+                     (if dy
+                        (values ll dy dx)
+                        (values ll #f #f))))
                ((eq? k sexp-key) 
                   (lets ((dy dx (movement-matching-paren-forward buff)))
                      (if dy
@@ -479,10 +528,10 @@
                                      (mx my pos)
                                      (tx (+ (- x 1) dx))
                                      (ty (+ (- y 1) dy)))
-                                 (log "cursor is at " (cons x y))
-                                 (log "offset is " (cons dx dy))
-                                 (log "relative movement from mar " pos " to this " (cons tx ty))
-                                 (log "relative movement up to pos" pos)
+                                 ;(log "cursor is at " (cons x y))
+                                 ;(log "offset is " (cons dx dy))
+                                 ;(log "relative movement from mar " pos " to this " (cons tx ty))
+                                 ;(log "relative movement up to pos" pos)
                                  ;; include cursor position at mark
                                  (cond
                                     ((= my ty)
@@ -1390,10 +1439,21 @@
 
 (define (command-move-words ll buff undo mode r cont)
    (lets ((dy dx (movement buff (or r 1) 'word)))
-      (log "moving" r "words gives dy" dy ", dx" dx)
       (if (eq? dy 0)
          (cont (keys ll #\l dx) buff undo mode) ;; use repetitions later
          (cont (-> ll (keys #\l dx) (keys #\j dy) (keys #\0 1) ) buff undo mode))))
+
+(define (command-move-paragraphs ll buff undo mode r cont)
+   (lets ((dy dx (movement buff (or r 1) 'paragraph)))
+      (if (eq? dy 0)
+         (cont (keys ll #\l dx) buff undo mode) ;; use repetitions later
+         (cont (-> ll (keys #\j dy) (keys #\0 1)) buff undo mode))))
+
+(define (command-move-paragraphs-back ll buff undo mode r cont)
+   (lets ((dy dx (movement buff (or r 1) 'paragraph-back)))
+      (if (eq? dy 0)
+         (cont (keys ll #\l dx) buff undo mode) ;; use repetitions later
+         (cont (-> ll (keys #\k (abs dy)) (keys #\0 1)) buff undo mode))))
 
 (define (command-yank ll buff undo mode r cont)
    (lets ((undop (push-undo undo buff))
@@ -1579,6 +1639,8 @@
       (put #\n command-find-next)
       (put #\m command-mark-position)
       (put #\w command-move-words)
+      (put #\} command-move-paragraphs)
+      (put #\{ command-move-paragraphs-back)
       (put #\$ command-line-end)
       (put #\0 command-line-start)
       (put #\j command-move-down)
