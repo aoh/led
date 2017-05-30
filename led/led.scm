@@ -1538,7 +1538,7 @@
    (fold (λ (ff x) (put ff x x))
       #empty
       (string->list
-         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>.:")))
+         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>.:+-*")))
 
 (define (word-char? x)
    (getf word-chars x))
@@ -1555,7 +1555,7 @@
    (cond
       ((m/^[0-9]+$/ s)
          (cons #\: (string->list s)))
-      ((m/^\/[a-zA-ZäöÄÖ0-9 _.- !]*\/$/ s)
+      ((m/^\/[a-zA-ZäöÄÖ0-9 _. !+*-]*\/$/ s)
          (reverse (cdr (reverse (string->list s)))))
       (else null)))
    
@@ -1563,7 +1563,8 @@
 (define (command-do ll buff undo mode r cont)
    (lets 
       ((u d l r x y off meta buff)
-       (line (list->string (foldr render-node null (append (reverse l) r))))
+       ;(line (list->string (foldr render-node null (append (reverse l) r))))
+       (line (current-word l r))
        (parts (c/:/ line)))
       (cond
          ((and (pair? parts) (file? (car parts)))
