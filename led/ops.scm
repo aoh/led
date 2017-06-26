@@ -10,7 +10,7 @@
        
        buffer-seek seek-line meta-dimensions paste-register ;; temp exports
        scroll-right scroll-left move-arrow seek-line-start 
-       paste-line-sequence-before paste-lines-below
+       paste-line-sequence-before paste-lines-below cut-lines
        )
     
    (import
@@ -199,8 +199,29 @@
                (else
                   (log "odd line move: " dir)
                   buff))))    
-      
-          
+     
+      ;; todo: ll no longer needed here 
+      (define (cut-lines ll buff n)
+         (lets 
+            ((u d l r x y off meta buff)
+             (d (cons (append (reverse l) r) d))
+             (taken d (split d n))
+             (l null))
+            (if (null? d)
+               ;; need to move up, unless u is null
+               (if (null? u)
+                  (values ll
+                     (buffer u d null null 1 1 '(0 . 0) meta)
+                     (tuple 'lines taken))
+                  (lets ((buff (move-arrow buff 'up #f))
+                         (u d l r x y off meta buff))
+                     (values ll
+                        (buffer u (cdr d) l r x y off meta)
+                        (tuple 'lines taken))))
+               (lets ((r d (uncons d null)))
+                  (values ll
+                     (buffer u d l r 1 y (cons 0 (cdr off)) meta)
+                     (tuple 'lines taken))))))       
   
       ;; lines → u line d y
       (define (seek-line lines end)
@@ -238,9 +259,12 @@
                      (else
                         (loop (+ xp (node-width (car r))) (- pos 1) (cons (car r) l) (cdr r) dx))))))
          
-      (define (paste-lines-below buff lines)
+      (define (paste-lines-below buff lines replace-empty?)
          (lets ((u d l r x y off meta buff))
-            (buffer u (append lines d) l r x y off meta)))
+            (if (and replace-empty? (null? u))
+               (lets ((first rest (uncons lines null)))
+                  (buffer u (append rest d) l (append first r) x y off meta))
+               (buffer u (append lines d) l r x y off meta))))
 
       (define (paste-sequence-after buff lst)
          (lets ((u d l r x y off meta buff))
@@ -289,14 +313,14 @@
                         (append fulls (maybe-join-partials last r d))
                         l (cons current this) x y off meta))))))
  
-      (define (paste-register buff reg)
+      (define (paste-register buff reg replace-empty?)
          (lets ((data (get-copy-buffer buff reg #false)))
             (cond
                ((not data)
                   buff)
                ((eq? 'lines (ref data 1))
                   (log "appending lines from buffer")
-                  (lets ((buff (paste-lines-below buff (ref data 2)))
+                  (lets ((buff (paste-lines-below buff (ref data 2) replace-empty?))
                          (buff (move-arrow buff 'down #f)))
                      buff))
                ((eq? 'sequence (ref data 1))
@@ -310,24 +334,19 @@
                   (error "how do i paste " data)))))
       
       (define (delete-lines-below buff n target)
-         (lets ((u d l r x y off meta buff)
-                (d (cons (append (reverse l) r) d))
-                (cutd d (split d n))
-                (r d (uncons d null)) ;; fixme: temp
-                (buff (buffer u d l r x y off meta)))
-            (put-copy-buffer buff target
-               (tuple 'lines cutd))))
-             
+         (lets ((ll buff lines (cut-lines null buff n)))
+            (put-copy-buffer buff target lines)))
+                   
       (define (op-delete-lines buff from to target)
          (lets ((buff (buffer-seek buff 0 (- from 1) #false)))
             (delete-lines-below buff (+ 1 (- to from)) target)))
      
-      (define (op-paste-register buff where reg)
+      (define (op-paste-register buff where reg replace-empty?)
          (let ((data (get-copy-buffer buff reg #false)))
             (if data
                (paste-register
                   (buffer-seek buff 0 (- where 1) #false)
-                  reg)
+                  reg replace-empty?)
                buff)))
 ))
 

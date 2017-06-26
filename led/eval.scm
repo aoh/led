@@ -134,7 +134,7 @@
                ((eq? op 'put)
                   (lets ((where reg (largs command))
                          (where (eval-position buff where))
-                         (buffp (op-paste-register buff where reg)))
+                         (buffp (op-paste-register buff where reg #f)))
                      (if (eq? buff buffp)
                         (values buff undo #false)
                         (values buffp 
@@ -158,7 +158,25 @@
                                (data (func lines))
                                (buffp (put-copy-buffer buffp 'lisp-result (tuple 'lines data))))
                               (values
-                                 (op-paste-register buffp (- from 1) 'lisp-result)
+                                 (op-paste-register buffp (- from 1) 'lisp-result #t)
+                                 (push-undo undo buff)
+                                 "evaluated"))))))
+               ((eq? op 'lisp-apply)
+                  (lets ((range func (largs command))
+                         (from to (eval-interval buff range))
+                         (buffp (op-delete-lines buff from to 'lisp)))
+                     (cond
+                        ((eq? buff buffp)
+                           ;; could not cut the range
+                           (values buff undo "bad range"))
+                        (else
+                           (lets 
+                              ((node (get-copy-buffer buffp 'lisp (tuple 'lines null)))
+                               (lines (map nodes->code-points (ref node 2)))
+                               (data (func lines))
+                               (buffp (put-copy-buffer buffp 'lisp-result (tuple 'lines data))))
+                              (values
+                                 (op-paste-register buffp (- from 1) 'lisp-result #t)
                                  (push-undo undo buff)
                                  "evaluated"))))))
                (else

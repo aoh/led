@@ -27,10 +27,19 @@
      
       (define (lex-sort lines)
          (sort lex-less? lines))
-       
+      
+      (define (reverse-line-order lines)
+         (reverse))
+      
+      (define (reverse-lines lines)
+         (map reverse lines))
+      
       (define extra-functions
          (list
-            (cons "sort" lex-sort)))
+            (cons "sort"    lex-sort)
+            (cons "reverse" reverse-line-order)
+            (cons "rev"     reverse-lines)
+            ))
          
       (define (find-extra name)
          (let ((res (assoc name extra-functions)))

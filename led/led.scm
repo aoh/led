@@ -960,7 +960,7 @@
 
 (define (command-paste-after ll buff undo mode r cont)
    (lets ((undo (push-undo undo buff))
-          (buffp (paste-register buff 'yank)))
+          (buffp (paste-register buff 'yank #f)))
       (cont ll buffp undo mode "pasted")))
 
 (define blank-yank
@@ -1274,7 +1274,7 @@
                   (log "read" lines "from" path)
                   (if lines
                      (lets ((undo (push-undo undo buff))
-                            (buff (paste-lines-below buff lines)))
+                            (buff (paste-lines-below buff lines #f)))
                         (output (update-screen buff))
                         (notify buff (str "Read " (length lines) " lines from '" path "'"))
                         (cont ll buff undo mode))

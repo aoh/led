@@ -1,1 +1,1 @@
-[4;1R[23;86Rifoo 3bar 0foo 32bar 9foo 1foo 99foo 9bar 2kmakkkkkkk:.,'al sort:w lisp-sort.io.out:q
+[2;1R[53;191Ria 8b 3a 3b 8a 0b 4c 4:%l sort:w lisp-sort.io.out:q

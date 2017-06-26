@@ -10,6 +10,7 @@
       (owl base)
       (owl parse)
       (owl proof)
+      (owl regex)
       (led log)
       )
    
@@ -171,7 +172,25 @@
              (skip allow-whitespace)
              (name (get-greedy+ (get-rune-if (λ (x) (not (whitespace-char? x)))))))
             (list 'lisp place (list->string name))))
-      
+     
+      ;; could use the one from (owl regex) later directly 
+      (define get-replace-regex
+         (let-parses
+            ((skip (get-imm #\s))
+             (rest (get-greedy* get-rune))
+             (func (eval (string->regex (list->string (cons #\s rest)))))
+             (verify func ""))
+            func))
+         
+      (define get-replacement
+         (let-parses
+            ((skip allow-whitespace)
+             (place (get-optionally get-interval interval-current-line))
+             (skip allow-whitespace)
+             (rep get-replace-regex))
+            (list 'lisp-apply place 
+               (λ (lines) (map rep lines)))))
+               
       ;; --------------------------
                   
       (define get-command 
@@ -182,7 +201,8 @@
                   get-write
                   get-delete
                   get-put
-                  get-lisp))
+                  get-lisp
+                  get-replacement))
              (skip allow-whitespace))
             command))
           
