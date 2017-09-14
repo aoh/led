@@ -9,12 +9,12 @@ PREFIX=/usr
 everything: bin/led .parrot
 
 .parrot: bin/led 
-	cd test && ./run ../bin/led
+	cd test && sh ./run ../bin/led
 	touch .parrot
 
 # gcc takes a while on a raspberry. this is a lot faster.
 fasltest: led.fasl bin/ol
-	cd test && ./run  ../bin/ol -l ../led.fasl --
+	cd test && sh ./run  ../bin/ol -l ../led.fasl --
 
 bin/led: led.c
 	mkdir -p bin
