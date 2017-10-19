@@ -29,7 +29,8 @@ led.fasl: bin/ol led/*.scm
 	bin/ol -o led.fasl led/led.scm
 
 install: bin/led .parrot
-	install -m 755 bin/led $(PREFIX)/bin
+	mkdir -p $(PREFIX)/bin
+	install -m 755 bin/led $(PREFIX)/bin/led
 
 uninstall:
 	rm -v $(PREFIX)/bin/led
