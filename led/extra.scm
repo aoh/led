@@ -7,7 +7,8 @@
    ;; there are intentionally no led-specific imports
    
    (import
-      (owl base))
+      (owl base)
+      (owl date))
   
    (export 
       extra-functions
@@ -15,7 +16,13 @@
       )
    
    (begin
-      
+
+      (define (current-date settings lines)
+         (list 
+            (string->list
+               (date-str (time)
+                  (get settings 'utc-offset 0)))))
+               
       (define (lex-less? a b)
          (cond
             ((null? a) #true)
@@ -25,13 +32,13 @@
                (lex-less? (cdr a) (cdr b)))
             (else #false)))
      
-      (define (lex-sort lines)
+      (define (lex-sort settings lines)
          (sort lex-less? lines))
       
-      (define (reverse-line-order lines)
-         (reverse))
+      (define (reverse-line-order settings lines)
+         (reverse lines))
       
-      (define (reverse-lines lines)
+      (define (reverse-lines settings lines)
          (map reverse lines))
       
       (define extra-functions
@@ -39,6 +46,7 @@
             (cons "sort"    lex-sort)
             (cons "reverse" reverse-line-order)
             (cons "rev"     reverse-lines)
+            (cons "date"    current-date)
             ))
          
       (define (find-extra name)

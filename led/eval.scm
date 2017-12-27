@@ -155,7 +155,7 @@
                            (lets 
                               ((node (get-copy-buffer buffp 'lisp (tuple 'lines null)))
                                (lines (map nodes->code-points (ref node 2)))
-                               (data (func lines))
+                               (data (func (get-buffer-meta buff 'global #empty) lines))
                                (buffp (put-copy-buffer buffp 'lisp-result (tuple 'lines data))))
                               (values
                                  (op-paste-register buffp (- from 1) 'lisp-result #t)

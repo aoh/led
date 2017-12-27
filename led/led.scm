@@ -102,7 +102,7 @@
 (define (delta-update-screen old new)
    (if (eq? old new)
       (begin
-         (log " - full share")
+         ;(log " - full share")
          null)
       (lets 
          ((ou od ol or ox oy ooff meta old)
@@ -1053,7 +1053,7 @@
       (values
          (buffer u d l r x y off meta)
          shift-n)))
-   
+
 (define (command-indent ll buff undo mode n cont)
    (lets 
       ((range ll (uncons ll #false))
@@ -1063,17 +1063,21 @@
             (lets ((buffp indented (indent-lines buff n)))
                (cont (keys ll #\l indented) buffp undop mode)))
          ((equal? range (tuple 'key #\%))
-            (lets ((dy dx (movement-matching-paren buff))
-                   (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
-               (cont (keys ll #\l indented) buffp undop mode)))
+            (lets ((dy dx (movement-matching-paren buff)))
+               (if dy
+                  (lets ((buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
+                     (cont (keys ll #\l indented) buffp undop mode))
+                  (cont ll buff undo mode))))
          ((equal? range (tuple 'key #\|))
             (lets ((n (sub-lines-ahead buff))
                    (buffp indentend (indent-lines buff (+ n 1))))
-               (cont ll buffp undop mode)))
+               (cont ll buffp undo mode)))
          ((equal? range (tuple 'key sexp-key))
-            (lets ((dy dx (movement-matching-paren buff))
-                   (buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
-               (cont (keys ll #\l indented ) buffp undop mode)))
+            (lets ((dy dx (movement-matching-paren buff)))
+               (if dx
+                  (lets ((buffp indented (indent-lines buff (+ dy 1)))) ;; current line + dy down
+                     (cont (keys ll #\l indented ) buffp undop mode))
+                  (cont ll buff undo mode))))
          (else
             (log "No such shift range: " range)
             (cont ll buff undo mode)))))
@@ -1109,13 +1113,13 @@
                (cont (keys ll #\h 3) buffp (push-undo undo buff) mode)))
          ((equal? range (tuple 'key #\%))
             (lets ((dy dx (movement-matching-paren buff))
-                   (buffp (unindent-lines buff (+ dy 1)))) ;; current line + dy down
+                   (buffp (if dx (unindent-lines buff (+ dy 1)) buff))) ;; current line + dy down
                (if (eq? buff buffp)
                   (cont ll buff undo mode)
                   (cont (keys ll #\h 3) buffp (push-undo undo buff) mode))))
          ((equal? range (tuple 'key sexp-key))
             (lets ((dy dx (movement-matching-paren-forward buff))
-                   (buffp (unindent-lines buff (+ dy 1)))) ;; current line + dy down
+                   (buffp (if dx (unindent-lines buff (+ dy 1) buff)))) ;; current line + dy down
                (if (eq? buff buffp)
                   (cont ll buff undo mode)
                   (cont (keys ll #\h 3) buffp (push-undo undo buff) mode))))
@@ -1229,6 +1233,18 @@
       (if fd
          (map (convert-paren meta) (map string->list (force-ll (lines fd))))
          #false)))
+
+(define (interpret-as-boolean notify buff s)
+   (cond
+      ((equal? s "1") (values #t #t))
+      ((equal? s "0") (values #t #f))
+      ((equal? s "true") (values #t #t))
+      ((equal? s "false") (values #t #f))
+      ((equal? s "on") (values #t #t))
+      ((equal? s "off") (values #t #f))
+      (else
+         (notify buff
+            (str "Not sure whether '" s "' means on or off.")))))
 
 (define (led-eval ll buff undo mode cont notify exp)
    (let ((parsed (led-parse exp)))
@@ -1350,12 +1366,27 @@
                (lets ((n (string->integer (s/set *tabstop=// exp))))
                   (notify buff (str "Tabstop = " n))
                   (cont ll (put-buffer-meta buff 'tabstop n) undo mode)))
+            ((m/set utc-offset [+-]?[0-9]+(\.[0-9]*)?$/ exp)
+               (lets ((off (string->number (s/set utc-offset // exp))))
+                  (notify buff (str "UTC-offset " off))
+                  (cont ll (put-global-meta buff 'utc-offset off) undo mode)))
+            ((m/set recursive-open-directory=.*/ exp)
+               (lets ((ok? val (interpret-as-boolean notify buff (s/.*=// exp))))
+                  (if ok?
+                     (begin
+                        (notify buff 
+                           (str "recursive-open-directory=" (if val "on" "off")))
+                        (cont ll
+                           (put-global-meta buff 'recursive-open-directory val)
+                           undo mode))
+                     (cont ll buff undo mode))))
             ((m/^search .*/ exp)
                (values ll buff undo mode (tuple 'search (s/search // exp))))
             ((m/settings/ exp)
                ;; open a settings buffer
                (values ll buff undo mode 'settings))
             (else
+               (notify buff "not understood")
                (cont ll buff undo mode))))))
 
 (define (command-enter-command ll buff undo mode r cont)
@@ -1574,10 +1605,11 @@
                   (maybe-string->command (cadr parts))
                   null))))
          ((directory? line)
-            (let ((dp (drop-dir-contents d line)))
+            (let ((dp (drop-dir-contents d line))
+                  (rec (get-global-meta buff 'recursive-open-directory #false)))
                (log "dropping length " (length d) " -> " (length dp))
                (if (eq? dp d) ;; no prefixed lines, open it
-                  (let ((contents (led-dir-recursive->list line)))
+                  (let ((contents ((if rec led-dir-recursive->list led-dir->list) line)))
                      (if contents
                         (cont ll
                            (buffer u 
