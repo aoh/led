@@ -13,7 +13,6 @@
 (define (log . stuff)
    (print-to log-fd stuff))
 
-
 (define (decimal-val c)
    (let ((c (- c #\0)))
       (cond
@@ -29,27 +28,37 @@
             (cont val b)))))
       
 (define (state-expect data succ fail)
-   (λ (b)
-      (log "expect " b " vs " data)
-      (cond
-         ((null? data)
-            ;; pattern received with total success
-            succ)
-         ((eq? b (car data))
-            ;; limited successs
-            (state-expect (cdr data) succ fail))
-         ((eq? (car data) 'decimal)
-            (let ((d (decimal-val b)))
-               (if d 
-                  (state-expect-decimal d
-                     (λ (res next)
-                        (log "decimal res" d ", end " next)
-                        (if res
-                           ((state-expect (cdr data) (succ res) fail) next)
-                           fail)))
-                  fail)))
-         (else fail))))
+   (if (null? data)
+      succ
+      (λ (b)
+         (cond
+            ((eq? b (car data))
+               ;; limited successs
+               (state-expect (cdr data) succ fail))
+            ((eq? (car data) 'decimal)
+               (let ((d (decimal-val b)))
+                  (if d 
+                     (state-expect-decimal d
+                        (λ (res next)
+                           (if res
+                              ((state-expect (cdr data) (succ res) fail) next)
+                              fail)))
+                     (fail b))))
+            (else 
+               (fail b))))))
 
+(define (num->bytes n tl)
+   (cond
+      ((eq? n 1) (cons #\1 tl))
+      ((eq? (type n) type-fix+)
+        (append (string->list (number->string n 10)) tl))
+      (else
+        (print-to stderr "num->bytes: bad pos " n)
+        (cons #\0 tl))))
+
+(define (set-cursor x y tl)
+   (ilist 27 #\[ (num->bytes (max 0 y) (cons #\; (num->bytes (max 0 x) (cons #\f tl))))))
+   
 (define terminal-state-machine
       
    (define (state-maybe-halt b)
@@ -63,20 +72,26 @@
             (print-to stderr "break again to exit")
             state-maybe-halt)
          ((eq? b 12) ;; C-l, request terminal update
-            ; request cursor position from terminal
-            ; request cursor to be placed in a far corner
-            ; rerequest cursor position
-            ; obtain farthest corner coordinate
-            ; reset cursor to original position
-            ; send information to 'screen
             ;; request cursor position
             (write-bytes stdout (list 27 #\[ #\6 #\n))
             (state-expect 
                (list 27 #\[ 'decimal #\; 'decimal #\R)
-               (λ (a)
-                  (λ (b)
-                     (log "CURSOR POS" (cons a b))
-                     state-start))
+               (λ (col)
+                  (λ (row)
+                     (write-bytes stdout
+                        (set-cursor 4095 4095 (list 27 #\[ #\6 #\n)))
+                     (state-expect 
+                        (list 27 #\[ 'decimal #\; 'decimal #\R)
+                        (λ (rows)
+                           (λ (cols)
+                              ;; send update from here
+                              (log "terminal size is " (cons rows cols))
+                              (mail 'screen
+                                 (tuple 'set-dimension rows cols))
+                              ;; restore cursor
+                              (write-bytes stdout (set-cursor row col null))
+                              state-start))
+                        state-start)))
                state-start))
          (else
             (mail 'buffers b)
@@ -92,20 +107,8 @@
    (lets ((env (wait-mail)))
       (values (ref env 1) (ref env 2))))
 
-(define (num->bytes n tl)
-   (cond
-      ((eq? n 1) (cons #\1 tl))
-      ((eq? (type n) type-fix+)
-        (append (string->list (number->string n 10)) tl))
-      (else
-        (print-to stderr "num->bytes: bad pos " n)
-        (cons #\0 tl))))
-
 (define (cursor-pos x y tl)
    (ilist 27 #\[ (num->bytes y (cons #\; (num->bytes x (list #\f))))))
-   
-(define (set-cursor x y tl)
-   (ilist 27 #\[ (num->bytes (max 0 y) (cons #\; (num->bytes (max 0 x) (cons #\f tl))))))
    
 (define (clear-line lst)       (ilist 27 #\[ #\2 #\K lst))
 (define (clear-line-right lst) (ilist 27 #\[ #\K lst))
@@ -129,7 +132,7 @@
       (tuple 'switch-to id))
    id)
 
-(define (screen active views last)
+(define (screen rows cols active views last)
    (log "screen waiting")
    (lets ((from msg (poll)))
       (log "screen got update from" from)
@@ -141,22 +144,22 @@
                   (log "switching to buffer" id)
                   (let ((val (get views id '(42 42 42))))
                      (log "val is " val)
-                     (screen id 
+                     (screen rows cols id 
                         (put views active last) ;; store current view
                         (render-screen! val last))))
+               ;((set-dimension rows cols)
+               ;   (screen rows cols active views last))
                (else
                   (log "screen wat " msg)
-                  (screen active views last))))
+                  (screen rows cols active views last))))
          ((eq? from active)
             ;; update currently active screen
-            (screen active views 
+            (screen rows cols active views 
                (render-screen! msg last)))
          (else
             ;; update background active screen
             (log "update @ " from)
-            (screen active
-               (put views from msg)
-               last)))))
+            (screen rows cols active (put views from msg) last)))))
                      
 (define (update data)
    (mail 'screen data)
@@ -235,13 +238,13 @@
     
    (fork-linked-server 'screen
       (λ ()
-         (screen 'scratch-1 empty null)))
+         (screen 10 10 'scratch-1 empty null)))
 
    (fork-linked-server 'echoer-1
       (λ () (sender 'g1 42 10000)))
    
    (fork-linked-server 'echoer-2
-      (λ () (sender 'g2 97 2000)))
+      (λ () (sender 'g2 97 13000)))
         
    (fork-linked-server 'buffers
       (λ ()
@@ -249,13 +252,14 @@
    
    (fork-linked-server 'terminal
       (λ ()
-         (terminal-stream 
-            (utf8-decoder
-               (port->byte-stream stdin)
-               (λ (loop line ll)
-                  ;; -- bad utf-8 input
-                  (print-to stderr "Bad UTF-8 in terminal input")
-                  null)))))
+         (cons 12 ;; start with a C-l to update info
+            (terminal-stream 
+                  (utf8-decoder
+                     (port->byte-stream stdin)
+                     (λ (loop line ll)
+                        ;; -- bad utf-8 input
+                        (print-to stderr "Bad UTF-8 in terminal input")
+                        null))))))
    
    (wait-threads))
    
