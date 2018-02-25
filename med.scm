@@ -13,6 +13,43 @@
 (define (log . stuff)
    (print-to log-fd stuff))
 
+
+(define (decimal-val c)
+   (let ((c (- c #\0)))
+      (cond
+         ((< c 0) #false)
+         ((> c 9) #false)
+         (else c))))
+
+(define (state-expect-decimal val cont)
+   (λ (b)
+      (let ((d (decimal-val b)))
+         (if d
+            (state-expect-decimal (+ (* val 10) d) cont)
+            (cont val b)))))
+      
+(define (state-expect data succ fail)
+   (λ (b)
+      (log "expect " b " vs " data)
+      (cond
+         ((null? data)
+            ;; pattern received with total success
+            succ)
+         ((eq? b (car data))
+            ;; limited successs
+            (state-expect (cdr data) succ fail))
+         ((eq? (car data) 'decimal)
+            (let ((d (decimal-val b)))
+               (if d 
+                  (state-expect-decimal d
+                     (λ (res next)
+                        (log "decimal res" d ", end " next)
+                        (if res
+                           ((state-expect (cdr data) (succ res) fail) next)
+                           fail)))
+                  fail)))
+         (else fail))))
+
 (define terminal-state-machine
       
    (define (state-maybe-halt b)
@@ -22,9 +59,25 @@
    
    (define (state-start b)
       (cond
-         ((eq? b 3) ;; C-c
+         ((eq? b 3) ;; C-c, maybe exit
             (print-to stderr "break again to exit")
             state-maybe-halt)
+         ((eq? b 12) ;; C-l, request terminal update
+            ; request cursor position from terminal
+            ; request cursor to be placed in a far corner
+            ; rerequest cursor position
+            ; obtain farthest corner coordinate
+            ; reset cursor to original position
+            ; send information to 'screen
+            ;; request cursor position
+            (write-bytes stdout (list 27 #\[ #\6 #\n))
+            (state-expect 
+               (list 27 #\[ 'decimal #\; 'decimal #\R)
+               (λ (a)
+                  (λ (b)
+                     (log "CURSOR POS" (cons a b))
+                     state-start))
+               state-start))
          (else
             (mail 'buffers b)
             state-start)))
@@ -154,8 +207,6 @@
                         (terminate!)
                         (buffers (cdr l) (switch-to! (car l)) null))
                      (buffers l (switch-to! (car r)) (cdr r))))
-               ((eq? msg 12) ; C-l, request window size and refresh
-                  (buffers l this r))
                (else
                   (mail this msg)
                   (buffers l this r))))
@@ -186,10 +237,10 @@
       (λ ()
          (screen 'scratch-1 empty null)))
 
-   (fork-linked-server 'echoer-1 ;; send to scratch-1 every 10s
+   (fork-linked-server 'echoer-1
       (λ () (sender 'g1 42 10000)))
    
-   (fork-linked-server 'echoer-2 ;; send to scratch-2 every 10s
+   (fork-linked-server 'echoer-2
       (λ () (sender 'g2 97 2000)))
         
    (fork-linked-server 'buffers
