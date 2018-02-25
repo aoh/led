@@ -12,27 +12,28 @@
 
 (define (log . stuff)
    (print-to log-fd stuff))
+
+(define terminal-state-machine
       
-(define (terminal-stream target)
-   (lfold
-      (λ (state n)
-         (if (eq? n 3)
-            (if (eq? state 0)
-               ;; second break, halt
-               (terminate!)
-               (begin
-                  (print-to stderr "break again to exit")
-                  0))
-            (begin
-               (mail target n)
-               1)))
-      1
-      (utf8-decoder
-         (port->byte-stream stdin)
-         (λ (loop line ll)
-            ;; -- bad utf-8 input
-            (print-to stderr "Bad UTF-8 in terminal input")
-            null))))
+   (define (state-maybe-halt b)
+      (if (eq? b 3)
+         (terminate!)
+         state-start))
+   
+   (define (state-start b)
+      (cond
+         ((eq? b 3) ;; C-c
+            (print-to stderr "break again to exit")
+            state-maybe-halt)
+         (else
+            (mail 'buffers b)
+            state-start)))
+   
+   state-start)
+   
+(define (terminal-stream ll)
+   (lfold (λ (state n) (state n))
+      terminal-state-machine ll))
 
 (define (poll)
    (lets ((env (wait-mail)))
@@ -64,7 +65,9 @@
 (define (render-screen! new old)
    (write-bytes stdout 
       (clear-screen (set-cursor 5 5 
-         (render new'()))))
+         ;(render new '())
+         (reverse new)
+         )))
    new)
 
 ;; switch-to! id → id
@@ -141,11 +144,18 @@
                   (if (null? l)
                      (buffers l this r)
                      (buffers (cdr l) (switch-to! (car l)) (cons this r))))
-               ((eq? msg 2)
-                  ;; create new buffer
+               ((eq? msg 2) ; C-b, create buffer
                   (let ((id (gensym (list l this r))))
                      (fork-buffer! id)
-                     (buffers l (switch-to! id) (cons this r))))
+                     (buffers (cons this l) (switch-to! id) r)))
+               ((eq? msg 23) ; C-w, close buffer
+                  (if (null? r)
+                     (if (null? l)
+                        (terminate!)
+                        (buffers (cdr l) (switch-to! (car l)) null))
+                     (buffers l (switch-to! (car r)) (cdr r))))
+               ((eq? msg 12) ; C-l, request window size and refresh
+                  (buffers l this r))
                (else
                   (mail this msg)
                   (buffers l this r))))
@@ -188,7 +198,13 @@
    
    (fork-linked-server 'terminal
       (λ ()
-         (terminal-stream 'buffers)))
+         (terminal-stream 
+            (utf8-decoder
+               (port->byte-stream stdin)
+               (λ (loop line ll)
+                  ;; -- bad utf-8 input
+                  (print-to stderr "Bad UTF-8 in terminal input")
+                  null)))))
    
    (wait-threads))
    
