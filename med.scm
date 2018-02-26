@@ -1,4 +1,6 @@
-(import (owl unicode))
+(import 
+   (owl unicode)
+   (owl date))
 
 (define (set-terminal-rawness rawp)
    (sys-prim 26 rawp #f #f))
@@ -116,14 +118,60 @@
 (define (clear-screen lst) (ilist 27 #\[ #\2 #\J lst))
 (define (clear-screen-top lst) (ilist 27 #\[ #\1 #\J lst))
 (define (clear-screen-bottom lst) (ilist 27 #\[ #\J lst))
- 
+
+
+
+(define (maybe-simple-rows draw-state)
+   (tuple-case draw-state
+      ((simple x y rows) rows)
+      (else null)))
+
+
+(define (take-upto lst n out)
+   (cond
+      ((eq? n 0) out)
+      ((null? lst) out)
+      (else
+         (cons (car lst)
+            (take-upto (cdr lst) (- n 1) out)))))
+
+(define (car* x)
+   (if (pair? x) (car x) x))
+
+(define (cdr* x)
+   (if (pair? x) (cdr x) x))
+
+;; screen must end up with rows and cursor at (x, y)
+(define (render-simple! x y rows nrows ncols old-rows)
+   (lets ((now (string->bytes (date-str (time))))
+          (now-row (max 1 nrows))
+          (now-col (max 1 (- ncols (length now))))
+          (finale
+            (set-cursor now-col now-row 
+              (append now (set-cursor x y null)))))
+      (write-bytes stdout
+         (let loop ((rows rows) (old old-rows) (y 1) (out finale))
+            (cond
+               ((null? rows) 
+                  (loop '((#\~)) old y out))
+               ((eq? y nrows) out)
+               ((eq? rows old) out)
+               ((equal? (car rows) (car* old))
+                  (loop (cdr rows) (cdr* old) (+ y 1) out))
+               (else
+                  (loop (cdr rows) (cdr* old) (+ y 1)
+                     (set-cursor 1 y 
+                        (clear-line-right 
+                           (take-upto (car rows) ncols out))))))))))
+
 ;; render-screen! new old → new 
-(define (render-screen! new old)
-   (write-bytes stdout 
-      (clear-screen (set-cursor 5 5 
-         ;(render new '())
-         (reverse new)
-         )))
+(define (render-screen! new old rows cols)
+   ;(log "rendering screen of dimensions" (cons cols rows))
+   (tuple-case new
+      ((simple x y rowdata)
+         (render-simple! x y rowdata rows cols (maybe-simple-rows old)))
+      (else
+         (log "render: not sure how to render" new)))
    new)
 
 ;; switch-to! id → id
@@ -132,58 +180,71 @@
       (tuple 'switch-to id))
    id)
 
+
+
 (define (screen rows cols active views last)
-   (log "screen waiting")
+   ;(log "screen waiting " (cons rows cols))
    (lets ((from msg (poll)))
-      (log "screen got update from" from)
+      ;(log "screen got update from" from)
       (cond
          ((tuple? msg)
             (tuple-case msg
                ;; switch buffer and refresh screen 
                ((switch-to id)
                   (log "switching to buffer" id)
-                  (let ((val (get views id '(42 42 42))))
-                     (log "val is " val)
+                  (let ((val (get views id '())))
+                     ;(log "val is " val)
                      (screen rows cols id 
                         (put views active last) ;; store current view
-                        (render-screen! val last))))
-               ;((set-dimension rows cols)
-               ;   (screen rows cols active views last))
+                        (render-screen! val last rows cols))))
+               ((set-dimension rows cols)
+                  (screen rows cols active views last))
+               ((simple x y rowdata)
+                  (screen rows cols active views
+                     (render-screen! msg last rows cols)) )
+               ((ping)
+                  (screen rows cols active views
+                     (render-screen! last last rows cols)))
                (else
                   (log "screen wat " msg)
                   (screen rows cols active views last))))
          ((eq? from active)
             ;; update currently active screen
             (screen rows cols active views 
-               (render-screen! msg last)))
+               (render-screen! msg last rows cols)))
          (else
             ;; update background active screen
-            (log "update @ " from)
+            ;(log "update @ " from)
             (screen rows cols active (put views from msg) last)))))
                      
-(define (update data)
-   (mail 'screen data)
+(define (update! x y data)
+   (mail 'screen (tuple 'simple x y data))
    data)
 
-(define (cdr* data)
-   (if (pair? data)
-      (cdr data)
-      data))
-
-(define (scratch-buffer data)
+(define (scratch-buffer x y rows)
    (lets ((from msg (poll)))
       (log "scratch buffer got" msg "from" from)
       (cond
          ((eq? msg 'redraw)
-            (scratch-buffer data))
+            (scratch-buffer x y rows))
          ((eq? msg 127)
-            (scratch-buffer (update (cdr* data))))
+            (if (= x 1)
+               (scratch-buffer x y rows)
+               (scratch-buffer (- x 1) y
+                  (update! (- x 1) y
+                     (cons
+                        (reverse (cdr (reverse (car rows))))
+                        (cdr rows))))))
          (else
-            (scratch-buffer (update (cons msg data)))))))
+            (scratch-buffer (+ x 1) y 
+               (update! (+ x 1) y
+                  (cons
+                     (append (car rows) (list msg))
+                     (cdr rows))))))))
 
 (define (fork-buffer! id)
    (fork-linked-server id
-      (λ () (scratch-buffer (string->list (symbol->string id))))))
+      (λ () (scratch-buffer 1 1 (list (list))))))
     
 (define (buffers l this r)
    (log "buffers waiting for input")
@@ -225,14 +286,14 @@
 
 (define (sender to byte interval)
    (sleep interval)
-   (log "sender sending to" to "byte" byte)
+   ;(log "sender sending to" to "byte" byte)
    (mail to byte)
    (sender to byte interval))
 
 (define (start)
-   (print "starting")
-   (print "terminal rawness: "
-      (set-terminal-rawness #true))
+   (set-terminal-rawness #true)
+   (write-bytes stdout
+      (set-cursor 1 1 (clear-screen null)))
 
    (fork-buffer! 'scratch)
     
@@ -240,6 +301,9 @@
       (λ ()
          (screen 10 10 'scratch-1 empty null)))
 
+   (mail 'screen 
+      (tuple 'simple 1 1 null))
+   
    (fork-linked-server 'echoer-1
       (λ () (sender 'g1 42 10000)))
    
@@ -249,6 +313,9 @@
    (fork-linked-server 'buffers
       (λ ()
          (buffers null (switch-to! 'scratch) null)))
+  
+   (fork-linked-server 'pinger
+      (λ () (sender 'screen (tuple 'ping) 1000))) 
    
    (fork-linked-server 'terminal
       (λ ()
