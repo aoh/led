@@ -2324,9 +2324,9 @@
          0)
       (else
          (log "started " dict ", " args)
-         (fork-linked-server 'logger (λ () (start-log dict)))
-         (fork-linked-server 'recorder (λ () (start-recorder dict)))
-         (fork-linked-server 'led (λ () (start-led dict args (led-input-stream dict))))
+         (thread 'logger (start-log dict))
+         (thread 'recorder (start-recorder dict))
+         (thread 'led (start-led dict args (led-input-stream dict)))
          (log "started")
          (trampoline))))
 
