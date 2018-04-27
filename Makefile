@@ -20,9 +20,9 @@ bin/led: led.c
 	mkdir -p bin
 	$(CC) $(CFLAGS) -o bin/led led.c
 
-led.c: led/*.scm
-	make bin/ol
-	bin/ol $(OFLAGS) -o led.c led/led.scm
+led.c: led/*.scm tmp/owl-lisp/bin/vm
+	#bin/ol $(OFLAGS) -o led.c led/led.scm
+	tmp/owl-lisp/bin/vm tmp/owl-lisp/fasl/init.fasl $(OFLAGS) -o led.c led/led.scm
 
 led.fasl: bin/ol led/*.scm
 	make bin/ol
@@ -41,6 +41,12 @@ bin/ol:
 	sha256sum tmp/$(OWL).c.gz | grep -q $(OWLSHA)
 	gzip -d < tmp/$(OWL).c.gz > tmp/$(OWL).c
 	cc -O2 -o bin/ol tmp/$(OWL).c
+
+tmp/owl-lisp:
+	clone https://github.com/aoh/owl-lisp.git
+
+tmp/owl-lisp/bin/vm: tmp/owl-lisp
+	cd tmp/owl-lisp && make bin/vm
 
 test: .parrot
 

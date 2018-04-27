@@ -85,7 +85,7 @@
             (list 'label label)))
          
       (define get-position
-         (get-any-of
+         (any
             get-integer
             get-delta
             get-dot
@@ -114,7 +114,7 @@
             (list 'interval pos pos)))
            
       (define get-interval
-         (get-any-of
+         (any
             get-dotted-interval
             get-interval-everything
             get-single-line-position))
@@ -197,7 +197,7 @@
          (let-parses
             ((skip allow-whitespace)
              (command 
-                (get-any-of
+                (any
                   get-write
                   get-delete
                   get-put
