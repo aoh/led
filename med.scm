@@ -243,7 +243,7 @@
                      (cdr rows))))))))
 
 (define (fork-buffer! id)
-   (fork-linked-server id
+   (thunk->thread id
       (λ () (scratch-buffer 1 1 (list (list))))))
     
 (define (buffers l this r)
@@ -297,27 +297,27 @@
 
    (fork-buffer! 'scratch)
     
-   (fork-linked-server 'screen
+   (thunk->thread 'screen
       (λ ()
          (screen 10 10 'scratch-1 empty null)))
 
    (mail 'screen 
       (tuple 'simple 1 1 null))
    
-   (fork-linked-server 'echoer-1
+   (thunk->thread 'echoer-1
       (λ () (sender 'g1 42 10000)))
    
-   (fork-linked-server 'echoer-2
+   (thunk->thread 'echoer-2
       (λ () (sender 'g2 97 13000)))
         
-   (fork-linked-server 'buffers
+   (thunk->thread 'buffers
       (λ ()
          (buffers null (switch-to! 'scratch) null)))
   
-   (fork-linked-server 'pinger
+   (thunk->thread 'pinger
       (λ () (sender 'screen (tuple 'ping) 1000))) 
    
-   (fork-linked-server 'terminal
+   (thunk->thread 'terminal
       (λ ()
          (cons 12 ;; start with a C-l to update info
             (terminal-stream 
