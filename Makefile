@@ -43,7 +43,8 @@ bin/ol:
 	cc -O2 -o bin/ol tmp/$(OWL).c
 
 tmp/owl-lisp:
-	clone https://github.com/aoh/owl-lisp.git
+	mkdir -p tmp
+	cd tmp && git clone https://github.com/aoh/owl-lisp.git
 
 tmp/owl-lisp/bin/vm: tmp/owl-lisp
 	cd tmp/owl-lisp && make bin/vm
