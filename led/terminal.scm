@@ -360,7 +360,7 @@
       (define (read-byte)
          (let ((block (get-block stdin 1)))
             (cond
-               ((eof? block) block)
+               ((eof-object? block) block)
                (block
                   (vector-ref block 0))
                (else block))))
