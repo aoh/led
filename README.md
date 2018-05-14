@@ -38,8 +38,7 @@ Currently working features consist mainly of:
     - `:search <foo>` searches for the literal string `<foo>` from paths in the directory buffer at position 1, if it's there.
     - the resulting buffer contains matching file paths, offsets and sample content
     - pressing `enter` on the matching line jumps to the match
-  - lisp extensions
- - some lisp extensions
+  - some lisp extensions
     - `:<range>l <lisp-extension>` calls the lisp function with contents of the range
     - `:%l sort` sorts contents
     - `:l date` replaces range with current date (you may want to `:set utc-offset +2.0`)
@@ -50,14 +49,14 @@ Currently working features consist mainly of:
 $ git clone https://github.com/aoh/led.git
 $ cd led
 $ make
-$ bin/led
+$ bin/led .
 ```
 
 ## Common issues
 
 Led does not automatically resize buffer after resizing terminal. Press `^L` to have it recompute the terminal size.
 
-File content search is slow if there are lots of files. You can remove directories holding uninteresting files from buffer 1 if this is an issue for now.
+File content search is really slow, if there are lots of files. You can remove directories holding uninteresting files from buffer 1 if this is an issue for now.
 
 The cursor does not move when you press the arrow keys. You should be using `h`, `j`, `k` and `l`. Arrow keys will be added at some point though.
 
@@ -67,3 +66,15 @@ There is no line wrap. This is an opinionated feature.
 I'd rather see part of the real structure than a broken representation of all of it.
 
 Terminal scrolling is fairly slow. This can be optimized, but I haven't bothered yet since `^F` and `^B` are fast enough even on a Raspberry Pi.
+
+## Goals
+
+Led should end up having most or all of traditional ex/vi features 
+along with at least the current extensions in a fairly simple and tractable
+codebase.
+
+Led should extend the vi mindset with a way that makes non-trivial extensions 
+easy to be added afterwards as extensions. Current lisp extensions use of 
+`enter` as a somewhat semantics aware general purpose action are experimental 
+steps along these lines.
+
