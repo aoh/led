@@ -3,7 +3,7 @@ OFLAGS=-O1
 CFLAGS=-O2 -Wall
 PREFIX=/usr
 OWLVER=0.1.15
-OWLURL=https://github.com/aoh/owl-lisp/releases/download/v$(OWLVER)
+OWLURL=https://github.com/owl-lisp/owl/releases/download/v$(OWLVER)
 
 everything: bin/led .parrot
 
