@@ -92,7 +92,7 @@
             ((u d l r x y off meta buff)
              (w h (meta-dimensions meta))
              (dx dy off)
-             (step (* 2 (div w 3)))
+             (step (* 2 (quotient w 3)))
              (buff (buffer u d l r (- x step) y (cons (+ dx step) dy) meta)))
             buff))
 
@@ -104,7 +104,7 @@
             (if (eq? dx 1)
               buff
               (lets
-                ((step (min dx (* 2 (div w 3))))
+                ((step (min dx (* 2 (quotient w 3))))
                  (buff (buffer u d l r (+ x step) y (cons (- dx step) dy) meta)))
                 buff))))
 
@@ -112,7 +112,7 @@
          (lets 
           ((u d l r x y off meta buff)
            (w h (meta-dimensions meta))
-           ;(step (+ 1 (* 2 (div h 3))))
+           ;(step (+ 1 (* 2 (quotient h 3))))
            (step 1)
            (dx dy off)
            (buff 
@@ -205,7 +205,7 @@
          (lets 
             ((u d l r x y off meta buff)
              (d (cons (append (reverse l) r) d))
-             (taken d (split d n))
+             (taken d (lsplit d n))
              (l null))
             (if (null? d)
                ;; need to move up, unless u is null
@@ -299,7 +299,7 @@
       (define (paste-line-sequence buff lst)
          (lets ((u d l r x y off meta buff)
                 (this lst (uncons lst null))
-                (fulls lasts (split lst (- (length lst) 1)))
+                (fulls lasts (lsplit lst (- (length lst) 1)))
                 (last _ (uncons lasts null)))
             (if (and (null? fulls) (null? last))
                 ;; special case, no new lines

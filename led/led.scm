@@ -228,7 +228,7 @@
                (lets
                   ((line u (uncons u null))
                    (line-len (printable-length line))
-                   (q x (quotrem (+ line-len 1) w))
+                   (q x (truncate/ (+ line-len 1) w))
                    (xp (* q w))
                    (buffp
                      (buffer u d (reverse line) r x (- y 1) (cons xp (cdr off)) meta)))
@@ -550,20 +550,20 @@
             (values ll #f #f)))))
 
 (define (cut-backward-multiline u l dy dx)
-   (lets ((next-lines u (split u (- dy 1)))
+   (lets ((next-lines u (lsplit u (- dy 1)))
           (new-l u (uncons u null))
-          (new-l last-partial (split new-l dx)))
+          (new-l last-partial (lsplit new-l dx)))
       (values u (reverse new-l)
          (tuple 'line-sequence
             (cons last-partial (reverse (cons (reverse l) next-lines)))))))
 
 (define (cut-forward r d dy dx)
    (if (eq? dy 0)
-      (lets ((cutd r (split r dx)))
+      (lets ((cutd r (lsplit r dx)))
          (values r d (tuple 'sequence cutd)))
-      (lets ((next-lines d (split d (- dy 1)))
+      (lets ((next-lines d (lsplit d (- dy 1)))
              (new-r d (uncons d null))
-             (last-partial new-r (split new-r dx)))
+             (last-partial new-r (lsplit new-r dx)))
          (values new-r d 
             (tuple 'line-sequence 
                (cons r (append next-lines (list last-partial))))))))
@@ -590,7 +590,7 @@
             (if (< dx 0)
                ;; cut backwards, one line
                (lets ((l r (step-zipper l r +1)) ;; include cursor position
-                      (rcut l (split l (* dx -1))))
+                      (rcut l (lsplit l (* dx -1))))
                   (values ll
                      (maybe-scroll-left 
                         (buffer u d l r (+ 1 (- x (printable-length rcut))) y off meta))
@@ -617,7 +617,7 @@
    (lets 
       ((u d l r x y off meta buff)
        (d (cons (append (reverse l) r) d))
-       (taken d (split d n))
+       (taken d (lsplit d n))
        (l null))
       (if (null? d)
          ;; need to move up, unless u is null
@@ -2107,7 +2107,7 @@
                   (log "Going to buffer " n)
                   (lets ((buffers (append (reverse left) (cons state right))))
                      (if (and (> n 0) (<= n (length buffers)))
-                        (lets ((left right (split buffers (- n 1))))
+                        (lets ((left right (lsplit buffers (- n 1))))
                            (led-buffers ll (reverse left) (car right) (cdr right) 
                               (str "switched to " n)))
                         (begin

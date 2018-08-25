@@ -119,7 +119,7 @@
             ((whitespace? node) #false)
             ((tuple? node) #false)
             ;; fixme: delimiter? + unify with other such ops
-            ((has? '(#\( #\) #\" #\[ #\] #\{ #\}) node)
+            ((assq node '(#\( #\) #\" #\[ #\] #\{ #\}))
                #false)
             (else #true)))
       

@@ -76,7 +76,9 @@
       (owl lazy)
       (owl ff)
       (owl list-extra)
+      (owl port)
       (scheme base)
+      (scheme write)
       (led log)
       (owl io)
       (only (owl unicode) utf8-decoder utf8-encode)
@@ -393,7 +395,7 @@
               (values 
                 (reverse (string->list elem)) 
                 null 
-                (max 0 (* (- (quot len off) 1) off)))))
+                (max 0 (* (- (quotient len off) 1) off)))))
           (else
             (values (ref elem 1) (ref elem 2) (ref elem 3)))))
 
@@ -417,7 +419,7 @@
       (define (readline ll history x y w)
         (lets 
           ((history (cons null history))  ; (newer . older)
-           (offset-delta (+ 1 (div (- w x) 2)))
+           (offset-delta (+ 1 (quotient (- w x) 2)))
            (width (- w x)))
           (let loop ((ll ll) (hi history) (left null) (right null) (cx x) (off 0))
             (lets ((op ll (uncons ll #false)))
