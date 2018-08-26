@@ -12,6 +12,8 @@
 
    (begin
 
+      (define null '())
+            
       (define search-timeout 10) ;; timeout after which search is stopped
 
       (define max-file-results 1000) ;; max results per file (protect against result set blowup)

@@ -41,6 +41,8 @@
   
    (begin    
       
+      (define null '())
+            
       (define rp-node
         ;(tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal)))
          (tuple 'replace (list 41) 1 (tio (font-dim) (font-fg-cyan) (raw (list 41)) (font-normal))))

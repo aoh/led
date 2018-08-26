@@ -2,6 +2,8 @@
    (owl unicode)
    (owl date))
 
+(define null '())
+            
 (define (set-terminal-rawness rawp)
    (sys-prim 26 rawp #f #f))
 

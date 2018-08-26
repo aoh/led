@@ -14,6 +14,8 @@
    
    (begin
     
+      (define null '())
+      
       (define (maybe-car exp default)
          (if (pair? exp)
             (car exp) 

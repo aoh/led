@@ -88,6 +88,8 @@
 
    (begin
      
+      (define null '())
+            
       (define (num->bytes n tl)
          (cond
             ((eq? n 1) (cons #\1 tl))
@@ -318,7 +320,7 @@
         (ilist 27 #\[ #\u lst))
 
       (define (cursor-top-left n) 
-         (write-byte-vector stdout #(27 #\[ #\H)))
+         (write-bytevector #(27 #\[ #\H) stdout))
 
       ;; Interaction with terminal
 
@@ -348,7 +350,7 @@
       ;; ll → cols rows ll'
       (define (get-cursor-position ll)
         ;; request cursor position
-        (write-byte-vector stdout #(27 #\[ #\6 #\n))
+        (write-bytevector #(27 #\[ #\6 #\n) stdout)
         (wait-cursor-position ll))
 
       (define (get-terminal-size ll)
@@ -360,7 +362,7 @@
           (values xm ym ll)))
 
       (define (read-byte)
-         (let ((block (get-block stdin 1)))
+         (let ((block (read-bytevector 1 stdin)))
             (cond
                ((eof-object? block) block)
                (block
@@ -594,7 +596,7 @@
             ((x y ll (get-terminal-size (terminal-input)))
              (ll res (editable-readline ll history)))
             (set-terminal-rawness #false)
-            (write-byte-vector stdout #(10))
+            (write-bytevector #(10) stdout)
             (if res
               (lets ((val (string->sexp res failed)))
                 (if (eq? val failed)
@@ -612,7 +614,7 @@
             ((x y ll (get-terminal-size (terminal-input)))
              (ll res (editable-readline ll history)))
             (set-terminal-rawness #false)
-            (write-byte-vector stdout #(10))
+            (write-bytevector #(10) stdout)
             (if res
               (pair res (loop (cons res history) ll))
               null))))

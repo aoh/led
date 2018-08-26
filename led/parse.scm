@@ -8,7 +8,7 @@
 
    (import
       (owl base)
-      (owl parse)
+      (prefix (owl parse) get-)
       (owl proof)
       (owl regex)
       (led log)
@@ -16,8 +16,10 @@
    
    (begin
 
+      (define null '())
+            
       (define (get-imm-as imm value)
-         (let-parses
+         (get-parses
             ((skip (get-imm imm)))
             value))
       
@@ -42,17 +44,17 @@
                 (eq? byte #\tab))))
        
       (define allow-whitespace
-         (get-greedy*
+         (get-greedy-star
             (get-byte-if whitespace-char?)))
                   
       (define get-digit
-         (let-parses
+         (get-parses
             ((x (get-byte-if (λ (x) (<= #\0 x #\9)))))
             (- x #\0)))
 
       (define get-integer
-         (let-parses
-            ((as (get-greedy+ get-digit)))
+         (get-parses
+            ((as (get-greedy-plus get-digit)))
             (fold (λ (x a) (+ (* x 10) a)) 0 as)))
              
       (define get-dot
@@ -67,7 +69,7 @@
             (get-imm-as #\- '-)))
       
       (define get-delta
-         (let-parses
+         (get-parses
             ((sign get-sign)
              (n get-integer))
             (list sign 'dot n)))
@@ -76,7 +78,7 @@
          (<= #\a x #\z))
       
       (define get-label
-         (let-parses
+         (get-parses
             ((skip (get-imm #\'))
              (label 
                 (get-either 
@@ -85,7 +87,7 @@
             (list 'label label)))
          
       (define get-position
-         (one-of
+         (get-one-of
             get-integer
             get-delta
             get-dot
@@ -102,19 +104,19 @@
          (get-imm-as #\% interval-everything)) 
 
       (define get-dotted-interval
-         (let-parses
+         (get-parses
             ((start get-position)
              (skip (get-imm #\,))
              (end get-position))
             (list 'interval start end)))
 
       (define get-single-line-position
-         (let-parses
+         (get-parses
             ((pos get-position))
             (list 'interval pos pos)))
            
       (define get-interval
-         (one-of
+         (get-one-of
             get-dotted-interval
             get-interval-everything
             get-single-line-position))
@@ -122,15 +124,15 @@
       ;; write command =  #(write[!] range path)
 
       (define get-path
-         (let-parses
+         (get-parses
             ((chars
-               (get-greedy+
+               (get-greedy-plus
                   (get-rune-if ;; allow-8
                      (λ (x) (not (eq? x #\space)))))))
             (list->string chars)))
       
       (define get-write
-         (let-parses
+         (get-parses
             ((interval 
                (get-optionally get-interval interval-everything))
              (skip allow-whitespace)
@@ -141,7 +143,7 @@
             (list operation interval path)))
 
       (define get-delete
-         (let-parses
+         (get-parses
             ((interval 
                (get-optionally get-interval interval-current-line))
              (skip allow-whitespace)
@@ -152,7 +154,7 @@
             (list 'delete interval target)))
 
       (define get-put
-         (let-parses
+         (get-parses
             ((place (get-optionally get-position 'dot))
              (skip allow-whitespace)
              (skip (get-imm #\p))
@@ -164,26 +166,26 @@
             (list 'put place reg)))
          
       (define get-lisp
-         (let-parses
+         (get-parses
             ((place 
                (get-optionally get-interval interval-current-line))
              (skip allow-whitespace)
              (skip (get-imm #\l))
              (skip allow-whitespace)
-             (name (get-greedy+ (get-rune-if (λ (x) (not (whitespace-char? x)))))))
+             (name (get-greedy-plus (get-rune-if (λ (x) (not (whitespace-char? x)))))))
             (list 'lisp place (list->string name))))
      
       ;; could use the one from (owl regex) later directly 
       (define get-replace-regex
-         (let-parses
+         (get-parses
             ((skip (get-imm #\s))
-             (rest (get-greedy* get-rune))
+             (rest (get-greedy-star get-rune))
              (func (eval (string->regex (list->string (cons #\s rest)))))
              (verify func ""))
             func))
          
       (define get-replacement
-         (let-parses
+         (get-parses
             ((skip allow-whitespace)
              (place (get-optionally get-interval interval-current-line))
              (skip allow-whitespace)
@@ -194,10 +196,10 @@
       ;; --------------------------
                   
       (define get-command 
-         (let-parses
+         (get-parses
             ((skip allow-whitespace)
              (command 
-                (one-of
+                (get-one-of
                   get-write
                   get-delete
                   get-put
@@ -224,7 +226,7 @@
        
       (define (led-parse thing)
          (log "parsing " thing)
-         (let ((res (try-parse get-command (any->ll thing) #f #f #f)))
+         (let ((res (get-try-parse get-command (any->ll thing) #f #f #f)))
             (log "parsed " res)
             res))
 

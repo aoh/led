@@ -17,6 +17,8 @@
 
 (define version-str "led v0.1a")
 
+(define null '())
+
 (define (output lst)
    (write-bytes stdout lst))
 

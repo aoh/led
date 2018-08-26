@@ -17,6 +17,8 @@
    
    (begin
 
+      (define null '())
+      
       (define (current-date settings lines)
          (list 
             (string->list

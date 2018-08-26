@@ -36,6 +36,8 @@
 
    (begin      
 
+      (define null '())
+      
       (define (buffer up down left right x y off meta)
          (tuple up down left right x y off meta))
    
