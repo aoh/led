@@ -180,6 +180,15 @@
             (get-global-meta buff 'abbreviations #empty)
             from to))))
       
+(define word-chars 
+   (fold (λ (ff x) (put ff x x))
+      #empty
+      (string->list
+         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>.:+-*")))
+
+(define (word-char? x)
+   (get word-chars x #f))
+
 (define (abbreviate l abs)
    (cond
       ((eq? abs empty) #false)
@@ -204,7 +213,6 @@
        (w h (meta-dimensions meta)))
       (lets ((node (key-node k meta))
              (nw (node-width node)))
-         (log "adding node " node)
          (if (< (+ x nw) w)
             (if (not (word-char? node))
                (lets ((lp (maybe-unabbreviate buff l))
@@ -1398,7 +1406,7 @@
        (command-history (get-global-meta buff 'command-history null))
        (ll res 
           (readline ll command-history
-            2 (+ 1 (screen-height buff) 1) (screen-width buff)))
+            2 (+ 1 (screen-height buff)) (screen-width buff)))
        (buff
          (if res
             (put-global-meta buff 'command-history
@@ -1567,14 +1575,6 @@
                x)))
       contents))
 
-(define word-chars 
-   (fold (λ (ff x) (put ff x x))
-      #empty
-      (string->list
-         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>.:+-*")))
-
-(define (word-char? x)
-   (getf word-chars x))
 
 (define (current-word l r)
    (lets ((l _ (take-while word-char? (nodes->code-points l)))

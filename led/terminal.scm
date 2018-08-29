@@ -362,7 +362,7 @@
           (values xm ym ll)))
 
       (define (read-byte)
-         (let ((block (read-bytevector 1 stdin)))
+         (let ((block (read-bytevector stdin 1)))
             (cond
                ((eof-object? block) block)
                (block
