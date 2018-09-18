@@ -59,10 +59,11 @@
                   null lines))))
 
       (define (current-date settings lines)
-         (list 
+         (cons
             (string->list
                (date-str (time)
-                  (get settings 'utc-offset 0)))))
+                  (get settings 'utc-offset 0)))
+            lines))
 
       (define (lex-less? a b)
          (cond
