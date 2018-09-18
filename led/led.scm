@@ -2272,17 +2272,16 @@
       )))
 
 (define (trampoline)
-  (let ((env (wait-mail)))
-    (log "main: " env)
+   (let ((env (wait-mail)))
     (set-terminal-rawness #false)
+    (log "Trampoline: " env)
     (if (and (eq? (ref env 1) 'led) (eq? (ref (ref env 2) 1) 'finished))
       (begin
          (log "trampoline: finished")
          (wait 10) ;; let other threads run if necessary (mainly send debug info before halt)
          0)
       (begin
-        (print "error: " env)
-        (mail 'logger (list 'ERROR env))
+        (log (list "ERROR: " env))
         (wait 100)
         (halt 1)))))
 
@@ -2329,6 +2328,9 @@
          (thread 'logger (start-log dict))
          (thread 'recorder (start-recorder dict))
          (thread 'led (start-led dict args (led-input-stream dict)))
+         (link 'led)
+         (link 'logger)
+         (link 'recorder)
          (log "started")
          (trampoline))))
 
