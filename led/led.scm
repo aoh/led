@@ -621,30 +621,6 @@
                (log "cut forwards")
                (values ll (buffer u d l r (+ 1 (printable-length l)) y off meta) cut))))))
 
-
-
-(define (cut-lines ll buff n)
-   (lets 
-      ((u d l r x y off meta buff)
-       (d (cons (append (reverse l) r) d))
-       (taken d (lsplit d n))
-       (l null))
-      (if (null? d)
-         ;; need to move up, unless u is null
-         (if (null? u)
-            (values ll
-               (buffer u d null null 1 1 '(0 . 0) meta)
-               (tuple 'lines taken))
-            (lets ((buff (move-arrow buff 'up #f))
-                   (u d l r x y off meta buff))
-               (values ll
-                  (buffer u (cdr d) l r x y off meta)
-                  (tuple 'lines taken))))
-         (lets ((r d (uncons d null)))
-            (values ll
-               (buffer u d l r 1 y (cons 0 (cdr off)) meta)
-               (tuple 'lines taken))))))
-
 (define (more-indented? ref lst)
    (cond
       ((null? lst) #false)
@@ -681,6 +657,7 @@
              (cond
                 ((eq? self k)
                    ;; cut lines via shortcut
+                   (log "XX")
                    (cut-lines ll buff n))
                 ((eq? #\| k)
                    (cut-lines ll buff
