@@ -3,32 +3,32 @@
 ;;;
 
 (define-library (led ops)
-   
-   (export 
+
+   (export
        op-delete-lines   ;; buff from to target → buff'
        op-paste-register ;; buff where reg → buff'
-       
+
        buffer-seek seek-line meta-dimensions paste-register ;; temp exports
-       scroll-right scroll-left move-arrow seek-line-start 
+       scroll-right scroll-left move-arrow seek-line-start
        paste-line-sequence-before paste-lines-below cut-lines
        )
-    
+
    (import
       (owl base)
       (led buffer)
       (led log)
       (led node))
-  
-   (begin 
+
+   (begin
 
       (define null '())
-            
+
       (define (meta-dimensions meta)
         (let ((glob (get meta 'global #empty)))
-           (values 
+           (values
               (get glob 'width 20)
               (get glob 'height 10))))
-     
+
       ;; (a b c d ... n) 3 → (c b a) (d... n) delta, because some chars require more space
       (define (seek-in-line line pos)
         (let loop ((line line) (pos pos) (l null))
@@ -39,7 +39,7 @@
                (log "warning: empty line at seek-in-line")
                (values l line pos))
             (else
-              (lets 
+              (lets
                 ((w (node-width (car line)))
                  (pos (- pos w)))
                 (if (> pos 0)
@@ -201,30 +201,32 @@
                (else
                   (log "odd line move: " dir)
                   buff))))    
-     
-      ;; todo: ll no longer needed here 
+
+      ;; ll no longer modified here, but it's used for the op
       (define (cut-lines ll buff n)
          (lets 
             ((u d l r x y off meta buff)
-             (d (cons (append (reverse l) r) d))
+             (d (cons (append (reverse l) r) d)) ;; current and lines below
+             (dx d)
              (taken d (lsplit d n))
              (l null))
             (if (null? d)
-               ;; need to move up, unless u is null
+               ;; current line removed → try to move up
                (if (null? u)
+                  ;; no way up
                   (values ll
                      (buffer u d null null 1 1 '(0 . 0) meta)
                      (tuple 'lines taken))
                   (lets ((buff (move-arrow buff 'up #f))
                          (u d l r x y off meta buff))
                      (values ll
-                        (buffer u (cdr d) l r x y off meta)
+                        (buffer u null l r 1 y (cons 0 (cdr off)) meta)
                         (tuple 'lines taken))))
                (lets ((r d (uncons d null)))
                   (values ll
                      (buffer u d l r 1 y (cons 0 (cdr off)) meta)
-                     (tuple 'lines taken))))))       
-  
+                     (tuple 'lines taken))))))
+
       ;; lines → u line d y
       (define (seek-line lines end)
          (let loop ((lines lines) (pos end) (u null))
@@ -237,7 +239,7 @@
                   (values u (car lines) (cdr lines) end))
                (else
                   (loop (cdr lines) (- pos 1) (cons (car lines) u))))))
-     
+
       ;; row+1 = y + dy, dy = row + 1 - y
       (define (buffer-seek buff x y screen-y)
          (log "buffer seek" x "," y ", y row at " screen-y)
@@ -260,7 +262,7 @@
                         (loop xp 0 l r dx))
                      (else
                         (loop (+ xp (node-width (car r))) (- pos 1) (cons (car r) l) (cdr r) dx))))))
-         
+
       (define (paste-lines-below buff lines replace-empty?)
          (lets ((u d l r x y off meta buff))
             (if (and replace-empty? (null? u))
@@ -279,24 +281,24 @@
       (define (paste-line-sequence-before buff lst)
          (if (null? lst)
             (error "empty line sequnce: " lst)
-            (lets 
+            (lets
                ((u d l r x y off meta buff)
                 (first-tail lst (uncons lst null))
                 (last-head lstr (uncons (reverse lst) null)))
                (buffer
-                  u 
+                  u
                   (append (reverse lstr)
                      (cons (append last-head r) d))
                   l
-                  first-tail 
+                  first-tail
                   x y off meta))))
-      
+
       (define (maybe-join-partials a b d)
          (let ((new (append a b)))
             (if (null? new)
                d
                (cons new d))))
-                      
+
       ;; paste 0-n lines with partial ones at both ends
       (define (paste-line-sequence buff lst)
          (lets ((u d l r x y off meta buff)
@@ -311,10 +313,10 @@
                      (append fulls (maybe-join-partials last r d))
                      l this x y off meta)
                   (lets ((current r r)) ;; paste after cursor if content
-                     (buffer u 
+                     (buffer u
                         (append fulls (maybe-join-partials last r d))
                         l (cons current this) x y off meta))))))
- 
+
       (define (paste-register buff reg replace-empty?)
          (lets ((data (get-copy-buffer buff reg #false)))
             (cond
@@ -334,15 +336,15 @@
                   (paste-line-sequence buff (ref data 2)))
                (else
                   (error "how do i paste " data)))))
-      
+
       (define (delete-lines-below buff n target)
          (lets ((ll buff lines (cut-lines null buff n)))
             (put-copy-buffer buff target lines)))
-                   
+
       (define (op-delete-lines buff from to target)
          (lets ((buff (buffer-seek buff 0 (- from 1) #false)))
             (delete-lines-below buff (+ 1 (- to from)) target)))
-     
+
       (define (op-paste-register buff where reg replace-empty?)
          (let ((data (get-copy-buffer buff reg #false)))
             (if data
