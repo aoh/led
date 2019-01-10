@@ -14,7 +14,6 @@
   (owl sys)
   (owl args))
 
-
 (define version-str "led v0.1a")
 
 (define null '())
@@ -657,7 +656,6 @@
              (cond
                 ((eq? self k)
                    ;; cut lines via shortcut
-                   (log "XX")
                    (cut-lines ll buff n))
                 ((eq? #\| k)
                    (cut-lines ll buff

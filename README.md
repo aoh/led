@@ -46,7 +46,7 @@ Currently working features consist mainly of:
 ## Building
 
 ```
-$ git clone https://github.com/aoh/led.git
+$ git clone https://gitlab.com/akihe/led.git
 $ cd led
 $ make
 $ bin/led .

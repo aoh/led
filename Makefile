@@ -2,8 +2,7 @@ CC?=gcc
 OFLAGS=-O1
 CFLAGS=-O2 -Wall
 PREFIX=/usr
-OWLVER=0.1.15
-OWLURL=https://github.com/owl-lisp/owl/releases/download/v$(OWLVER)
+OWLURL=https://gitlab.com/owl-lisp/owl/uploads/b8af726cd9ef00efe23a3fedf642d1ac/ol-0.1.18.c.gz
 
 everything: bin/led .parrot
 
@@ -35,10 +34,8 @@ uninstall:
 
 bin/ol:
 	mkdir -p bin tmp
-	test -f ol-$(OWLVER).c.gz || wget $(OWLURL)/ol-$(OWLVER).c.gz
-	gzip -d < ol-$(OWLVER).c.gz > tmp/ol-$(OWLVER).c
-	rm ol-$(OWLVER).c.gz
-	cc -O2 -o bin/ol tmp/ol-$(OWLVER).c
+	test -f tmp/ol.c || curl $(OWLURL) | gzip -d > tmp/ol.c
+	cc -O2 -o bin/ol tmp/ol.c
 
 test: .parrot
 
