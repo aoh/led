@@ -4,7 +4,7 @@ stages:
   - build
   - test
 
-build blab binary:
+build binary:
   stage: build
   script: make bin/led
 
