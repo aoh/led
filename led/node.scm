@@ -181,7 +181,7 @@
               (cond
                 ((eq? (type x) type-fix+)
                   ;; a printable unicode code point
-                  (if (eq? x (fxband x #x7f))
+                  (if (eq? x (fxand x #x7f))
                     ;; a printable ascii range thingie (usual suspect)
                     (cons x (take-printable line (- n 1)))
                     (encode-point x
