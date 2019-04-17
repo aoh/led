@@ -3,6 +3,7 @@ OFLAGS=-O1
 CFLAGS=-O2 -Wall
 PREFIX=/usr
 OWLURL=https://gitlab.com/owl-lisp/owl/uploads/b8af726cd9ef00efe23a3fedf642d1ac/ol-0.1.18.c.gz
+OL=bin/ol
 
 everything: bin/led .parrot
 
@@ -18,12 +19,12 @@ bin/led: led.c
 	mkdir -p bin
 	$(CC) $(CFLAGS) -o bin/led led.c
 
-led.c: led/*.scm bin/ol
-	bin/ol $(OFLAGS) -o led.c led/led.scm
+led.c: led/*.scm $(OL)
+	$(OL) $(OFLAGS) -o led.c led/led.scm
 
 led.fasl: bin/ol led/*.scm
 	make bin/ol
-	bin/ol -o led.fasl led/led.scm
+	$(OL) -o led.fasl led/led.scm
 
 install: bin/led .parrot
 	mkdir -p $(PREFIX)/bin
@@ -46,5 +47,11 @@ clean:
 mrproper:
 	make clean
 	rm -rf tmp
+
+future:
+	test -d owl || git clone https://gitlab.com/owl-lisp/owl
+	cd owl && git pull
+	-cd owl && make
+	test -x owl/bin/ol && make OL=owl/bin/ol
 
 .PHONY: mrproper clean test install uninstall fasltest everything
