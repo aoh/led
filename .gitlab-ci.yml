@@ -5,10 +5,15 @@ stages:
 
 build:
   stage: build
-  script: make
+  except:
+   - schedules
+  script: 
+   - make
 
 build:on-schedule:
    stage: build
-   only: schedules
-   script: make future
+   only: 
+    - schedules
+   script: 
+    - make future
 
