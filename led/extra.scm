@@ -42,10 +42,17 @@
                      (values (cons (car data) this) rest)
                      (values #f #f))))))
 
+      (define (drop-leading-space data)
+         (if (and (pair? data) (eq? (car data) #\space))
+            (drop-leading-space (cdr data))
+            data))
+      
       (define (format-lines data)
          (if (null? data)
             null
-            (lets ((this rest (pick-line data 80)))
+            (lets 
+               ((data (drop-leading-space data))
+                (this rest (pick-line data 80)))
                (if this
                   (cons this (format-lines rest))
                   (list data)))))
