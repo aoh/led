@@ -63,6 +63,11 @@
       (define get-end-position
          (get-imm-as #\$ 'end))
       
+      (define get-paragraph-movement
+         (get-either
+            (get-imm-as #\{ 'paragraph-back)
+            (get-imm-as #\} 'paragraph)))
+      
       (define get-sign
          (get-either
             (get-imm-as #\+ '+)
@@ -91,6 +96,7 @@
             get-integer
             get-delta
             get-dot
+            get-paragraph-movement
             get-end-position
             get-label))
 

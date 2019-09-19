@@ -32,6 +32,9 @@
       
       write-buffer
       buffer-range->bytes
+      
+      movement
+      next-words
       )
 
    (begin      
@@ -130,8 +133,8 @@
             ; = (+ 1 (length u) (length d))
             (+ (buffer-current-line buff) 
                (length d))))
-         
-       ;; buff start end → (byte ...)
+      
+      ;; buff start end → (byte ...)
       (define (buffer-range->bytes buff start end)
          (lets ((u d l r x y off meta buff))
             (if (and start end (<= start end))
@@ -140,33 +143,121 @@
                      (append (reverse u) (list (append (reverse l) r)) d)
                      start end))
                #false)))
-           
-      (define (write-buffer buff path)
-         (log "writing to " path)
+
+      (define (blank-line? l)
          (cond
-            ((not path)
-               (values #false
-                  (foldr render null
-                     (list "Give me a name for this"))))
-            ((directory? path)
-               (values #false
-                  (foldr render null
-                     (list "'" path "' is a directory"))))
-            (else
-               (lets
-                  ((port (open-output-file path))
-                   (lst (buffer->bytes buff))
-                   (n (length lst))
-                   (res (if port (byte-stream->port lst port) #f)))
-                  (if port 
-                     (close-port port))
-                  (if res
-                     (values #true
-                        (foldr render null 
-                           (list "Wrote " n " bytes to '" path "'")))
+            ((null? l) #true)
+            ((whitespace? (car l))
+               (blank-line? (cdr l)))
+            (else #false)))
+
+      ;; l r d -> n lines down (n >= 1)
+      (define (next-paragraphs l r d n)
+         (define (next ls state dy) ; → ls' dy'
+            (cond
+               ((null? ls)
+                  (values ls dy))
+               ((blank-line? (car ls))
+                  (if (eq? state 'init)
+                     (next (cdr ls) state (+ dy 1))
+                     (values ls dy)))
+               ((eq? state 'body)
+                  (next (cdr ls) state (+ dy 1)))
+               (else
+                  (next ls 'body dy))))
+         (let loop ((ls (cons (append l r) d)) (dy 0) (n n))
+            (if (= n 0)
+               (values ls dy)
+               (lets ((ls dy (next ls 'init dy)))
+                  (loop ls dy (- n 1))))))
+               
+                     
+      ;; r d -> r' d' n-down n-from-left
+      (define (next-word start d n-left)
+         (let loop ((r start) (d d) (y 0) (x 0) (space? #false))
+            (log "loop " r "," y "," x "," space?)
+            (cond
+               ((null? r)
+                  (cond
+                     ((null? d)
+                        (values null null y x))
+                     ((eq? n-left 1)
+                        ;; do not eat the final newline after last word
+                        (values r d y x))
+                     ;(space?
+                     ;   (loop (car d) (cdr d) (+ y 1) 0 #t))
+                     (else
+                        (loop (car d) (cdr d) (+ y 1) 0 #t))))
+               ((space-char? (car r))
+                  (loop (cdr r) d y (+ x 1) #t))
+               ((word-delim-char? (car r))
+                  (if (eq? r start)
+                     ;; consume the one delimiter char and potential whitespace
+                     (loop (cdr r) d y (+ x 1) #true)
+                     ;; otherwise stop here
+                     (values r d y x)))
+               (space?
+                  (values r d y x))
+               (else
+                  (loop (cdr r) d y (+ x 1) #f)))))
+
+      ;; r d n -> dy dx r' d'
+      (define (next-words r d n)
+         (let loop((y 0) (x 0) (r r) (d d) (n n))
+            (if (eq? n 0)
+               (values y x r d)
+               (lets ((r d dy dx (next-word r d n)))
+                  (if (eq? dy 0)
+                     (loop y (+ x dx) r d (- n 1))
+                     (loop (+ y dy) dx r d (- n 1)))))))
+
+      ;; buff movement-exp -> n | dy dx
+      (define (movement buff n type)
+         (lets ((u d l r x y off meta buff))
+            (cond
+               ((eq? type 'end-of-line)
+                  (values (- n 1) (length r)))
+               ((eq? type 'beginning-of-line)
+                  (values (- n 1) (- 0 (length l))))
+               ((eq? type 'word)
+                  (lets ((y x r d (next-words r d n)))
+                     (values y x)))
+               ((eq? type 'paragraph)
+                  (lets ((d dy (next-paragraphs l r d n)))
+                     (values dy 0)))
+               ((eq? type 'paragraph-back)
+                  (lets ((d dy (next-paragraphs l r u n)))
+                     (values (- 0 dy) 0)))
+               (else
+                  (log "unknown movement type " type)
+                  (values #f #f)))))
+            
+            (define (write-buffer buff path)
+               (log "writing to " path)
+               (cond
+                  ((not path)
                      (values #false
                         (foldr render null
-                           (list "Failed to write to '" path "'"))))))))
-     
+                           (list "Give me a name for this"))))
+                  ((directory? path)
+                     (values #false
+                        (foldr render null
+                           (list "'" path "' is a directory"))))
+                  (else
+                     (lets
+                        ((port (open-output-file path))
+                         (lst (buffer->bytes buff))
+                         (n (length lst))
+                         (res (if port (byte-stream->port lst port) #f)))
+                        (if port 
+                           (close-port port))
+                        (if res
+                           (values #true
+                              (foldr render null 
+                                 (list "Wrote " n " bytes to '" path "'")))
+                           (values #false
+                              (foldr render null
+                                 (list "Failed to write to '" path "'"))))))))
+           
 
-      ))
+))
