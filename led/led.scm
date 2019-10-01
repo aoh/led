@@ -1538,19 +1538,20 @@
 
 (define (command-next-buffer ll buff undo mode r cont)
    (values ll buff undo mode 'right))
- 
-;; a macro to type the command
-(define (command-format-paragraph ll buff undo mode r cont)
-   (cont
-      (append 
-         (map 
-            (λ (x) (tuple 'key x))
-            (string->list ":{,}l fmt"))
-         (ilist
-            (tuple 'enter) 
-            (tuple 'key #\}) 
-            ll))
-      buff undo mode))
+
+(define (char->key c)
+   (if (eq? c #\newline)
+      (tuple 'enter)
+      (tuple 'key c)))
+
+(define (string->keys s)
+   (map char->key (string->list s)))
+
+(define (command-macro string)
+   (let ((input (string->keys string)))
+      (λ (ll buff undo mode r cont)
+         (log "command macro " input)
+         (cont (append input ll) buff undo mode))))
 
 ;;; Command mode key mapping
 
@@ -1564,9 +1565,11 @@
       (put 'arrow-right command-next-buffer)
       (put '#\p command-previous-buffer) ;; also available in insert mode
       (put '#\n command-next-buffer)     ;; ditto
-      (put #\w command-save)
+      (put #\w (command-macro "mm:%s/ +$//\n'm:w\n"))
       (put #\l command-update-screen)
-      (put #\x command-format-paragraph)))
+      ;(put #\x command-format-paragraph)
+      (put #\x (command-macro ":{,}l fmt\n}"))
+      ))
 
 ;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
 (define *command-mode-actions*
