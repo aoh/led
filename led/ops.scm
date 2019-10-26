@@ -24,7 +24,7 @@
       (define null '())
 
       (define (meta-dimensions meta)
-        (let ((glob (get meta 'global #empty)))
+        (let ((glob (get meta 'global empty)))
            (values
               (get glob 'width 20)
               (get glob 'height 10))))

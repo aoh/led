@@ -5,7 +5,7 @@
       (owl sys)
       (led log)
       (led node))
-   
+
    (export
       buffer
       make-buffer-having
@@ -26,83 +26,83 @@
       buffer-screen-size
       buffer-y
       buffer->lines
-      
+
       buffer-current-line ;; get value of .
       buffer-line-count   ;; get value of $
-      
+
       write-buffer
       buffer-range->bytes
-      
+
       movement
       next-words
       )
 
-   (begin      
+   (begin
 
       (define null '())
-      
+
       (define (buffer up down left right x y off meta)
          (tuple up down left right x y off meta))
-   
+
       (define (make-buffer-having w h meta data)
          (lets ((r d (uncons data null)))
             (buffer null d null r  1 1 (cons 0 0) meta)))
-      
+
       (define (make-empty-buffer w h meta)
          (make-buffer-having w h meta null))
-      
+
       (define (buffer-meta buff) (ref buff 8))
       (define (set-buffer-meta buff meta) (set buff 8 meta))
-   
+
       (define (put-buffer-meta buff key val)
          (set-buffer-meta buff (put (buffer-meta buff) key val)))
-   
+
       (define (get-buffer-meta buff key def)
          (get (buffer-meta buff) key def))
-   
+
       (define (get-global-meta buff key def)
-         (get (get-buffer-meta buff 'global #empty) key def))
-      
+         (get (get-buffer-meta buff 'global empty) key def))
+
       (define (screen-width buff) (get-global-meta buff 'width 10))
       (define (screen-height buff) (get-global-meta buff 'height 10))
-      
+
       (define (buffer-screen-size buff)
          (values
             (get-global-meta buff 'width 20)
             (get-global-meta buff 'height 10)))
-      
+
       (define (put-global-meta buff key val)
          (put-buffer-meta buff 'global
-            (put (get-buffer-meta buff 'global #empty) key val)))
-  
+            (put (get-buffer-meta buff 'global empty) key val)))
+
       (define (put-copy-buffer buff key val)
          (put-global-meta buff 'copy
-            (put (get-global-meta buff 'copy #empty) key val)))
-      
+            (put (get-global-meta buff 'copy empty) key val)))
+
       (define (get-copy-buffer buff key def)
-         (get (get-global-meta buff 'copy #empty) key def))
-   
+         (get (get-global-meta buff 'copy empty) key def))
+
       (define (buffer-path buff default)
          (get-buffer-meta buff 'path default))
-   
+
       (define (buffer-path-str buff)
          (get-buffer-meta buff 'path "*scratch*"))
-   
+
       (define (buffer-x buff) (ref buff 5))
       (define (buffer-y buff) (ref buff 6))
-      
-      (define (buffer->lines buff) 
+
+      (define (buffer->lines buff)
          (lets ((u d l r x y off meta buff))
             (log "buffer->lines bound")
             (map (λ (line) (list->string (foldr render-code-point null line)))
                (append (reverse u)
                   (cons (append (reverse l) r) d)))))
 
-      
+
 
 
       ;; buffer writing
-            
+
       (define (nodes->bytes nodes)
          (foldr render-node null nodes))
 
@@ -112,7 +112,7 @@
                (λ (line tl)
                   (append line (cons #\newline tl)))
                null ls)))
-       
+
       (define (buffer->bytes buff)
          (lets ((u d l r x y off meta buff))
             (lines->bytes
@@ -121,19 +121,19 @@
       (define (pick-lines ls start end)
          (let ((off (- start 1)))
             (take (drop ls off) (- end off))))
-      
-      ;; buffer → line-number 
+
+      ;; buffer → line-number
       (define (buffer-current-line buff)
          (lets ((u d l r x y off meta buff)
                 (dx dy off))
             (+ y dy)))
-      
+
       (define (buffer-line-count buff)
          (lets ((u d l r x y off meta buff))
             ; = (+ 1 (length u) (length d))
-            (+ (buffer-current-line buff) 
+            (+ (buffer-current-line buff)
                (length d))))
-      
+
       ;; buff start end → (byte ...)
       (define (buffer-range->bytes buff start end)
          (lets ((u d l r x y off meta buff))
@@ -170,8 +170,8 @@
                (values ls dy)
                (lets ((ls dy (next ls 'init dy)))
                   (loop ls dy (- n 1))))))
-               
-                     
+
+
       ;; r d -> r' d' n-down n-from-left
       (define (next-word start d n-left)
          (let loop ((r start) (d d) (y 0) (x 0) (space? #false))
@@ -231,7 +231,7 @@
                (else
                   (log "unknown movement type " type)
                   (values #f #f)))))
-            
+
             (define (write-buffer buff path)
                (log "writing to " path)
                (cond
@@ -249,15 +249,15 @@
                          (lst (buffer->bytes buff))
                          (n (length lst))
                          (res (if port (byte-stream->port lst port) #f)))
-                        (if port 
+                        (if port
                            (close-port port))
                         (if res
                            (values #true
-                              (foldr render null 
+                              (foldr render null
                                  (list "Wrote " n " bytes to '" path "'")))
                            (values #false
                               (foldr render null
                                  (list "Failed to write to '" path "'"))))))))
-           
+
 
 ))

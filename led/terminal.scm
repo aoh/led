@@ -9,9 +9,9 @@
       font-standard        ;; lst → lst'
       font-reverse         ;; lst → lst'
       font-attrs           ;; lst a b c → lst'
-      
+
       font-gray
-      
+
       font-fg-black
       font-fg-red
       font-fg-green
@@ -53,7 +53,7 @@
       set-scroll-range     ;; lst y1 y2 → lst'
       scroll-up            ;; lst → lst'
       scroll-down          ;; lst → lst'
-      
+
       tio
       tio*
 
@@ -65,7 +65,7 @@
       port->readline-line-stream)
 
    (import
-      (owl defmac)
+      (owl core)
       (owl math)
       (owl primop)
       (owl list)
@@ -74,7 +74,7 @@
       (owl syscall)
       (owl render)
       (owl lazy)
-      (owl ff)
+      (owl lcd ff)
       (owl list-extra)
       (owl port)
       (scheme base)
@@ -87,9 +87,9 @@
 
 
    (begin
-     
+
       (define null '())
-            
+
       (define (num->bytes n tl)
          (cond
             ((eq? n 1) (cons #\1 tl))
@@ -103,7 +103,7 @@
       (define (unary-op n op)
          (write-bytes stdout
             (ilist 27 #\[ (num->bytes n (list op)))))
-      
+
       (define (set-terminal-rawness rawp)
          (sys-prim 26 rawp #f #f))
 
@@ -118,7 +118,7 @@
 
       (define (font-gray lst)
          (ilist 27 #\[ #\1 #\; #\3 #\0 #\m lst))
-      
+
       (define (font-fg-black lst)   (ilist 27 #\[ #\3 #\0 #\m lst))
       (define (font-fg-red lst)     (ilist 27 #\[ #\3 #\1 #\m lst))
       (define (font-fg-green lst)   (ilist 27 #\[ #\3 #\2 #\m lst))
@@ -127,7 +127,7 @@
       (define (font-fg-magenta lst) (ilist 27 #\[ #\3 #\5 #\m lst))
       (define (font-fg-cyan lst)    (ilist 27 #\[ #\3 #\6 #\m lst))
       (define (font-fg-white lst)   (ilist 27 #\[ #\3 #\7 #\m lst))
-   
+
       (define (font-bg-black lst)   (ilist 27 #\[ #\4 #\0 #\m lst))
       (define (font-bg-red lst)     (ilist 27 #\[ #\4 #\1 #\m lst))
       (define (font-bg-green lst)   (ilist 27 #\[ #\4 #\2 #\m lst))
@@ -139,7 +139,7 @@
 
       (define (font-attrs lst a b c)
          (ilist 27 #\[ (render a (cons #\; (render b (cons #\; (render c (cons #\m lst))))))))
-      
+
       ;;; Clearing content
 
       (define (clear-line lst)       (ilist 27 #\[ #\2 #\K lst))
@@ -151,39 +151,39 @@
       (define (clear-screen-bottom lst) (ilist 27 #\[ #\J lst))
 
       ;;; Wrapping
-      
+
       (define (enable-line-wrap lst)     (ilist 27 #\[ #\7 #\h lst))
       (define (disable-line-wrap lst)    (ilist 27 #\[ #\7 #\l lst))
-      
+
       ;;; Scrolling
-      
-      (define (set-scroll-range lst a b)  
+
+      (define (set-scroll-range lst a b)
          (ilist 27 #\[ (render a (cons #\; (render b (cons #\r lst))))))
-      
+
       (define (scroll-up   lst) (ilist 27 #\[ #\M lst))
       (define (scroll-down lst) (ilist 27 #\[ #\D lst))
-      
+
       ;;; Terminal input stream
-      
+
       (define (get-natural ll def)
         (let loop ((n 0) (first? #true) (ll ll))
           (lets ((x ll (uncons ll #false)))
             (cond
-              ((not x) (values def ll)) 
+              ((not x) (values def ll))
               ((< 47 x 58)
                 (loop (+ (* n 10) (- x 48)) #false ll))
               (first?
                 (values def (cons x ll)))
               (else
                 (values n (cons x ll)))))))
-      
+
       (define (get-imm ll val)
         (lets ((x ll (uncons ll #false)))
           (if (eq? x val)
             (values x ll)
             (values #false (cons x ll)))))
- 
-      ;; optional raw terminal input stream recorder 
+
+      ;; optional raw terminal input stream recorder
       (define (recorder ll)
          (cond
             ((null? ll) ll)
@@ -195,7 +195,7 @@
 
       ;; convert this to a proper stream parser later
       (define (terminal-input . opt)
-       (let ((port (if (null? opt) stdin (car opt)))) 
+       (let ((port (if (null? opt) stdin (car opt))))
         (let loop ((ll (utf8-decoder (recorder (port->byte-stream port)) (λ (loop line ll) (print-to stderr "Bad UTF-8 in terminal input") null))))
           (cond
             ((pair? ll)
@@ -211,7 +211,7 @@
                               ((eq? op 66) (cons (tuple 'arrow 'down) (loop ll)))
                               ((eq? op 67) (cons (tuple 'arrow 'right) (loop ll)))
                               ((eq? op 68) (cons (tuple 'arrow 'left) (loop ll)))
-                              (else 
+                              (else
                                 (lets
                                   ((a ll (get-natural (cons op ll) #false)))
                                   (if a
@@ -228,7 +228,7 @@
                                                     ((eq? op #\R)
                                                       (cons (tuple 'cursor-position a b) (loop ll)))
                                                     (else
-                                                      (cons 
+                                                      (cons
                                                         (tuple 'esc-unknown-binop a ";" b (list->string (list op)))
                                                         null)))
                                                   null))
@@ -236,8 +236,8 @@
                                         ((and (eq? a 3) (eq? x #\~))
                                           (cons (tuple 'delete) (loop ll)))
                                         (else
-                                          (cons 
-                                             (tuple 'esc-unknown-unary-op a (list->string (list x))) 
+                                          (cons
+                                             (tuple 'esc-unknown-unary-op a (list->string (list x)))
                                              (loop ll)))))
                                     null))))))
                         ((eq? op 79)
@@ -289,44 +289,44 @@
       (define (cursor-pos x y)
          (write-bytes stdout
             (ilist 27 #\[ (num->bytes y (cons #\; (num->bytes x (list #\f)))))))
-      
+
       (define (set-cursor lst x y)
          (if (and (> x 0) (> y 0))
             (ilist 27 #\[ (num->bytes y (cons #\; (num->bytes x (cons #\f lst)))))
             (error "set-cursor: bad position " (cons x y))))
-    
-      (define (cursor-up lst n) 
+
+      (define (cursor-up lst n)
          (ilist 27 #\[ (num->bytes n (cons #\A lst))))
 
-      (define (cursor-down lst n) 
+      (define (cursor-down lst n)
          (ilist 27 #\[ (num->bytes n (cons #\B lst))))
 
-      (define (cursor-right lst n) 
+      (define (cursor-right lst n)
          (ilist 27 #\[ (num->bytes n (cons #\C lst))))
 
-      (define (cursor-left lst n) 
+      (define (cursor-left lst n)
          (ilist 27 #\[ (num->bytes n (cons #\D lst))))
 
-      (define (cursor-hide lst) 
+      (define (cursor-hide lst)
         (ilist 27 #\[ #\? #\2 #\5 #\l lst))
 
-      (define (cursor-show lst) 
+      (define (cursor-show lst)
         (ilist 27 #\[ #\? #\2 #\5 #\h lst))
 
-      (define (cursor-save lst) 
+      (define (cursor-save lst)
         (ilist 27 #\[ #\s lst))
 
-      (define (cursor-restore lst) 
+      (define (cursor-restore lst)
         (ilist 27 #\[ #\u lst))
 
-      (define (cursor-top-left n) 
+      (define (cursor-top-left n)
          (write-bytevector #(27 #\[ #\H) stdout))
 
       ;; Interaction with terminal
 
       ;; ^[6n = get cursor position ^[<x>;<y>R
       ;; ^[5n = check terminal status -> ^[0n = ok, ^[3n = not ok
-      ;; ^[[c = get terminal type -> 
+      ;; ^[[c = get terminal type ->
       ;; input: up    27 91 65
       ;;        down  27 91 66
       ;;        right 27 91 67
@@ -346,7 +346,7 @@
                 (values (ref this 3) (ref this 2) (append (reverse head) ll)))
               (else
                 (loop (cons this head) ll))))))
-                
+
       ;; ll → cols rows ll'
       (define (get-cursor-position ll)
         ;; request cursor position
@@ -354,7 +354,7 @@
         (wait-cursor-position ll))
 
       (define (get-terminal-size ll)
-        (lets 
+        (lets
           ((x y ll (get-cursor-position ll))
            (res (cursor-pos 4095 4095))
            (xm ym ll (get-cursor-position ll)))
@@ -368,7 +368,7 @@
                (block
                   (vector-ref block 0))
                (else block))))
-      
+
       ;; show as much of right as fits after cx (cursor x)
       ;; return cursor to cx
       (define (update-line-right right w cx)
@@ -377,7 +377,7 @@
           (let ((visible-right (list->string (take right (- w cx)))))
             (display visible-right)
             (write-bytes stdout (cursor-left null (string-length visible-right))))))
-      
+
       ;; → cx
       (define (update-line-left x y off left)
         (lets
@@ -394,15 +394,15 @@
           ((string? elem)
             ;; compute a suitable offset
             (let ((len (string-length elem)))
-              (values 
-                (reverse (string->list elem)) 
-                null 
+              (values
+                (reverse (string->list elem))
+                null
                 (max 0 (* (- (quotient len off) 1) off)))))
           (else
             (values (ref elem 1) (ref elem 2) (ref elem 3)))))
 
       (define (whitespace? x)
-         (or (eq? x #\space) 
+         (or (eq? x #\space)
              (eq? x #\tab)))
 
       (define (backspace-over-word left ll bs blanks?)
@@ -419,7 +419,7 @@
                (backspace-over-word (cdr left) (cons bs ll) bs #false))))
 
       (define (readline ll history x y w)
-        (lets 
+        (lets
           ((history (cons null history))  ; (newer . older)
            (offset-delta (+ 1 (quotient (- w x) 2)))
            (width (- w x)))
@@ -504,13 +504,13 @@
                         ((null? (cdr hi)) ;; nothing oldr available
                           (loop ll hi left right cx off))
                         (else
-                          (lets 
+                          (lets
                             ((new old hi)
                              (current (tuple left right off))
                              (left right off (history->state (car old) offset-delta))
                              (cx (update-line-left x y off left)))
                             (update-line-right right w cx)
-                            (loop ll 
+                            (loop ll
                               (cons (cons current new) (cdr old))
                               left right cx off)))))
                     ((eq? dir 'down)
@@ -518,13 +518,13 @@
                         ((null? (car hi)) ;; nothing newer available
                           (loop ll hi left right cx off))
                         (else
-                          (lets 
+                          (lets
                             ((new old hi)
                              (current (tuple left right off))
                              (left right off (history->state (car new) offset-delta))
                              (cx (update-line-left x y off left)))
                             (update-line-right right w cx)
-                            (loop ll 
+                            (loop ll
                               (cons (cdr new) (cons current old))
                               left right cx off)))))
                     (else
@@ -559,7 +559,7 @@
                      (loop ll hi null right x 0)))
                 ((ctrl-e)
                   ;; use arrow to scroll as usual easily
-                  (loop 
+                  (loop
                      (fold (λ (ll x) (cons (tuple 'arrow 'right) ll)) ll
                         (iota 0 1 (length right)))
                      hi left right cx off))
@@ -570,19 +570,19 @@
                   (loop ll hi left right cx off)))))))
 
       (define (get-dimensions ll)
-        (lets ((w h ll (get-terminal-size ll))  
+        (lets ((w h ll (get-terminal-size ll))
                (x y ll (get-cursor-position ll)))
               (values x y w ll)))
 
-      (define editable-readline 
-        (case-lambda 
-          (() 
+      (define editable-readline
+        (case-lambda
+          (()
             (lets ((x y w ll (get-dimensions (terminal-input))))
               (readline ll null x y w)))
-          ((ll) 
+          ((ll)
             (lets ((x y w ll (get-dimensions ll)))
               (readline ll null x y w)))
-          ((ll history) 
+          ((ll history)
             (lets ((x y w ll (get-dimensions ll)))
               (readline ll history x y w)))))
 
@@ -592,7 +592,7 @@
         (let loop ((history null) (ll (terminal-input)))
           (if prompt (display prompt))
           (set-terminal-rawness #true)
-          (lets 
+          (lets
             ((x y ll (get-terminal-size (terminal-input)))
              (ll res (editable-readline ll history)))
             (set-terminal-rawness #false)
@@ -610,7 +610,7 @@
         (let loop ((history null) (ll (terminal-input)))
           (if prompt (display prompt))
           (set-terminal-rawness #true)
-          (lets 
+          (lets
             ((x y ll (get-terminal-size (terminal-input)))
              (ll res (editable-readline ll history)))
             (set-terminal-rawness #false)
@@ -621,7 +621,7 @@
 
      (define (output lst val)
       (render val lst))
-     
+
      (define-syntax tio
       (syntax-rules (raw)
          ((tio (raw lst) . rest)
@@ -631,7 +631,7 @@
          ((tio) '())
          ((tio val . rest)
             (render val (tio . rest)))))
-     
+
      (define-syntax tio*
       (syntax-rules (raw)
          ((tio* (raw lst) . rest)

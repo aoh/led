@@ -37,7 +37,7 @@
 
 (define (draw-lines-at-offset tl w dx y dy end lines)
    (cond
-      ((null? lines) 
+      ((null? lines)
          (draw-lines-at-offset tl w dx y dy end
             (list empty-buffer-line)))
       ((eq? y end) tl)
@@ -57,7 +57,7 @@
 
 (define (update-screen buff)
    ;(log "FULL UPDATE SCREEN")
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        (w h (meta-dimensions meta))
        (this (append (reverse l) r)))
@@ -72,9 +72,9 @@
 
 (define (maybe-draw-lines-at-offset tl w dx y dy end lines old-lines)
    (cond
-      ((eq? y end) 
+      ((eq? y end)
          tl)
-      ((null? lines) 
+      ((null? lines)
          (maybe-draw-lines-at-offset tl w dx y dy end
             (list empty-buffer-line) old-lines))
       ((equal? (car lines) (maybe-car old-lines empty-buffer-line))
@@ -105,7 +105,7 @@
       (begin
          ;(log " - full share")
          null)
-      (lets 
+      (lets
          ((ou od ol or ox oy ooff meta old)
           (nu nd nl nr nx ny noff meta new)
           (w h (meta-dimensions meta))
@@ -131,7 +131,7 @@
      (dx dy off)
      (x (+ dx x))
      (y (+ dy y))
-     (status (str "       " x "," y " " (if (eq? mode 'insert) "i" "c") 
+     (status (str "       " x "," y " " (if (eq? mode 'insert) "i" "c")
                  (if (dirty-buffer? buff undo)
                     "*"
                     " ")))
@@ -148,7 +148,7 @@
          (cursor-restore)))))
 
 (define (notify buff txt)
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        (w h (meta-dimensions meta)))
       (output
@@ -170,18 +170,18 @@
                (cdr chars) val))))
    (push abbrs (reverse (string->list sfrom))
       (reverse (string->list sto))))
-            
+
 (define (buff-add-abbreviation buff from to)
    (notify buff (str "abbreviating '" from "' -> '" to "'"))
-   (let ((abbs (get-global-meta buff 'abbreviations #empty)))
+   (let ((abbs (get-global-meta buff 'abbreviations empty)))
       (put-global-meta buff 'abbreviations
-         (add-abbreviation 
-            (get-global-meta buff 'abbreviations #empty)
+         (add-abbreviation
+            (get-global-meta buff 'abbreviations empty)
             from to))))
-      
-(define word-chars 
+
+(define word-chars
    (fold (λ (ff x) (put ff x x))
-      #empty
+      empty
       (string->list
          "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZåäöÅÄÖ-/_!?<>.:+-*")))
 
@@ -192,22 +192,22 @@
    (cond
       ((eq? abs empty) #false)
       ((or (null? l) (not (word-char? (car l))))
-         (let ((val (getf abs 'abbreviation)))
+         (let ((val (get abs 'abbreviation)))
             (if val
                (append val l)
                #false)))
-      ((getf abs (car l)) =>
+      ((get abs (car l)) =>
          (λ (val)
             (abbreviate (cdr l) val)))
       (else
          #false)))
-         
+
 (define (maybe-unabbreviate buff l)
-   (or (abbreviate l (get-global-meta buff 'abbreviations #empty))
+   (or (abbreviate l (get-global-meta buff 'abbreviations empty))
        l))
-      
+
 (define (insert-handle-key buff k)
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        (w h (meta-dimensions meta)))
       (lets ((node (key-node k meta))
@@ -225,7 +225,7 @@
                buff)))))
 
 (define (insert-backspace buff)
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        (w h (meta-dimensions meta)))
       (if (null? l)
@@ -246,7 +246,7 @@
          (let ((cw (node-width (car l))))
            (if (> x cw)
             (buffer u d (cdr l) r (- x cw) y off meta)
-            (lets 
+            (lets
                ((buff (scroll-left buff))
                 (buff (insert-backspace buff)))
                buff))))))
@@ -273,7 +273,7 @@
          (if (null? l)
             (values l r)
             (step-zipper (cdr l) (cons (car l) r) (+ n 1))))))
-            
+
 (define (seek-line-end buff)
    (lets ((u d l r x y off meta buff)
           (w h (meta-dimensions meta))
@@ -297,7 +297,7 @@
 ;;;
 
 (define space-key (tuple 'key #\space))
-     
+
 (define (key->digit k)
    (if (eq? (ref k 1) 'key)
       (let ((n (- (ref k 2) #\0)))
@@ -401,37 +401,37 @@
       (tuple-case op
          ((key k)
             (cond
-               ;((eq? k #\k) 
+               ;((eq? k #\k)
                ;   (values ll (- 0 n) 0))
-               ;((eq? k #\h) 
+               ;((eq? k #\h)
                ;   (values ll 0 (- 0 n)))
-               ((eq? k #\j) 
+               ((eq? k #\j)
                   (values ll n 0))
-               ((eq? k #\l) 
+               ((eq? k #\l)
                   (values ll 0 n))
                ((eq? k #\$)
                   (lets ((u d l r x y off meta buff))
                      (values ll 0 (length r))))
-               ((eq? k #\w) 
+               ((eq? k #\w)
                   (lets ((u d l r x y off meta buff)
                          (dy dx rp dp (next-words r d n)))
                       (values ll dy dx)))
-               ((eq? k #\%) 
+               ((eq? k #\%)
                   (lets ((dy dx (movement-matching-paren buff)))
                      (if dy
                         (values ll dy dx)
                         (values ll #f #f))))
-               ((eq? k #\}) 
+               ((eq? k #\})
                   (lets ((dy dx (movement buff (as-count r) 'paragraph)))
                      (if dy
                         (values ll dy dx)
                         (values ll #f #f))))
-               ((eq? k #\{) 
+               ((eq? k #\{)
                   (lets ((dy dx (movement buff (as-count r) 'paragraph-back)))
                      (if dy
                         (values ll dy dx)
                         (values ll #f #f))))
-               ((eq? k sexp-key) 
+               ((eq? k sexp-key)
                   (lets ((dy dx (movement-matching-paren-forward buff)))
                      (if dy
                         (values ll dy dx)
@@ -442,7 +442,7 @@
                         ((not k)
                            (log "no key")
                            (values ll #f #f))
-                        ((get (get-buffer-meta buff 'marks #empty) k #false) =>
+                        ((get (get-buffer-meta buff 'marks empty) k #false) =>
                            (λ (pos)
                               (lets ((u d l r x y off meta buff)
                                      (dx dy off)
@@ -485,8 +485,8 @@
       (lets ((next-lines d (lsplit d (- dy 1)))
              (new-r d (uncons d null))
              (last-partial new-r (lsplit new-r dx)))
-         (values new-r d 
-            (tuple 'line-sequence 
+         (values new-r d
+            (tuple 'line-sequence
                (cons r (append next-lines (list last-partial))))))))
 
 ;; move buffer left if x is off screen
@@ -503,7 +503,7 @@
                (else
                   (let ((step (min dx w)))
                      (loop (+ x step) (- dx step)))))))))
-      
+
 (define (cut-relative-movement ll buff dy dx)
    (lets ((u d l r x y off meta buff))
       (cond
@@ -513,7 +513,7 @@
                (lets ((l r (step-zipper l r +1)) ;; include cursor position
                       (rcut l (lsplit l (* dx -1))))
                   (values ll
-                     (maybe-scroll-left 
+                     (maybe-scroll-left
                         (buffer u d l r (+ 1 (- x (printable-length rcut))) y off meta))
                      (tuple 'sequence (reverse rcut))))
                ;; cut forwards, oneline
@@ -521,13 +521,13 @@
                   (values ll (buffer u d l r x y off meta) cut))))
          ((< dy 0)
             ;; cut backwards, multiple lines
-            (lets 
+            (lets
                ((l r (step-zipper l r 1)) ;; include char at cursor if there
                 (u l cut (cut-backward-multiline u l (* -1 dy) dx)))
                ;; fixme, scrolling
                (values ll (buffer u d l r (+ 1 (printable-length l)) y off meta) cut)))
          (else
-            (lets 
+            (lets
                ((r d cut (cut-forward r d dy dx)))
                (log "cut forwards")
                (values ll (buffer u d l r (+ 1 (printable-length l)) y off meta) cut))))))
@@ -551,9 +551,9 @@
       ((more-indented? ref (car ls))
          (count-more-indented ref (cdr ls) (+ n 1)))
       (else n)))
-   
+
 (define (sub-lines-ahead buff)
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        (l (append (reverse l) r)))
       (count-more-indented l d 0)))
@@ -587,7 +587,7 @@
 ;; buff → (x . y) | #false
 (define (seek-matching-paren-back buff left? right?)
    (lets ((u d l r x y off meta buff))
-      (let loop 
+      (let loop
          ((x (length l)) (y (+ (cdr off) (- y 1))) (l l) (u u) (depth 1))
          (cond
             ((null? l)
@@ -605,7 +605,7 @@
 
 (define (seek-matching-paren-forward buff left? right?)
    (lets ((u d l r x y off meta buff))
-      (let loop 
+      (let loop
          ((x (length l)) (y (+ (cdr off) (- y 1))) (r r) (d d) (depth 0))
          (cond
             ((null? r)
@@ -643,14 +643,14 @@
          (values #f #f))
       (else
          (search-from (car ls) (cdr ls) regex 0 (+ y 1)))))
-            
+
 (define (find-next buff)
    (lets ((u d l r x y off meta buff)
           (dx dy off)
           (regex (get meta 'search-regex (λ (x) #false)))
           (row (+ (length u) 1))
           (_ rt (uncons r #false)) ;; move one char forward
-          (mx my 
+          (mx my
             (search-from rt d regex (+ x dx) (+ (- y 1) dy))))
          (if mx
             (values (buffer-seek buff mx my #false) #false)
@@ -665,12 +665,12 @@
 (define (paste-lines-above buff lines)
    (if (null? lines)
       buff
-      (lets 
+      (lets
          ((u d l r x y off meta buff)
           (this (append (reverse l) r))
           (dx dy off)
           (d (cons this d)))
-         (buffer u (append (cdr lines) d) null (car lines) 1 y 
+         (buffer u (append (cdr lines) d) null (car lines) 1 y
             (cons 0 dy)
             meta))))
 
@@ -707,14 +707,14 @@
           (tuple 'sequence (car lines)))
        (else
           (tuple 'lines lines))))
-   
+
 ;; cut forward, for backward move to corresponding open paren and use this
 ;; buff -> buff' msg
 (define (buffer-cut-sexp buff)
    (lets ((u d l r x y off meta buff)
           (sexp lines (cut-sexp r d 0)))
       (if sexp
-         (lets 
+         (lets
             ((r d (uncons lines null))
              (buff (buffer u d l r x y off meta)))
             (values
@@ -723,14 +723,14 @@
          (values buff "Bad range"))))
 
 
- 
+
 (define (mark-position buff char)
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        (dx dy off)
        (mark-x (+ (- x 1) dx))
        (mark-y (+ (- y 1) dy))
-       (marks (get meta 'marks #empty))
+       (marks (get meta 'marks empty))
        (mark (cons mark-x mark-y)))
       (log "marked" (list->string (list char)) " as " (cons mark-x mark-y))
       (put-buffer-meta buff 'marks
@@ -747,7 +747,7 @@
          (else #false))))        ;; below screen
 
 (define (paren-hunter buff seeker left? right?)
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        (w h (meta-dimensions meta))
        (yp (+ (cdr off) (- y 1))))      ;; yp is at row y on screen currently
@@ -759,7 +759,7 @@
                buffp)
             buff))))
 
-(define (is? x) 
+(define (is? x)
    (λ (y) (eq? x y)))
 
 (define (maybe-seek-matching-paren buff)
@@ -790,21 +790,21 @@
 
 (define (command-regex-search ll buff undo mode r cont)
    (output (tio* (set-cursor 1 (+ 1 (screen-height buff))) (clear-line) (list #\/)))
-   (lets ((search-history 
+   (lets ((search-history
             (get-global-meta buff 'search-history null))
           (ll res (readline ll search-history
                      2 (+ 1 (screen-height buff)) (screen-width buff))))
          (if res
             (lets
-               ((buff 
+               ((buff
                   (if (equal? res "") buff
-                     (put-global-meta buff 'search-history 
+                     (put-global-meta buff 'search-history
                         (cons res search-history))))
                 (regex ;; note: ^ and $ need special handling later
                   (string->regex (str "m/^" res "/"))))
                (if regex
                   (lets
-                     ((buff 
+                     ((buff
                         (if (equal? res "")
                            buff
                            (-> buff (put-buffer-meta 'search-regex regex))))
@@ -823,7 +823,7 @@
    (lets ((msg ll (uncons ll #false)))
       (if (eq? (ref msg 1) 'key)
          (let ((char (ref msg 2)))
-            (cont ll (mark-position buff char) undo mode 
+            (cont ll (mark-position buff char) undo mode
                (str "marked '" (list->string (list char)) "'")))
          (cont ll buff undo mode))))
 
@@ -840,19 +840,19 @@
       (cont ll buff undo mode)))
 
 (define (command-move-up ll buff undo mode r cont)
-   (lets ((buff (move-arrow buff 'up #f))) 
+   (lets ((buff (move-arrow buff 'up #f)))
       (cont ll buff undo mode)))
 
 (define (command-move-right ll buff undo mode r cont)
-   (lets ((buff (move-arrow buff 'command-right #f))) 
+   (lets ((buff (move-arrow buff 'command-right #f)))
       (cont ll buff undo mode)))
 
 (define (command-move-left ll buff undo mode r cont)
-   (lets ((buff (move-arrow buff 'left #f))) 
+   (lets ((buff (move-arrow buff 'left #f)))
       (cont ll buff undo mode)))
 
 (define (command-seek-matching-paren ll buff undo mode r cont)
-   (lets ((buff (maybe-seek-matching-paren buff))) 
+   (lets ((buff (maybe-seek-matching-paren buff)))
       (cont ll buff undo mode)))
 
 (define (command-paste-after ll buff undo mode r cont)
@@ -952,7 +952,7 @@
          shift-n)))
 
 (define (command-indent ll buff undo mode n cont)
-   (lets 
+   (lets
       ((range ll (uncons ll #false))
        (undop (push-undo undo buff)))
       (cond
@@ -1000,7 +1000,7 @@
                 (buffp (buffer u d null line 1 y off meta)))
              buffp)
           buff)))
-         
+
 (define (command-unindent ll buff undo mode n cont)
    (lets ((range ll (uncons ll #false)))
       (cond
@@ -1035,11 +1035,11 @@
          (if (null? l)
             (cont ll buff undo mode)
             (lets ((buffp (insert-backspace buff)))
-               (cont ll 
+               (cont ll
                   (put-copy-buffer buffp 'yank (tuple 'sequence (list (car l))))
                   undo mode)))
          (lets ((buffp (buffer u d l (cdr r) x y off meta)))
-            (cont ll 
+            (cont ll
                (put-copy-buffer buffp 'yank (tuple 'sequence (list (car r))))
                undo mode)))))
 
@@ -1054,7 +1054,7 @@
             ((or (null? d) (eq? n 0))
                (let ((buffp (buffer u d l r x y off meta)))
                   (cont ll buffp undo mode)))
-            (else   
+            (else
                (lets
                   ((tail (drop-leading-whitespace (car d)))
                    (tail (if (whitespace? (last r #\a)) tail (cons #\space tail))))
@@ -1091,21 +1091,21 @@
                (values ll buff undo mode 'close)
                (cont (cons chr ll) buff undo mode "Close aborted"))))
       (values ll buff undo mode 'close)))
-         
+
 (define (command-go-to-line ll buff undo mode n cont)
    (lets ((buff (buffer-seek buff 0 (if (number? n) (- n 1) 0) #false)))
       (cont ll buff undo mode (str "line " n))))
 
 (define (command-go-to-mark ll buff undo mode r cont)
-   (log "marks is " (get-buffer-meta buff 'marks #empty))
+   (log "marks is " (get-buffer-meta buff 'marks empty))
    (lets ((msg ll (uncons ll #false)))
       (if (eq? (ref msg 1) 'key)
          (lets
             ((char (ref msg 2))
-             (pos (getf (get-buffer-meta buff 'marks #empty) char)))
+             (pos (get (get-buffer-meta buff 'marks empty) char)))
             (log "going back to position " pos)
             (if pos
-               (lets 
+               (lets
                   ((x y pos)
                    (buff (buffer-seek buff x y #f)))
                   (cont ll buff undo mode (str "mark '" (list->string (list char))) "'"))
@@ -1113,7 +1113,7 @@
          (cont ll buff undo mode))))
 
 (define (command-go-to-last-line ll buff undo mode cont)
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        (last (+ 1 (+ (length u) (length d))))
        (buff (buffer-seek buff 0 last #false)))
@@ -1123,7 +1123,7 @@
    (let ((tab (get meta 'tab tab-node)))
       (λ (line)
          (map (λ (node) (key-node node meta)) line))))
-      
+
 (define (path->lines path meta)
    (let ((fd (open-input-file path)))
       ;; todo: allow binary mode operation
@@ -1149,10 +1149,10 @@
       (if parsed
          ;; shiny new eval
          (lets ((buffp undo msg (led-eval-command buff undo parsed)))
-            (if msg 
+            (if msg
                (notify buff msg))
             (cont ll buffp undo mode))
-         
+
          ;; silly legacy eval
          (cond
             ((equal? exp "")
@@ -1177,7 +1177,7 @@
             ((m/^w / exp)
               (let ((path (s/^w +// exp)))
                  (lets ((ok? write-msg (write-buffer buff path)))
-                    (cont ll 
+                    (cont ll
                        (put-buffer-meta buff 'path path)
                        (mark-saved undo buff (time-ms))
                        mode (list->string write-msg)))))
@@ -1199,7 +1199,7 @@
                  (if path
                     (lets ((ok? write-tio (write-buffer buff path)))
                        (notify buff write-tio)
-                       (cont ll buff 
+                       (cont ll buff
                           (mark-saved undo buff (time-ms))
                           mode))
                     (cont ll buff undo mode))))
@@ -1271,7 +1271,7 @@
                (lets ((ok? val (interpret-as-boolean notify buff (s/.*=// exp))))
                   (if ok?
                      (begin
-                        (notify buff 
+                        (notify buff
                            (str "recursive-open-directory=" (if val "on" "off")))
                         (cont ll
                            (put-global-meta buff 'recursive-open-directory val)
@@ -1291,7 +1291,7 @@
    (lets
       ((metadata (buffer-meta buff))
        (command-history (get-global-meta buff 'command-history null))
-       (ll res 
+       (ll res
           (readline ll command-history
             2 (+ 1 (screen-height buff)) (screen-width buff)))
        (buff
@@ -1301,8 +1301,8 @@
             buff)))
       (log (str "readline returned '" res "'"))
       (output
-         (tio 
-            (set-cursor 1 (+ 1 (screen-height buff))) 
+         (tio
+            (set-cursor 1 (+ 1 (screen-height buff)))
             (clear-line)
             (set-cursor (buffer-x buff) (buffer-y buff))))
       (if res
@@ -1347,7 +1347,7 @@
       (if (eq? n 1)
          (values ll (length l) 0 (length r) 0)
          (values ll (length l) 0 (- n 1) 0))))
-   
+
 (define (command-delete ll buff undo mode r cont)
    (lets ((undop (push-undo undo buff))
           (ll buffp tob (cut-movement ll buff r #\d)))
@@ -1355,10 +1355,10 @@
        (if tob
           (cont ll (put-copy-buffer buffp 'yank tob) undop mode)
           (cont ll buff undo mode))))
- 
+
 (define (command-change ll buff undo mode r cont)
-   ;; convert possible next c of [c]c to d, 
-   (lets 
+   ;; convert possible next c of [c]c to d,
+   (lets
       ((next ll (uncons ll eof))
        (ll (cons (if (equal? next (tuple 'key #\c)) (tuple 'key #\d) next) ll)))
       (command-delete ll buff undo mode r
@@ -1391,7 +1391,7 @@
              (log "cut data " tob)
              (cont ll (put-copy-buffer buff 'yank tob) undop mode "yanked"))
           (cont ll buff undo mode))))
- 
+
 (define (command-no-op ll buff undo mode r cont)
    (cont ll buff undo mode))
 
@@ -1401,7 +1401,7 @@
           (buff (buffer u d l null x y off meta)))
          ;; not having to repaint over these when switching modes reduces flicker for now
          ;(output
-         ;   (tio 
+         ;   (tio
          ;      (cursor-save)
          ;      (font-dim)
          ;      (raw   (repeat #\- (min (+ 1 (- w x)) (printable-length r))))
@@ -1468,7 +1468,7 @@
           (r _ (take-while word-char? (nodes->code-points r))))
       (list->string (append (reverse l) r))))
 
-;; translate part after file link possibly into a command 
+;; translate part after file link possibly into a command
 ;;   e.g. foo/bar.txt:8 -> suffix = "8" -> '(#\: #\8)
 ;; arbitrary command are not allowed for security reasons
 (define (maybe-string->command s)
@@ -1478,10 +1478,10 @@
       ((m/^\/[a-zA-ZäöÄÖ0-9 _. !+*-]*\/$/ s)
          (reverse (cdr (reverse (string->list s)))))
       (else null)))
-   
+
 ;; todo: add a recursive-open flag
 (define (command-do ll buff undo mode r cont)
-   (lets 
+   (lets
       ((u d l r x y off meta buff)
        ;(line (list->string (foldr render-node null (append (reverse l) r))))
        (line (current-word l r))
@@ -1489,7 +1489,7 @@
       (cond
          ((and (pair? parts) (file? (car parts)))
             (log "do: open file '" line "' with args " (cdr parts))
-            (values ll buff undo mode (tuple 'open (car parts) 
+            (values ll buff undo mode (tuple 'open (car parts)
                (if (pair? (cdr parts))
                   (maybe-string->command (cadr parts))
                   null))))
@@ -1501,7 +1501,7 @@
                   (let ((contents ((if rec led-dir-recursive->list led-dir->list) line)))
                      (if contents
                         (cont ll
-                           (buffer u 
+                           (buffer u
                               (append (map string->list contents) d)
                               l r x y off meta)
                            (push-undo undo buff) mode)
@@ -1556,7 +1556,7 @@
 ;;; Command mode key mapping
 
 (define *command-mode-control-actions*
-   (-> #empty
+   (-> empty
       (put #\f command-step-forward)
       (put #\b command-step-backward)
       (put #\r command-redo)
@@ -1573,7 +1573,7 @@
 
 ;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
 (define *command-mode-actions*
-   (-> #empty
+   (-> empty
       (put #\/ command-regex-search)
       (put #\n command-find-next)
       (put #\m command-mark-position)
@@ -1664,7 +1664,7 @@
             (else
                (drop-spaces lead (* bal (- 0 tabstop))))))))
 
-(define (key x) 
+(define (key x)
    (tuple 'key x))
 
 (define (insert-enter buff)
@@ -1680,8 +1680,8 @@
             (lets
                ((ind (artificial-intelligence (cons (reverse l) u) (get meta 'tabstop 3)))
                 (buffp
-                  (move-arrow 
-                     (seek-line-start 
+                  (move-arrow
+                     (seek-line-start
                         (buffer u (cons (append ind r) d) l null x y off meta))
                      'down #true)))
                (fold
@@ -1725,7 +1725,7 @@
        (eq? x #\])
        ;(eq? x #\{)
        (eq? x #\})))
- 
+
 ;; ll buff undo mode -> ll' buff' undo' mode' action
 (define (led-buffer ll buff undo mode)
    (log-buff buff undo mode)
@@ -1745,7 +1745,7 @@
                ((tab)
                   ;(led-buffer (ilist space-key space-key space-key ll) buff undo mode)
                   ;; expandtab = #false or tab width
-                  (let ((exp (getf meta 'expandtab)))
+                  (let ((exp (get meta 'expandtab)))
                      (log "tab expansion -> " exp)
                      (if exp
                         (led-buffer (keys ll #\space (get meta 'tabstop 8)) buff undo mode)
@@ -1781,7 +1781,7 @@
                      ((eq? key 'arrow-right) (values ll buff undo mode 'right))
                      ((eq? key #\p) (values ll buff undo mode 'left))
                      ((eq? key #\n) (values ll buff undo mode 'right))
-                     ((eq? key #\w) 
+                     ((eq? key #\w)
                         (command-save ll buff undo mode 1
                            (λ (ll buff undo mode msg)
                               (if msg (notify buff msg))
@@ -1835,14 +1835,14 @@
 
 (define (make-new-state buff)
    (lets ((w h (buffer-screen-size buff))
-          (buff (make-empty-buffer w h #empty)))
+          (buff (make-empty-buffer w h empty)))
       (tuple buff (initial-undo buff) 'command)))
 
 (define (make-new-state-having buff type content)
    (lets ((w h (buffer-screen-size buff))
-          (buff 
-             (make-buffer-having w h 
-                (-> #empty
+          (buff
+             (make-buffer-having w h
+                (-> empty
                    (put 'type type))
                 content)))
       (tuple buff (initial-undo buff) 'command)))
@@ -1868,8 +1868,8 @@
 
 (define (make-directory-buffer path contents meta w h)
    (lets ((contents (directory-contents path contents))
-          (buff (buffer null (cdr contents) null (car contents) 1 1 (cons 0 0) 
-                   (-> meta 
+          (buff (buffer null (cdr contents) null (car contents) 1 1 (cons 0 0)
+                   (-> meta
                       (put 'type 'directory)
                       (put 'path path)))))
       (tuple buff (initial-undo buff) 'command)))
@@ -1924,8 +1924,8 @@
          ((c-source? path)       c-source?)
          ((web-source? path)     web-source?)
          (else (λ (x) #true)))))
-      
-         
+
+
 (define (led-buffers-action ll left state right action led-buffers)
    (lets ((buff undo mode state))
       (cond
@@ -1935,17 +1935,17 @@
          ((eq? action 'close)
             (cond
                ((pair? left)
-                  (led-buffers ll (cdr left) (car left) right 
+                  (led-buffers ll (cdr left) (car left) right
                      (str "Closed " (buffer-path-str buff))))
                ((pair? right)
-                  (led-buffers ll left (car right) (cdr right) 
+                  (led-buffers ll left (car right) (cdr right)
                      (str "Closed " (buffer-path-str buff))))
                (else
                   (log "all buffers closed")
                   (exit-led 0))))
          ((eq? action 'left)
             (if (null? left)
-               (led-buffers ll left state right 
+               (led-buffers ll left state right
                   (if (null? right)
                      (str "You only have " (buffer-path-str buff) " open.")
                      "already at first buffer"))
@@ -1953,7 +1953,7 @@
                   (cons state right) #false)))
          ((eq? action 'right)
             (if (null? right)
-               (led-buffers ll left state right 
+               (led-buffers ll left state right
                   (if (null? left)
                      (str "You only have " (buffer-path-str buff) " open.")
                      "already at last buffer"))
@@ -1979,7 +1979,7 @@
                         (λ (subs)
                            (notify buff (str "Opening directory " path))
                            (lets
-                              ((w h (buffer-screen-size buff)) 
+                              ((w h (buffer-screen-size buff))
                                (new (make-directory-buffer path subs (buffer-meta buff) w h)))
                               (log "made dir buffer")
                               (led-buffers ll (cons state left) new right path))))
@@ -2000,8 +2000,8 @@
                         (log "Searching for " what)
                         (led-buffers ll (cons state left)
                            (initial-state
-                              (make-buffer-having w h 
-                                 (-> (buffer-meta ibuff) 
+                              (make-buffer-having w h
+                                 (-> (buffer-meta ibuff)
                                     (put 'type 'search-results))
                                  (run-search what (buffer->lines ibuff)
                                     (λ (msg) (notify ibuff msg))
@@ -2014,7 +2014,7 @@
                   (lets ((buffers (append (reverse left) (cons state right))))
                      (if (and (> n 0) (<= n (length buffers)))
                         (lets ((left right (lsplit buffers (- n 1))))
-                           (led-buffers ll (reverse left) (car right) (cdr right) 
+                           (led-buffers ll (reverse left) (car right) (cdr right)
                               (str "switched to " n)))
                         (begin
                            (notify buff "No such buffer")
@@ -2036,9 +2036,9 @@
       new
       (lets ((ob ou om old)
              (nb nu nm new))
-          (tuple 
+          (tuple
              (put-buffer-meta nb 'global
-                (get-buffer-meta ob 'global #empty))
+                (get-buffer-meta ob 'global empty))
              nu nm))))
 
 (define (led-buffers ll left state right msg)
@@ -2048,7 +2048,7 @@
           (ll buff undo mode action (led-buffer ll buff undo mode))
           (state (tuple buff undo mode)))
       (log "led-buffers: action " action)
-      (led-buffers-action ll left state right action 
+      (led-buffers-action ll left state right action
          (λ (ll left statep right msg)
             ;; copy global settings from the old buffer to the new one
             (led-buffers ll left
@@ -2056,7 +2056,7 @@
                right msg)))))
 
 ; (define (led-buffers-action ll left state right action led-buffers)
-   
+
 ;; todo: use the buffer open command instead
 ;                                 (led-buffers ll left state right #false)))))))
 (define (open-all-files paths w h shared-meta)
@@ -2090,7 +2090,7 @@
                            (raw (string->list (str att ";" fg ";" bg " ")))
                            (font-attrs 0 0 0)
                            out))
-                     out 
+                     out
                         ;(list 0 1 2 3 4 5 6 7)
                         (list 2 0 4 1)
                         ))
@@ -2101,23 +2101,23 @@
       (tio
          (disable-line-wrap))))
 
-(define sink 
+(define sink
    (λ x x))
 
 ;; dict -> meta | #false
 (define (load-settings dict terminal-width terminal-height)
    (lets/cc ret
-      ((config-path 
-         (or (getf dict 'config)
+      ((config-path
+         (or (get dict 'config)
              (str (or (getenv "HOME") ".")
                   "/.ledrc")))
-       (empty-config 
-          (-> #empty
+       (empty-config
+          (-> empty
              (put 'global
-                (-> #empty
+                (-> empty
                    (put 'width terminal-width)
                    (put 'height terminal-height)))))
-       (config-port 
+       (config-port
          (open-input-file config-path)))
       (log "loading config from " config-path)
       (cond
@@ -2129,7 +2129,7 @@
                   (fold
                      (λ (buff cmd)
                         (log "led eval: " cmd)
-                        (led-eval null buff empty-undo 'command 
+                        (led-eval null buff empty-undo 'command
                             (λ (ll buff undo mode) buff)
                             sink cmd))
                      (make-empty-buffer 10 10 empty-config)
@@ -2139,8 +2139,8 @@
             #false))))
 
 (define (led-get-terminal-size ll dict)
-   (if (getf dict 'faketerm)
-      ;; fake terminal in use - do not try to chat with it   
+   (if (get dict 'faketerm)
+      ;; fake terminal in use - do not try to chat with it
       (values 80 24 ll)
       (get-terminal-size ll)))
 
@@ -2191,7 +2191,7 @@
 
 (define (led-input-stream dict)
    (cond
-      ((getf dict 'faketerm) =>
+      ((get dict 'faketerm) =>
          (λ (path)
             (let ((port (open-input-file path)))
                (if port
@@ -2203,11 +2203,11 @@
 
 (define (start-led-threads dict args)
    (cond
-      ((getf dict 'help)
+      ((get dict 'help)
          (print usage-text)
          (print (format-rules command-line-rules))
          0)
-      ((getf dict 'version)
+      ((get dict 'version)
          (print version-str)
          0)
       (else
