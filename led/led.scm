@@ -1,7 +1,8 @@
 #!/usr/bin/ol --run
 
 (import
-  (led terminal)
+  ;(led terminal)
+  (owl readline)
   (led log)
   (led buffer)
   (led undo)
@@ -17,6 +18,27 @@
 (define version-str "led v0.1a")
 
 (define null '())
+
+     (define-syntax tio
+      (syntax-rules (raw)
+         ((tio (raw lst) . rest)
+            (append lst (tio . rest)))
+         ((tio (op . args) . rest)
+            (op (tio . rest) . args))
+         ((tio) '())
+         ((tio val . rest)
+            (render val (tio . rest)))))
+
+     (define-syntax tio*
+      (syntax-rules (raw)
+         ((tio* (raw lst) . rest)
+            (append lst (tio* . rest)))
+         ((tio* x) x)
+         ((tio* (op . args) . rest)
+            (op (tio* . rest) . args))
+         ((tio*) '())
+         ((tio* val . rest)
+            (render val (tio* . rest)))))
 
 (define (output lst)
    (write-bytes stdout lst))
@@ -793,8 +815,9 @@
    (lets ((search-history
             (get-global-meta buff 'search-history null))
           (ll res (readline ll search-history
-                     2 (+ 1 (screen-height buff)) (screen-width buff))))
-         (if res
+                     2 (+ 1 (screen-height buff)) (screen-width buff)
+                     (put readline-default-options 'backspace-out #true))))
+         (if (string? res) ;; can be backspaced
             (lets
                ((buff
                   (if (equal? res "") buff
@@ -1293,7 +1316,8 @@
        (command-history (get-global-meta buff 'command-history null))
        (ll res
           (readline ll command-history
-            2 (+ 1 (screen-height buff)) (screen-width buff)))
+            2 (+ 1 (screen-height buff)) (screen-width buff)
+                     (put readline-default-options 'backspace-out #true)))
        (buff
          (if res
             (put-global-meta buff 'command-history
@@ -1305,9 +1329,9 @@
             (set-cursor 1 (+ 1 (screen-height buff)))
             (clear-line)
             (set-cursor (buffer-x buff) (buffer-y buff))))
-      (if res
+      (if (string? res)
          (led-eval ll buff undo mode cont notify res)
-         (cont ll buff undo mode))))
+         (cont ll buff undo mode)))) ;; backspaced out, etc
 
 (define (command-redo ll buff undo mode r cont)
   (lets ((undo buffp (unpop-undo undo buff)))

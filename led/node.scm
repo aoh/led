@@ -37,12 +37,36 @@
       (owl base)
       (led log)
       (only (owl unicode) encode-point)
-      (led terminal))
+      ;(led terminal)
+      (owl readline)
+      
+      )
   
    (begin    
       
       (define null '())
             
+     (define-syntax tio
+      (syntax-rules (raw)
+         ((tio (raw lst) . rest)
+            (append lst (tio . rest)))
+         ((tio (op . args) . rest)
+            (op (tio . rest) . args))
+         ((tio) '())
+         ((tio val . rest)
+            (render val (tio . rest)))))
+
+     (define-syntax tio*
+      (syntax-rules (raw)
+         ((tio* (raw lst) . rest)
+            (append lst (tio* . rest)))
+         ((tio* x) x)
+         ((tio* (op . args) . rest)
+            (op (tio* . rest) . args))
+         ((tio*) '())
+         ((tio* val . rest)
+            (render val (tio* . rest)))))
+
       (define rp-node
         ;(tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal)))
          (tuple 'replace (list 41) 1 (tio (font-dim) (font-fg-cyan) (raw (list 41)) (font-normal))))
