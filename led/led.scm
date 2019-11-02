@@ -1581,18 +1581,18 @@
 
 (define *command-mode-control-actions*
    (-> empty
-      (put #\f command-step-forward)
-      (put #\b command-step-backward)
-      (put #\r command-redo)
-      (put #\h command-go-home)
+      (put 'f command-step-forward)
+      (put 'b command-step-backward)
+      (put 'r command-redo)
+      (put 'h command-go-home)
       (put 'arrow-left command-previous-buffer)
       (put 'arrow-right command-next-buffer)
-      (put '#\p command-previous-buffer) ;; also available in insert mode
-      (put '#\n command-next-buffer)     ;; ditto
-      (put #\w (command-macro "mm:%s/ +$//\n'm:w\n"))
-      (put #\l command-update-screen)
+      (put 'p command-previous-buffer) ;; also available in insert mode
+      (put 'n command-next-buffer)     ;; ditto
+      (put 'w (command-macro "mm:%s/ +$//\n'm:w\n"))
+      (put 'l command-update-screen)
       ;(put #\x command-format-paragraph)
-      (put #\x (command-macro ":{,}l fmt\n}"))
+      (put 'x (command-macro ":{,}l fmt\n}"))
       ))
 
 ;; key → (ll buff undo mode range cont → (cont ll' buff' undo' mode'))
@@ -1803,9 +1803,9 @@
                   (cond
                      ((eq? key 'arrow-left) (values ll buff undo mode 'left))
                      ((eq? key 'arrow-right) (values ll buff undo mode 'right))
-                     ((eq? key #\p) (values ll buff undo mode 'left))
-                     ((eq? key #\n) (values ll buff undo mode 'right))
-                     ((eq? key #\w)
+                     ((eq? key 'p) (values ll buff undo mode 'left))
+                     ((eq? key 'n) (values ll buff undo mode 'right))
+                     ((eq? key 'w)
                         (command-save ll buff undo mode 1
                            (λ (ll buff undo mode msg)
                               (if msg (notify buff msg))
