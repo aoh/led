@@ -2,7 +2,7 @@ CC?=gcc
 OFLAGS=-O1
 CFLAGS=-O2 -Wall
 PREFIX=/usr
-OWLURL=https://gitlab.com/owl-lisp/owl/uploads/38d13ea55860be90b8c0a4519810c6d5/ol-0.1.20.c.gz
+OWLURL=https://gitlab.com/owl-lisp/owl/uploads/92375620fb4d570ee997bc47e2f6ddb7/ol-0.1.21.c.gz
 OL=bin/ol
 
 everything: bin/led .parrot
