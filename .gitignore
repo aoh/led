@@ -3,4 +3,4 @@ led.fasl
 led.log
 .parrot
 bin
-tmp/ol*
+tmp

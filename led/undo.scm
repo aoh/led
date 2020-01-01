@@ -16,6 +16,8 @@
    
    (begin
 
+      (define null '())
+            
       (define empty-undo 
          (cons null null))
 

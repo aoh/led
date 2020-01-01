@@ -1,8 +1,8 @@
 (define-library (led eval)
-   
+
    (export
-      led-eval-command) ;; buff command-tuple → buff' 
-   
+      led-eval-command) ;; buff command-tuple → buff'
+
    (import
       (owl base)
       (led buffer)
@@ -11,14 +11,16 @@
       (led log)
       (led extra)
       (led undo))
-   
+
    (begin
-    
+
+      (define null '())
+
       (define (maybe-car exp default)
          (if (pair? exp)
-            (car exp) 
+            (car exp)
             default))
-    
+
       ;; unary/binary temporary helper
       (define (largs sexp)
          (cond
@@ -31,12 +33,12 @@
 
       ;; buff label-char → line | #false
       (define (label-line buff mark)
-         (let ((pos (get (get-buffer-meta buff 'marks #empty) mark #false)))
+         (let ((pos (get (get-buffer-meta buff 'marks empty) mark #false)))
             (if pos
                (+ 1 (cdr pos)) ;; absolute offset → line number
-               #false)))         
-     
-      (define (apply-position buff op a b) 
+               #false)))
+
+      (define (apply-position buff op a b)
          (cond
             ;; unary ones
             ((not a) #false)
@@ -46,14 +48,14 @@
             ((not b) #false)
             ((eq? op '+) (+ a b))
             ((eq? op '-) (- a b))
-            (else 
+            (else
                (log "ERROR: apply-position: " op)
                #false)))
-     
+
       (define (eval-position buff pos)
          (cond
             ((not pos) pos)
-            ((number? pos) 
+            ((number? pos)
                (cond
                   ((< pos 0)
                      (max 1 (+ (buffer-current-line buff) pos)))
@@ -61,16 +63,24 @@
                      ;; first line is 1
                      1)
                   (else pos)))
-            ((eq? pos 'dot) 
+            ((eq? pos 'dot)
                (buffer-current-line buff))
-            ((eq? pos 'end) 
+            ((eq? pos 'paragraph)
+               (lets ((dy dx(movement buff 1 'paragraph)))
+                  (log "paragraph forward returned dy " dy)
+                  (+ (buffer-current-line buff) dy)))
+            ((eq? pos 'paragraph-back)
+               (lets ((dy dx (movement buff 1 'paragraph-back)))
+                  (log "paragraph back returned dy " dy)
+                  (+ (buffer-current-line buff) dy)))
+            ((eq? pos 'end)
                (buffer-line-count buff))
             ((and (pair? pos) (list? pos))
                (lets ((a b (largs pos)))
                   (apply-position buff (car pos)
                      (eval-position buff a)
                      (eval-position buff b))))
-            (else 
+            (else
                (log "ERROR: interpret-position " pos)
                #false)))
 
@@ -83,7 +93,7 @@
                   (eval-position buff to)))
             (let ((res (eval-position buff pos)))
                (values res res))))
-      
+
       ;; bytes path → bool
       (define (bytes->file bytes path)
          (let ((port (open-output-file path)))
@@ -92,8 +102,8 @@
                   (close-port port)
                   outcome)
                #false)))
-     
-      ;; todo: add an env to avoid this blowing up 
+
+      ;; todo: add an env to avoid this blowing up
       (define (led-eval-command buff undo command)
          (log "eval: " command)
          (let ((op (maybe-car command #false)))
@@ -105,11 +115,11 @@
                         ;; full write also marks the buffer as saved
                         (lets ((ok? msg (write-buffer buff path)))
                            (if ok?
-                              (values 
+                              (values
                                  (put-buffer-meta buff 'path path)
                                  (mark-saved undo buff (time-ms))
                                  "saved")
-                              (values buff undo 
+                              (values buff undo
                                  (or msg "save failed"))))
                         (lets
                            ((from to (largs range))
@@ -126,7 +136,7 @@
                   (lets ((range to-buffer (largs command))
                          (from to (eval-interval buff range)))
                       (if (and from to (<= from to))
-                         (values 
+                         (values
                             (op-delete-lines buff from to to-buffer)
                             (push-undo undo buff)
                             "deleted")
@@ -134,10 +144,10 @@
                ((eq? op 'put)
                   (lets ((where reg (largs command))
                          (where (eval-position buff where))
-                         (buffp (op-paste-register buff where reg)))
+                         (buffp (op-paste-register buff where reg #f)))
                      (if (eq? buff buffp)
                         (values buff undo #false)
-                        (values buffp 
+                        (values buffp
                            (push-undo undo buff)
                            "pasted"))))
                ((eq? op 'lisp)
@@ -152,16 +162,34 @@
                         ((not func)
                            (values buff undo "unknown extra"))
                         (else
-                           (lets 
+                           (lets
+                              ((node (get-copy-buffer buffp 'lisp (tuple 'lines null)))
+                               (lines (map nodes->code-points (ref node 2)))
+                               (data (func (get-buffer-meta buff 'global empty) lines))
+                               (buffp (put-copy-buffer buffp 'lisp-result (tuple 'lines data))))
+                              (values
+                                 (op-paste-register buffp (- from 1) 'lisp-result #t)
+                                 (push-undo undo buff)
+                                 "evaluated"))))))
+               ((eq? op 'lisp-apply)
+                  (lets ((range func (largs command))
+                         (from to (eval-interval buff range))
+                         (buffp (op-delete-lines buff from to 'lisp)))
+                     (cond
+                        ((eq? buff buffp)
+                           ;; could not cut the range
+                           (values buff undo "bad range"))
+                        (else
+                           (lets
                               ((node (get-copy-buffer buffp 'lisp (tuple 'lines null)))
                                (lines (map nodes->code-points (ref node 2)))
                                (data (func lines))
                                (buffp (put-copy-buffer buffp 'lisp-result (tuple 'lines data))))
                               (values
-                                 (op-paste-register buffp (- from 1) 'lisp-result)
+                                 (op-paste-register buffp (- from 1) 'lisp-result #t)
                                  (push-undo undo buff)
                                  "evaluated"))))))
                (else
                   (values buff undo "led-eval is confused")))))))
-                  
+
 

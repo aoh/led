@@ -37,10 +37,36 @@
       (owl base)
       (led log)
       (only (owl unicode) encode-point)
-      (led terminal))
+      ;(led terminal)
+      (owl readline)
+      
+      )
   
    (begin    
       
+      (define null '())
+            
+     (define-syntax tio
+      (syntax-rules (raw)
+         ((tio (raw lst) . rest)
+            (append lst (tio . rest)))
+         ((tio (op . args) . rest)
+            (op (tio . rest) . args))
+         ((tio) '())
+         ((tio val . rest)
+            (render val (tio . rest)))))
+
+     (define-syntax tio*
+      (syntax-rules (raw)
+         ((tio* (raw lst) . rest)
+            (append lst (tio* . rest)))
+         ((tio* x) x)
+         ((tio* (op . args) . rest)
+            (op (tio* . rest) . args))
+         ((tio*) '())
+         ((tio* val . rest)
+            (render val (tio* . rest)))))
+
       (define rp-node
         ;(tuple 'replace (list 41) 1 (tio (font-dim) (raw (list 41)) (font-normal)))
          (tuple 'replace (list 41) 1 (tio (font-dim) (font-fg-cyan) (raw (list 41)) (font-normal))))
@@ -119,7 +145,7 @@
             ((whitespace? node) #false)
             ((tuple? node) #false)
             ;; fixme: delimiter? + unify with other such ops
-            ((has? '(#\( #\) #\" #\[ #\] #\{ #\}) node)
+            ((assq node '(#\( #\) #\" #\[ #\] #\{ #\}))
                #false)
             (else #true)))
       
@@ -179,7 +205,7 @@
               (cond
                 ((eq? (type x) type-fix+)
                   ;; a printable unicode code point
-                  (if (eq? x (fxband x #x7f))
+                  (if (eq? x (fxand x #x7f))
                     ;; a printable ascii range thingie (usual suspect)
                     (cons x (take-printable line (- n 1)))
                     (encode-point x

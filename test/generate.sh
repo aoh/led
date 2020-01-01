@@ -1,4 +1,4 @@
-# git clone https://github.com/aoh/blab.git && cd blab && make && sudo make install
+# git clone https://gitlab.com/akihe/blab.git && cd blab && make && sudo make install
 
 # just make  file
 blab -l . -e 'led.prelude ":w hello.io.out\r:q\r"' > hello.io

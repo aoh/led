@@ -1,0 +1,1 @@
+[2;1R[53;191Rifoo foo fooyypppppp:s/foo/bar/:%s/foo/FOO/:%s/foo/X/g:w replace.io.out:q

@@ -12,6 +12,8 @@
    
    (begin
 
+      (define null '())
+      
       (define (sort-paths paths)
          (sort string<?
             (remove m/^\./ paths)))

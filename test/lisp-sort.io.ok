@@ -1,10 +1,7 @@
-
-bar 0
-bar 2
-bar 9
-foo 1
-foo 2
-foo 3
-foo 9
-foo 99
-
+a 0
+a 3
+a 8
+b 3
+b 4
+b 8
+c 4
