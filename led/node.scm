@@ -37,7 +37,7 @@
       (owl base)
       (led log)
       (only (owl unicode) encode-point)
-      ;(led terminal)
+      (owl terminal)
       (owl readline)
       
       )

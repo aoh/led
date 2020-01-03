@@ -1,7 +1,7 @@
 #!/usr/bin/ol --run
 
 (import
-  ;(led terminal)
+  (owl terminal)
   (owl readline)
   (led log)
   (led buffer)

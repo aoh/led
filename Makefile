@@ -2,10 +2,10 @@ CC?=gcc
 OFLAGS=-O1
 CFLAGS=-O2 -Wall
 PREFIX=/usr
-OWLURL=https://gitlab.com/owl-lisp/owl/uploads/92375620fb4d570ee997bc47e2f6ddb7/ol-0.1.21.c.gz
+OWLURL=https://haltp.org/files/ol-0.1.22.c.gz
 OL=bin/ol
 
-everything: bin/led .parrot
+everything: bin/led # .parrot
 
 .parrot: bin/led 
 	cd test && sh ./run ../bin/led
@@ -26,7 +26,7 @@ led.fasl: bin/ol led/*.scm
 	make bin/ol
 	$(OL) -o led.fasl led/led.scm
 
-install: bin/led .parrot
+install: bin/led # .parrot
 	mkdir -p $(PREFIX)/bin
 	install -m 755 bin/led $(PREFIX)/bin/led
 
