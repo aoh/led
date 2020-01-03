@@ -4,3 +4,4 @@ led.log
 .parrot
 bin
 tmp
+test/config
