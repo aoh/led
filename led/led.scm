@@ -1805,6 +1805,10 @@
                      ((eq? key 'arrow-right) (values ll buff undo mode 'right))
                      ((eq? key 'p) (values ll buff undo mode 'left))
                      ((eq? key 'n) (values ll buff undo mode 'right))
+                     ((eq? key 'c)
+                        (log "switching out of insert mode on C-c + moving cursor")
+                        ;(output (update-screen buff)) ;; would clear overstrike
+                        (led-buffer (cons (tuple 'key #\h) ll) buff (push-undo undo buff) 'command))
                      ((eq? key 'w)
                         (command-save ll buff undo mode 1
                            (λ (ll buff undo mode msg)
