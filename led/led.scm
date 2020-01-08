@@ -2226,8 +2226,7 @@
                   (terminal-input port)
                   null))))
       (else
-         (set-terminal-rawness #true)
-         (terminal-input stdin))))
+         (terminal-input empty))))
 
 (define (start-led-threads dict args)
    (cond
