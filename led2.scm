@@ -20,8 +20,8 @@
 
 (define log-fd (open-output-file "led2.log"))
 (define (log . x)
-   (for-each (λ (x) (display-to log-fd x)) x)
-   (print-to log-fd "")
+;   (for-each (λ (x) (display-to log-fd x)) x)
+;   (print-to log-fd "")
    42)
 
 (log "getting started")
