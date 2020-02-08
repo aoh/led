@@ -221,6 +221,10 @@
          (else
             (loop (cdr l) (+ n 1))))))
 
+(define (buffer-line-pos b)
+   (b (λ (pos l r len line) 
+      (distance-to-newline l))))
+
 (define (select-next-line b)
    (b
       (λ (pos l r len line)
@@ -989,7 +993,9 @@
                (if (eq? (car runes) #\/) ;; this is a search
                   (let ((pos (first-match b (cdr runes))))
                      (if pos
-                         (led env mode (seek b pos) 1 1 w h)
+                         (lets ((b (seek b pos))
+                                (lp (buffer-line-pos b)))
+                            (led env mode b (if (>= lp w) 1 (+ lp 1)) 1 w h))
                          (led env mode b cx cy w h)))
                    (led env mode b cx cy w h))))
          ((eq? mode 'command)
