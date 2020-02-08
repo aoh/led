@@ -85,6 +85,25 @@
       (+ line delta)
       line))
 
+(define (match-prefix? lst pat)
+   (cond
+      ((null? pat) #t)
+      ((null? lst) #f)
+      ((eq? (car lst) (car pat)) 
+         (match-prefix? (cdr lst) (cdr pat)))
+      (else #f)))
+
+(define (first-match b runes)
+   (b (λ (pos l r len line)
+      (let ((data (append (reverse l) r)))
+         (let loop ((data data) (pos 0))
+            (cond
+               ((null? data) #false)
+               ((match-prefix? data runes)
+                  pos)
+               (else
+                  (loop (cdr data) (+ pos 1)))))))))
+
 ;; seek position
 (define (seek b to)
    (define (find pos l r len line)
@@ -965,6 +984,14 @@
          ((eq? op 'command-aborted)
             ;; search or colon command was aborted, resume command mode
             (led env 'command b cx cy w h))
+         ((eq? op 'command-updated)
+            (let ((runes (ref msg 2)))
+               (if (eq? (car runes) #\/) ;; this is a search
+                  (let ((pos (first-match b (cdr runes))))
+                     (if pos
+                         (led env mode (seek b pos) 1 1 w h)
+                         (led env mode b cx cy w h)))
+                   (led env mode b cx cy w h))))
          ((eq? mode 'command)
             (tuple-case msg
                ((ctrl k)
@@ -1192,6 +1219,7 @@
             (status-line id info w (list key)))
          ((key x)
             (mail id (tuple 'status-line (reverse (cons x keys)) (+ 1 (length keys))))
+            (mail id (tuple 'command-updated (reverse (cons x keys))))
             (status-line id info w (cons x keys)))
          ((backspace)
             (if (null? (cdr keys))
@@ -1203,8 +1231,7 @@
                   (mail id (tuple 'status-line (reverse keys) (+ 1 (length keys))))
                   (status-line id info w keys))))
          ((enter)
-            (mail id
-               (tuple 'command-entered (reverse keys)))
+            (mail id (tuple 'command-entered (reverse keys)))
             (mail id (tuple 'status-line null 1))
             (status-line id info w null))
          (else
@@ -1335,46 +1362,74 @@
             (str "pushing to " to " on " (date-str (time)) "\n"))))
    (pusher to))
 
-(define (start-ui w h)
+(define (start-ui w h paths)
    (print "Starting ui")
-   (let ((name 'ui))
+   (lets ((name 'ui)
+          (buffers
+             (if (null? paths)
+                (list (new-buffer-window (list 'scratch) #f))
+                (map (λ (x) (new-buffer-window x x)) paths))))
       (thread name
          (ui
             (list
-               (new-buffer-window 'buff-1 #f))
-            (list
-               (new-buffer-window 'buff-2 #f)
-               (new-buffer-window 'buff-3 "led2.scm")
-               (new-buffer-window 'buff-4 #f)
-               )
+               (car buffers))
+            (cdr buffers)
             empty))
       (link name)
       ;; ui tells the size to client threads
       (mail 'ui (tuple 'terminal-size w h))
       name))
 
+(define version-str "led v0.2a")
 
+(define usage-text "led [args] [file-or-directory] ...")
 
-(lets ((p log-fd)
-       (input (terminal-input empty))
-       (x y ll (get-terminal-size input)))
-   (log "Terminal dimensions " (cons x y))
-   (start-input-terminal (start-ui x y) ll)
-   (log "Input terminal and UI running")
-   (start-screen x y)
-   (log "Screen running")
-   ;(link (thread (pusher 'buff-2)))
-   ;(link (thread (pusher 'buff-4)))
-   ;(link (thread (status-pusher 'buff-1)))
-   ;(link (thread (status-pusher 'buff-3)))
-   (let loop ()
-      (let ((mail (wait-mail)))
-         (print mail)
-         (log "CRASH " mail)
-         (write-bytes stderr (string->bytes (str mail "\n")))
-         (halt 1)
-         ;(loop)
-         )))
+(define command-line-rules
+  (cl-rules
+    `((help "-h" "--help" comment "show this thing")
+      (version "-v" "--version" comment "show program version")
+      ;(log "-L" "--log" has-arg comment "debug log file")
+      ;(config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
+      ;(faketerm #f "--terminal" has-arg comment "fake terminal input stream source")
+      ;(record #f "--record" has-arg comment "record all terminal input to file")
+      )))
+
+(define (start-led-threads dict args)
+   (cond
+      ((get dict 'help)
+         (print usage-text)
+         (print (format-rules command-line-rules))
+         0)
+      ((get dict 'version)
+         (print version-str)
+         0)
+      (else
+         (lets ((input (terminal-input empty))
+                (x y ll (get-terminal-size input)))
+            (log "Terminal dimensions " (cons x y))
+            (start-screen x y)
+            (clear-screen)
+            (start-input-terminal (start-ui x y args) ll)
+            (log "Input terminal and UI running")
+            (log "Screen running")
+            ;(link (thread (pusher 'buff-2)))
+            ;(link (thread (pusher 'buff-4)))
+            ;(link (thread (status-pusher 'buff-1)))
+            ;(link (thread (status-pusher 'buff-3)))
+            (let loop ()
+               (let ((mail (wait-mail)))
+                  (print mail)
+                  (log "CRASH " mail)
+                  (write-bytes stderr (string->bytes (str mail "\n")))
+                  (halt 1)
+                  ;(loop)
+                  ))))))
+
+(define (main args)
+   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
+
+main
+   
 
 
 
