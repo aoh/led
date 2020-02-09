@@ -301,6 +301,8 @@
       (λ (pos l r len line)
          (buffer pos l (drop r len) 0 line))))
 
+(define (buffer-apply b func)
+   (buffer-replace b (func (get-selection b))))
 
 ;;; Screen rendering -----------------------------------------------------------------------
 
@@ -970,13 +972,23 @@
       (car x)
       #f))
 
+
+;;; Content Operations
+
+(define (indent-selection env)
+   (lambda (data)
+      (ilist #\space #\space #\space (s/(\n)/\1   /g data))))
+
+(define (unindent-selection env)
+   (lambda (data)
+      (s/^   // (s/(\n)   /\1/g data))))
+
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
    (lets ((from msg (next env b w h cx cy))
           (op (ref msg 1)))
       (log "led: " mode " <- " msg " from " from)
       (cond
-         ;; nama kaikki erilliselle kaistalle ja mahdollisesti eri threadiin myohemmin
          ((eq? op 'push)
             (led env mode
                (buffer-append-to-end b (ref msg 2))
@@ -1107,6 +1119,14 @@
                                    )
                               (led env mode b cx cy w h)
                               (led env mode bp (min w (+ cx 1)) cy w h))))
+                     ((eq? x #\>) ;; indent
+                        (led env mode
+                           (buffer-apply b (indent-selection env))
+                           cx cy w h))
+                     ((eq? x #\<) ;; unindent
+                        (led env mode
+                           (buffer-apply b (unindent-selection env))
+                           cx cy w h))
                      ((eq? x #\j) ;; down
                         (lets ((delta nleft (next-line-same-pos b)))
                            (if delta
