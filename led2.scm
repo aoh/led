@@ -69,7 +69,7 @@
 (define (buffer-unselect b)
    (b (λ (pos l r len line) (buffer pos l r 0 line))))
 
-(import (only (owl syscall) link))
+(import (only (owl syscall) link kill))
 
 ;; current line (at start of dot)
 (define (buffer-line b)
@@ -1177,7 +1177,10 @@
                         (led (put env 'line-numbers (not (get env 'line-numbers #false)))
                            mode b cx cy w h))
                      ((eq? x #\Q)
-                        (halt 0))
+                        ;; clean up, notify UI we are done and finish
+                        (kill (get env 'status-thread'id))
+                        (mail 'ui (tuple 'buffer-closed))
+                        42)
                      ((or (eq? x #\:) (eq? x #\/) (eq? x #\?) (eq? x #\|))
                         (mail (get env 'status-thread-id) (tuple 'start-command x))
                         (led (clear-status-text env) 'enter-command b cx cy w h))
@@ -1421,6 +1424,18 @@
                      (get i 'width 80)
                      (get i 'height 30))))
                (ui (cons new l) r i)))
+         ((eq? (ref msg 1) 'buffer-closed)
+            (lets ((l (keep (lambda (x) (not (eq? x from))) l))
+                   (r (keep (lambda (x) (not (eq? x from))) r)))
+               (if (null? l)
+                  (if (null? r)
+                     (halt 0)
+                     (begin
+                        (refresh (car r))
+                        (ui (list (car r)) (cdr r) i)))
+                  (begin
+                     (refresh (car l))
+                     (ui l r i)))))
          ((eq? from (car l))
             ;; forward print message from current window
             (mail 'screen msg)
@@ -1510,10 +1525,10 @@
             ;(link (thread (status-pusher 'buff-3)))
             (let loop ()
                (let ((mail (wait-mail)))
-                  (print mail)
+                  ;(print mail)
                   (log "CRASH " mail)
-                  (write-bytes stderr (string->bytes (str mail "\n")))
-                  (halt 1)
+                  ;(write-bytes stderr (string->bytes (str mail "\n")))
+                  ;(halt 1)
                   ;(loop)
                   ))))))
 
