@@ -570,6 +570,9 @@
 (define (set-status-text env string)
    (put env 'status-message (string->runes string)))
 
+(define (clear-status-text env)
+   (del env 'status-message))
+
 (define (led-eval buff env exp)
    (log "led-eval " exp)
    (tuple-case exp
@@ -1139,7 +1142,7 @@
                         (halt 0))
                      ((or (eq? x #\:) (eq? x #\/) (eq? x #\?) (eq? x #\|))
                         (mail (get env 'status-thread-id) (tuple 'start-command x))
-                        (led env 'enter-command b cx cy w h))
+                        (led (clear-status-text env) 'enter-command b cx cy w h))
                      (else
                         (led env mode b cx cy w h))))
                (else
