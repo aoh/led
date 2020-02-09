@@ -1252,6 +1252,9 @@
                (let ((keys (cdr keys)))
                   (mail id (tuple 'status-line (reverse keys) (+ 1 (length keys))))
                   (status-line id info w keys))))
+         ((esc)
+            (mail id (tuple 'command-aborted))
+            (status-line id info w null))
          ((enter)
             (mail id (tuple 'command-entered (reverse keys)))
             (mail id (tuple 'status-line null 1))
@@ -1329,7 +1332,7 @@
             (tuple-case msg
                ((ctrl x)
                   (cond
-                     ((eq? x 'n)
+                     ((eq? x 'n)                         
                         (if (null? r)
                            (ui l r i)
                            (begin
