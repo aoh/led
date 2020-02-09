@@ -3,11 +3,13 @@
    (only (owl parse) byte-stream->exp-stream fd->exp-stream)
    (only (owl readline) port->readline-byte-stream)
    (owl unicode)
+   (only (owl sys) file?)
    (owl terminal)
    (owl sys)
    (owl proof)
    (owl unicode)
    (owl date)
+   (only (led system) led-dir->list)
    (owl args))
 
 ;; fixme: undo buffer two node types, crashes
@@ -85,8 +87,24 @@
 (define (string-buffer str)
    (buffer 0 null (string->list str) 0 1))
 
+;; -> buffer | #false
 (define (file-buffer path)
-   (buffer 0 null (utf8-decode (file->list path)) 0 1))
+   (log (str "trying to open " path " as file"))
+   (if (file? path)
+      (buffer 0 null (utf8-decode (file->list path)) 0 1)
+      #false))
+
+;; -> buffer | #false
+(define (dir-buffer path)
+   (log (str "trying to open " path " as directory"))
+   (let ((paths (led-dir->list path)))
+      (if paths
+         (buffer 0 null
+            (foldr
+               (λ (x tail) (append (string->list x) (cons #\newline tail)))
+               null paths)
+             0 1)
+          #false)))
 
 (define (buffer-append-to-end b data)
    (b (λ (pos l r len line)
@@ -101,7 +119,7 @@
    (cond
       ((null? pat) #t)
       ((null? lst) #f)
-      ((eq? (car lst) (car pat)) 
+      ((eq? (car lst) (car pat))
          (match-prefix? (cdr lst) (cdr pat)))
       (else #f)))
 
@@ -234,7 +252,7 @@
             (loop (cdr l) (+ n 1))))))
 
 (define (buffer-line-pos b)
-   (b (λ (pos l r len line) 
+   (b (λ (pos l r len line)
       (distance-to-newline l))))
 
 (define (select-next-line b)
@@ -585,9 +603,9 @@
             (if fd
                (let ((data (buffer->bytes buff)))
                   (if (write-bytes fd data)
-                     (values buff 
-                        (set-status-text 
-                           (put env 'path path) 
+                     (values buff
+                        (set-status-text
+                           (put env 'path path)
                            (str "Wrote " (length data) "b to " path ".")))
                      (values buff
                         (set-status-text env (str "Failed to write to " path ".")))))
@@ -884,9 +902,9 @@
       ((lsts dcx (render-buffer env b w h cx cy))
        (status-bytes (ref (get env 'status-line #f) 2))
        (status-message (get env 'status-message null))
-       (lsts 
-          (append lsts 
-             (list 
+       (lsts
+          (append lsts
+             (list
                 (overlay
                    status-message
                   (or status-bytes (list 32))))))
@@ -1051,7 +1069,7 @@
                                  (if buffp
                                     (led envp mode buffp cx cy w h)
                                     (led env mode b cx cy w h)))
-                              (led 
+                              (led
                                  (set-status-text env
                                     "No path yet.")
                                  mode b cx cy w h))))
@@ -1196,7 +1214,7 @@
                                  (if buffp
                                     (led envp mode buffp cx cy w h)
                                     (led env mode b cx cy w h)))
-                              (led 
+                              (led
                                  (set-status-text env
                                     "No path yet.")
                                  mode b cx cy w h))))
@@ -1310,7 +1328,9 @@
                'status-thread-id status-thread-id)
              'command
             (if path
-               (file-buffer path)
+               (or
+                  (file-buffer path)
+                  (dir-buffer path))
                (string-buffer ""))
             1 1 w h))
       (link id)
@@ -1349,6 +1369,13 @@
 ;; manage threads and their views
 ;; decide which ones get to draw on screen
 
+(define (close-buffer l r)
+   (if (null? (cdr l))
+      (if (null? r)
+         (values #f #f)
+         (values (list (car r)) (cdr r)))
+      (values (cdr l) r)))
+
 (define (ui l r i)
    (lets ((msg (wait-mail))
           (from msg msg))
@@ -1358,7 +1385,7 @@
             (tuple-case msg
                ((ctrl x)
                   (cond
-                     ((eq? x 'n)                         
+                     ((eq? x 'n)
                         (if (null? r)
                            (ui l r i)
                            (begin
@@ -1370,8 +1397,13 @@
                            (begin
                               (refresh (cadr l))
                               (ui (cdr l) (cons (car l) r) i))))
-                     ((eq? x 'q)
-                        (halt 1))
+                     ((eq? x 'q) ;; close current buffer (from outside), may leave zombies for now
+                        (lets ((l r (close-buffer l r)))
+                           (if l
+                              (begin
+                                 (refresh (car l))
+                                 (ui l r i))
+                              0)))
                      ;((eq? x 'l)
                      ;   (refresh (car l))
                      ;   (ui l r i))
@@ -1382,8 +1414,8 @@
                   (mail (car l) msg)
                   (ui l r i))))
          ((eq? (ref msg 1) 'new-buffer)
-            (let ((new 
-                  (new-buffer-window 
+            (let ((new
+                  (new-buffer-window
                      (list (if (ref msg 2) (ref msg 2) '*scratch*))
                      (ref msg 2)
                      (get i 'width 80)
@@ -1489,7 +1521,7 @@
    (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
 
 main
-   
+
 
 
 

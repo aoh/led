@@ -28,12 +28,17 @@
                (foldr append null
                   (map led-dir-recursive->list sorted-subs)))
             (list path)))
-         
+        
+      ;; path -> ("path/a" "path/b" ...) | #false 
       (define (led-dir->list path)
          (let ((contents (dir->list path)))
-            (if contents
-               (map 
-                  (λ (x) (str path "/" x))
+            (cond
+               ((not contents)
+                  #false)
+               ((equal? path ".")
                   (sort-paths contents))
-               #false)))))
+               (else
+                  (map 
+                     (λ (x) (str path "/" x))
+                     (sort-paths contents))))))))
       
