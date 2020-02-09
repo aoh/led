@@ -1159,6 +1159,9 @@
                   (led env 'insert b cx cy w h))
                ((esc)
                   (led env 'command b cx cy w h))
+               ((tab)
+                  (lets ((b (buffer-append-noselect b (list #\space #\space #\space))))
+                     (led env mode b (min w (+ cx 3)) cy w h)))
                ((ctrl k)
                   (cond
                      ((eq? k 'c)
