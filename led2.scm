@@ -18,13 +18,25 @@
 ; 'buff-<n> + '(buff-<n> . status-line)
 ;
 
-(define log-fd (open-output-file "led2.log"))
 (define (log . x)
-;   (for-each (λ (x) (display-to log-fd x)) x)
-;   (print-to log-fd "")
-   42)
+   ;; just dropped if logger is not running
+   (mail 'log x))
 
-(log "getting started")
+(define (logger port)
+   (lets ((envelope (wait-mail))
+          (from msg envelope))
+      (print-to port from ": " msg)
+      (logger port)))
+
+(define (start-logger path)
+   (if path
+      (let ((port (open-output-file path)))
+         (if port
+            (begin
+               (thread 'log (logger port))
+               log)
+            (error "Cannot open log file " path)))))
+
 ;; discard sender
 (define (wait-message)
    (let ((envelope (wait-mail)))
@@ -577,6 +589,9 @@
                (begin
                   (log "Failed to open " path " for writing.")
                   (values #f #f)))))
+      ((new-buffer path)
+         (mail 'ui exp)
+         (values buff env))
       ((append text)
          (lets
             ((action exp)
@@ -684,7 +699,9 @@
             (get-word "w" 'write-buffer)     ;; the whole buffer + mark saved, not just selection
             (get-word "write" 'write-buffer)
             (get-word "r" 'read)
-            (get-word "read" 'read)))
+            (get-word "read" 'read)
+            (get-word "n" 'new-buffer)
+            (get-word "new" 'new-buffer)))
        (path
           (get-either
              (get-parses
@@ -703,8 +720,7 @@
             ;(get-action get-movement)
             get-file-command
             (get-word "delete" (tuple 'delete))
-            (get-word "d" (tuple 'delete))
-            )))
+            (get-word "d" (tuple 'delete)))))
       val))
 
 (define (forward-read ll)
@@ -1243,9 +1259,9 @@
          (else
             (status-line id info w keys)))))
 
-(define (start-status-line id)
+(define (start-status-line id w)
    (mail id (tuple 'keep-me-posted))
-   (status-line id 0 30 null))
+   (status-line id 0 w null))
 
 (define (status-pusher to)
    (mail to
@@ -1256,7 +1272,7 @@
 (define (maybe-put ff k v)
    (if v (put ff k v) ff))
 
-(define (new-buffer-window id path)
+(define (new-buffer-window id path w h)
    ;(print "new-buffer-window " id)
    (let ((status-thread-id (cons id 'status-line)))
       (thread id
@@ -1267,11 +1283,11 @@
             (if path
                (file-buffer path)
                (string-buffer ""))
-            1 1 80 30))
+            1 1 w h))
       (link id)
       (link
          (thread status-thread-id
-            (start-status-line id)))
+            (start-status-line id w)))
       id))
 
 (define (input-terminal input target)
@@ -1336,6 +1352,14 @@
                (else
                   (mail (car l) msg)
                   (ui l r i))))
+         ((eq? (ref msg 1) 'new-buffer)
+            (let ((new 
+                  (new-buffer-window 
+                     (list (if (ref msg 2) (ref msg 2) '*scratch*))
+                     (ref msg 2)
+                     (get i 'width 80)
+                     (get i 'height 30))))
+               (ui (cons new l) r i)))
          ((eq? from (car l))
             ;; forward print message from current window
             (mail 'screen msg)
@@ -1373,8 +1397,8 @@
    (lets ((name 'ui)
           (buffers
              (if (null? paths)
-                (list (new-buffer-window (list 'scratch) #f))
-                (map (λ (x) (new-buffer-window x x)) paths))))
+                (list (new-buffer-window (list 'scratch) #f w h))
+                (map (λ (x) (new-buffer-window x x w h)) paths))))
       (thread name
          (ui
             (list
@@ -1394,7 +1418,7 @@
   (cl-rules
     `((help "-h" "--help" comment "show this thing")
       (version "-v" "--version" comment "show program version")
-      ;(log "-L" "--log" has-arg comment "debug log file")
+      (log "-L" "--log" has-arg comment "debug log file")
       ;(config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
       ;(faketerm #f "--terminal" has-arg comment "fake terminal input stream source")
       ;(record #f "--record" has-arg comment "record all terminal input to file")
@@ -1418,6 +1442,7 @@
             (start-input-terminal (start-ui x y args) ll)
             (log "Input terminal and UI running")
             (log "Screen running")
+            (link (start-logger (get dict 'log)))
             ;(link (thread (pusher 'buff-2)))
             ;(link (thread (pusher 'buff-4)))
             ;(link (thread (status-pusher 'buff-1)))
