@@ -134,6 +134,26 @@
                (else
                   (loop (cdr data) (+ pos 1)))))))))
 
+(define (maybe-car x)
+   (if (pair? x)
+      (car x)
+      #f))
+
+(define (maybe-cdr x)
+   (if (pair? x)
+      (cdr x)
+      x))
+
+(define (next-match b runes)
+   (b (λ (pos l r len line)
+      (let loop ((data (maybe-cdr r)) (pos (+ pos 1)))
+         (cond
+            ((null? data) #false)
+            ((match-prefix? data runes)
+               pos)
+            (else
+               (loop (cdr data) (+ pos 1))))))))
+
 ;; seek position
 (define (seek b to)
    (define (find pos l r len line)
@@ -985,12 +1005,6 @@
          (paren-hunt (cdr r) 1 1 40 41)
          #false))))
 
-(define (maybe-car x)
-   (if (pair? x)
-      (car x)
-      #f))
-
-
 ;;; Content Operations
 
 (define (indent-selection env)
@@ -1031,6 +1045,10 @@
                   ((eq? (maybe-car runes) #\:)
                      (lets ((buff env (led-eval-runes b env (cdr runes))))
                         (led env 'command buff cx cy w h)))
+                  ((eq? (maybe-car runes) #\/)
+                     (log "saving last search " (cdr runes))
+                     (let ((env (put env 'last-search (cdr runes))))
+                        (led env 'command b cx cy w h)))
                   (else
                      (log "wat command " (runes->string runes))
                      (led env 'command b cx cy w h)))))
@@ -1073,17 +1091,24 @@
                                  (set-status-text env
                                     "No path yet.")
                                  mode b cx cy w h))))
-                     ((eq? k 'w)
-                        (led
-                           (write-buffer! env b)
-                           mode b cx cy w h))
                      (else
                         (led env mode b cx cy w h))))
                ((key x)
                   (cond
                      ((eq? x #\i)
-                        ;; insert moden jalkeen voisi ottaa sen selectioniksi
                         (led env 'insert b cx cy w h))
+                     ((eq? x #\n)
+                        (let ((s (get env 'last-search)))
+                           (log "running last search " s)
+                           (if s
+                              (let ((p (next-match b s)))
+                                 (log "next search match is " p)
+                                 (if p
+                                    (lets ((b (seek b p))
+                                           (lp (buffer-line-pos b)))
+                                       (led env mode b (if (>= lp w) 1 (+ lp 1)) 1 w h))
+                                    (led env mode b cx cy w h)))
+                              (led env mode b cx cy w h))))
                      ((eq? x #\c)
                         (lets ((seln (get-selection b))
                                (env (put env 'yank seln)))
