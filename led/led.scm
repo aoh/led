@@ -1119,16 +1119,24 @@
                      (else
                         (led env mode b cx cy w h))))
                ((enter)
-                  (let ((s (list->string (get-selection (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)))))
+                  (lets
+                     ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)) ;; fixme - cursor move
+                      (s (list->string (get-selection bp))))
                      (cond
                         ((file? s)
                            (mail 'ui (tuple 'new-buffer s))
-                           (led env mode b cx cy w h))
+                           (led env mode bp cx cy w h))
                         ((directory? s)
-                           (log "Would have opened " s)
-                           (led env mode b cx cy w h))
+                           (let ((fs (or (led-dir->list s) null)))
+                              (led (push-undo env (tuple b cx cy))
+                                 mode
+                                 (buffer-replace bp
+                                   (foldr
+                                      (lambda (path tail) (render path (if (null? tail) tail (cons 10 tail))))
+                                      null fs))
+                                 cx cy w h)))
                         (else
-                           (led env mode b cx cy w h)))))
+                           (led env mode bp cx cy w h)))))
                ((key x)
                   (cond
                      ((eq? x #\i)
