@@ -3,7 +3,7 @@
    (only (owl parse) byte-stream->exp-stream fd->exp-stream)
    (only (owl readline) port->readline-byte-stream)
    (owl unicode)
-   (only (owl sys) file?)
+   (only (owl sys) file? directory?)
    (owl terminal)
    (owl sys)
    (owl proof)
@@ -110,6 +110,23 @@
    (b (λ (pos l r len line)
          (buffer pos l (append r data) len line))))
 
+;;; do-command 
+(define word-chars
+   (fold (λ (ff x) (put ff x x))
+      empty
+      (string->list
+         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/_!?<>.:+-*")))
+
+(define (word-char? x) 
+   (get word-chars x))
+
+(define (word-chars l)
+   (cond
+      ((null? l) l)
+      ((word-char? (car l))
+         (cons (car l) (word-chars (cdr l))))
+      (else null)))
+
 (define (add-nl line char delta)
    (if (eq? char #\newline)
       (+ line delta)
@@ -171,6 +188,14 @@
                   0 (add-nl line (car l) -1))
                #false))))
    (b find))
+
+(define (buffer-select-current-word b)
+   (b (λ (pos l r len line)
+      (lets ((dl (length (word-chars l)))
+             (dr (length (word-chars r))))
+         (buffer-selection-delta
+            (buffer-unselect (seek b (- pos dl)))
+            (+ dl dr))))))
 
 (define (seek-delta b n)
    (b (λ (pos l r len line) (seek b (+ pos n)))))
@@ -1210,6 +1235,13 @@
                         (kill (get env 'status-thread'id))
                         (mail 'ui (tuple 'buffer-closed))
                         42)
+                     ((eq? x #\W)
+                        (lets ((b (buffer-select-current-word b))
+                               (seln (get-selection b))
+                               (lp (buffer-line-pos b)))
+                           (led env mode
+                              (buffer-select-current-word b)
+                              (max 1 (+ 1 lp)) cy w h)))
                      ((or (eq? x #\:) (eq? x #\/) (eq? x #\?) (eq? x #\|))
                         (mail (get env 'status-thread-id) (tuple 'start-command x))
                         (led (clear-status-text env) 'enter-command b cx cy w h))
