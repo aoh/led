@@ -1097,6 +1097,10 @@
                   (cond
                      ((eq? x #\i)
                         (led env 'insert b cx cy w h))
+                     ((eq? x #\y)
+                        (lets ((seln (get-selection b))
+                               (env (put env 'yank seln)))
+                           (led env mode  b cx cy w h)))
                      ((eq? x #\n)
                         (let ((s (get env 'last-search)))
                            (log "running last search " s)
@@ -1262,9 +1266,14 @@
                   (if (> (buffer-pos b) 0)
                      (lets
                         ((p (buffer-pos b))
+                         (lp (buffer-line-pos b))
                          (b (select b (- p 1) p))
                          (b (buffer-delete b)))
-                        (led env mode b (max 1 (- cx 1)) cy w h))
+                        (if (eq? lp 0)
+                           (led env mode b 
+                              (min w (+ 1 (buffer-line-pos b)))
+                              (max (- cy 1) 1) w h)
+                           (led env mode b (max 1 (- cx 1)) cy w h)))
                      (led env mode b cx cy w h)))
                (else is foo
                   (mail 'ui
