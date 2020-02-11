@@ -1118,6 +1118,17 @@
                                  mode b cx cy w h))))
                      (else
                         (led env mode b cx cy w h))))
+               ((enter)
+                  (let ((s (list->string (get-selection b))))
+                     (cond
+                        ((file? s)
+                           (mail 'ui (tuple 'new-buffer s))
+                           (led env mode b cx cy w h))
+                        ((directory? s)
+                           (log "Would have opened " s)
+                           (led env mode b cx cy w h))
+                        (else
+                           (led env mode b cx cy w h)))))
                ((key x)
                   (cond
                      ((eq? x #\i)
