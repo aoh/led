@@ -1119,7 +1119,7 @@
                      (else
                         (led env mode b cx cy w h))))
                ((enter)
-                  (let ((s (list->string (get-selection b))))
+                  (let ((s (list->string (get-selection (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)))))
                      (cond
                         ((file? s)
                            (mail 'ui (tuple 'new-buffer s))
