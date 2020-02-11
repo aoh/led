@@ -1140,7 +1140,7 @@
                ((key x)
                   (cond
                      ((eq? x #\i)
-                        (led env 'insert b cx cy w h))
+                        (led (push-undo env (tuple b cx cy)) 'insert b cx cy w h))
                      ((eq? x #\y)
                         (lets ((seln (get-selection b))
                                (env (put env 'yank seln)))
