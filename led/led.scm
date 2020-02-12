@@ -1274,7 +1274,7 @@
                ((enter)
                   (lets
                      ((b (buffer-append-noselect b (list #\newline))))
-                     (led env 'insert b 1 (min h (+ cy 1)) w h)))
+                     (led env 'insert b 1 (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                ((key x)
                   (lets
                      ((b (buffer-append-noselect b (list x))))
@@ -1350,6 +1350,15 @@
          (loop (cons #\space lst) (+ n 1))
          lst)))
 
+(define tz-offset (* 60 60 2))
+
+(define (pad-time x)
+   (if (< x 10) (str "0" x) x))
+
+(define (now)
+   (lets ((d m y H M S (date (+ tz-offset (time)))))
+      (str d "." m "." y " " (pad-time H) ":" (pad-time M) ":" (pad-time S))))
+
 (define (status-line id info w keys)
    (lets ((envelope (wait-mail))
           (from msg envelope))
@@ -1359,7 +1368,7 @@
             (lets ((line (buffer-line buff))
                    (p  (buffer-pos buff))
                    (l  (buffer-selection-length buff))
-                   (info2 (str (if (eq? l 0) "" (str "[" l "] ")) line " ")))
+                   (info2 (str (if (eq? l 0) "" (str "[" l "] ")) line " " (now))))
                (if (not (equal? info info2))
                   (mail id
                      (tuple 'status-line
