@@ -189,6 +189,21 @@
                #false))))
    (b find))
 
+(define (length>=? l n)
+   (cond
+      ((eq? n 0) #t)
+      ((null? n) #f)
+      (else (length>=? (cdr l) (- n 1)))))
+
+(define (seek-select b pos len)
+   (let ((b (seek b pos)))
+      (if b
+         (b (lambda (pos l r _ line)
+               (if (length>=? r len)
+                  (buffer pos l r len line)
+                  #f)))
+         #false)))
+
 (define (buffer-select-current-word b)
    (b (λ (pos l r len line)
       (lets ((dl (length (word-chars l)))
@@ -1040,6 +1055,15 @@
    (lambda (data)
       (s/^   // (s/(\n)   /\1/g data))))
 
+(define (add-mark env key pos len)
+   (log "marking " (list->string (list key)) " as " pos " + " len)
+   (let ((marks (get env 'marks)))
+      (put env 'marks
+         (put marks key (cons pos len)))))
+
+(define (find-mark env key)
+   (get (get env 'marks empty) key))
+
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
    (lets ((from msg (next env b w h cx cy))
@@ -1121,6 +1145,7 @@
                ((enter)
                   (lets
                      ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)) ;; fixme - cursor move
+                      (cx (min w (max 1 (+ 1 (buffer-line-pos bp)))))
                       (s (list->string (get-selection bp))))
                      (cond
                         ((file? s)
@@ -1157,6 +1182,24 @@
                                        (led env mode b (if (>= lp w) 1 (+ lp 1)) 1 w h))
                                     (led env mode b cx cy w h)))
                               (led env mode b cx cy w h))))
+                     ((eq? x #\m)
+                        (lets ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key)))))
+                           (led 
+                              (add-mark env (ref (ref envelope 2) 2) (buffer-pos b) (buffer-selection-length b))
+                              mode b cx cy w h)))
+                     ((eq? x #\')
+                        (lets 
+                           ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
+                            (from msg envelope)
+                            (_ key msg)
+                            (location (find-mark env key)))
+                           (if location
+                              (lets
+                                 ((bp (seek-select b (car location) (cdr location))))
+                                 (if bp 
+                                    (led env mode bp 1 1 w h)
+                                    (led env mode b cx cy w h)))
+                              (led env mode b cx cy w h)))) 
                      ((eq? x #\c)
                         (lets ((seln (get-selection b))
                                (env (put env 'yank seln)))
@@ -1258,9 +1301,8 @@
                         (lets ((b (buffer-select-current-word b))
                                (seln (get-selection b))
                                (lp (buffer-line-pos b)))
-                           (led env mode
-                              (buffer-select-current-word b)
-                              (max 1 (+ 1 lp)) cy w h)))
+                           (led env mode b
+                              (min w (max 1 (+ 1 lp))) cy w h)))
                      ((or (eq? x #\:) (eq? x #\/) (eq? x #\?) (eq? x #\|))
                         (mail (get env 'status-thread-id) (tuple 'start-command x))
                         (led (clear-status-text env) 'enter-command b cx cy w h))
