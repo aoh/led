@@ -20,6 +20,13 @@
 ; 'buff-<n> + '(buff-<n> . status-line)
 ;
 
+
+(define (bound lo x hi)
+  (cond
+    ((< x lo) lo)
+    ((< hi x) hi)
+    (else x)))
+
 (define (log . x)
    ;; just dropped if logger is not running
    (mail 'log x))
@@ -150,6 +157,28 @@
                   pos)
                (else
                   (loop (cdr data) (+ pos 1)))))))))
+
+(define (find-balanced lst open close)
+   (let loop ((lst lst) (pos 0) (depth 0))
+      (print (list lst pos depth))
+      (cond
+         ((null? lst) #f)
+         ((eq? (car lst) open)
+            (loop (cdr lst) (+ pos 1) (+ depth 1)))
+         ((eq? (car lst) close)
+            (cond 
+               ((eq? depth 0) 
+                  #f)
+               ((eq? depth 1)
+                  (+ pos 1))
+               (else
+                  (loop (cdr lst) (+ pos 1) (- depth 1)))))
+         (else
+            (loop (cdr lst) (+ pos 1) depth)))))
+
+(example
+   (find-balanced '(L a R b) 'L 'R) = 3
+   (find-balanced '(L L a b R c L d R R e) 'L 'R) = 10)
 
 (define (maybe-car x)
    (if (pair? x)
@@ -1045,6 +1074,21 @@
          (paren-hunt (cdr r) 1 1 40 41)
          #false))))
 
+(define (parent-expression b)
+   (b (lambda (pos l r len line)
+      (if (null? l)
+         (values #false #false)
+         (let loop ((l (cdr l)) (r (cons (car l) r)) (d 1))
+            (cond
+               ((eq? (car r) 40)
+                  (let ((len (paren-hunt (cdr r) 1 1 40 41)))
+                     (if (and len (> len d))
+                        (values (* -1 d) len)
+                        (loop (cdr l) (cons (car l) r) (+ d 1)))))
+               ((null? l) (values #false #false))
+               (else (loop (cdr l) (cons (car l) r) (+ d 1)))))))))
+             
+
 ;;; Content Operations
 
 (define (indent-selection env)
@@ -1288,6 +1332,16 @@
                               (led env mode
                                  (buffer-selection-delta (buffer-unselect b) delta)
                                  cx cy w h)
+                              (led env mode b cx cy w h))))
+                     ((eq? x #\e) ;; parent expression
+                        (lets ((back len (parent-expression b)))
+                           (if back
+                              (lets
+                                 ((b (seek-delta b back)))
+                                 (led env mode 
+                                    (buffer-selection-delta (buffer-unselect b) len) 
+                                    (bound 1 (+ 1 (buffer-line-pos b)) w)
+                                    1 w h))
                               (led env mode b cx cy w h))))
                      ((eq? x #\N) ;; numbers
                         (led (put env 'line-numbers (not (get env 'line-numbers #false)))
