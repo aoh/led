@@ -51,6 +51,60 @@
    (let ((envelope (wait-mail)))
       (ref envelope 2)))
 
+;;; Inferior REPL --------------------------------------------------
+
+(define (pipe)
+   (let ((pair (sys-prim 31 0 0 0)))
+      (values 
+         (car pair)    ;; read port
+         (cdr pair)))) ;; write port
+
+(define (dup2 old new)
+   (let ((res (sys-prim 30 old new #f)))
+      res))
+
+(define (start-repl call)
+   (lets ((stdin-read  stdin-write  (pipe))
+          (stdout-read stdout-write (pipe))
+          (pid (fork)))
+      (cond
+         ((eq? pid #true) ;; child proces
+            (dup2 stdin-read stdin)
+            (close-port stdin-write)
+            (dup2 stdout-write stdout)
+            (close-port stdout-read)
+            (exec (car call) call))
+         (pid
+            (close-port stdin-read)
+            (close-port stdout-write)
+            (cons stdin-write stdout-read))
+         (else #false))))
+
+(define (wait-response fd)
+   (lets ((req (tuple 'read-timeout fd 5000))
+          (resp (interact 'iomux req)))
+      (print "response " resp)
+      (if (eq? req resp)
+         (vector->list
+            (try-get-block fd (* 16 1024) #f))
+         #false)))
+
+
+;; pipe = (send-fd . read-fd)
+(define (communicate pipe data)
+   (cond
+      ((string? data)
+         (communicate pipe (string->bytes data)))
+      ((write-bytes (car pipe) data)
+         (wait-response (cdr pipe)))
+      (else
+         #false)))
+
+;(define p (start-repl (list "/usr/bin/ol")))
+;(print "[" (bytes->string (communicate p "(iota 0 1 10)")) "]")
+;(print "[" (bytes->string (communicate p "(iota 0 1 20)")) "]")
+;(print "[" (bytes->string (communicate p "(iota 0 1 30)")) "]")
+
 ;;; Buffers --------------------------------------------------
 
 (define (buffer pos l r len line)
@@ -98,13 +152,17 @@
 (define (file-buffer path)
    (log (str "trying to open " path " as file"))
    (if (file? path)
-      (buffer 0 null (utf8-decode (file->list path)) 0 1)
+      (let ((data (utf8-decode (file->list path))))
+         (if data
+            (buffer 0 null data 0 1)
+            #false))
       #false))
 
 ;; -> buffer | #false
 (define (dir-buffer path)
    (log (str "trying to open " path " as directory"))
    (let ((paths (led-dir->list path)))
+      (log "paths " paths)
       (if paths
          (buffer 0 null
             (foldr
@@ -160,7 +218,6 @@
 
 (define (find-balanced lst open close)
    (let loop ((lst lst) (pos 0) (depth 0))
-      (print (list lst pos depth))
       (cond
          ((null? lst) #f)
          ((eq? (car lst) open)
@@ -1080,6 +1137,7 @@
          (values #false #false)
          (let loop ((l (cdr l)) (r (cons (car l) r)) (d 1))
             (cond
+               ((null? r) (values #f #f))
                ((eq? (car r) 40)
                   (let ((len (paren-hunt (cdr r) 1 1 40 41)))
                      (if (and len (> len d))
@@ -1523,7 +1581,8 @@
             (if path
                (or
                   (file-buffer path)
-                  (dir-buffer path))
+                  (dir-buffer path)
+                  (string-buffer (str "failed to read " path)))
                (string-buffer ""))
             1 1 w h))
       (link id)
