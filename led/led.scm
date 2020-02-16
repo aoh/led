@@ -3,7 +3,7 @@
    (only (owl parse) byte-stream->exp-stream fd->exp-stream)
    (only (owl readline) port->readline-byte-stream)
    (owl unicode)
-   (only (owl sys) file? directory?)
+   (only (owl sys) file? directory? kill sigkill)
    (owl terminal)
    (owl sys)
    (owl proof)
@@ -77,13 +77,12 @@
          (pid
             (close-port stdin-read)
             (close-port stdout-write)
-            (cons stdin-write stdout-read))
+            (tuple pid call stdin-write stdout-read))
          (else #false))))
 
 (define (wait-response fd)
    (lets ((req (tuple 'read-timeout fd 5000))
           (resp (interact 'iomux req)))
-      (print "response " resp)
       (if (eq? req resp)
          (vector->list
             (try-get-block fd (* 16 1024) #f))
@@ -95,10 +94,14 @@
    (cond
       ((string? data)
          (communicate pipe (string->bytes data)))
-      ((write-bytes (car pipe) data)
-         (wait-response (cdr pipe)))
+      ((write-bytes (ref pipe 3) data)
+         (wait-response (ref pipe 4)))
       (else
          #false)))
+
+(define (close-pipe pipe)
+   (log "closing subprocess " pipe)
+   (kill (ref pipe 2) sigkill))
 
 ;(define p (start-repl (list "/usr/bin/ol")))
 ;(print "[" (bytes->string (communicate p "(iota 0 1 10)")) "]")
@@ -773,6 +776,17 @@
          (values
             (select-line buff n)
             env))
+      ((subprocess call)
+         (let ((info (start-repl call)))
+            (log " => call " call)
+            (log " => subprocess " info)
+            (if info
+               (values buff 
+                  (set-status-text 
+                     (put env 'subprocess info)
+                     (str "Started " info)))
+               (values buff 
+                  (set-status-text env "no")))))
       ((extend-selection movement)
          (lets ((buffp envp (led-eval buff env movement)))
             (if buffp
@@ -861,6 +875,9 @@
    (get-byte-if
       (λ (x) (or (eq? x #\newline) (eq? x #\space)))))
 
+(define sub-owl 
+   (tuple 'subprocess (list "/usr/bin/ol")))
+
 (define get-file-command
    (get-parses
       ((op
@@ -870,7 +887,8 @@
             (get-word "r" 'read)
             (get-word "read" 'read)
             (get-word "n" 'new-buffer)
-            (get-word "new" 'new-buffer)))
+            (get-word "new" 'new-buffer)
+            ))
        (path
           (get-either
              (get-parses
@@ -888,6 +906,7 @@
             ;get-movement
             ;(get-action get-movement)
             get-file-command
+            (get-word "subowl" sub-owl)
             (get-word "delete" (tuple 'delete))
             (get-word "d" (tuple 'delete)))))
       val))
@@ -983,7 +1002,6 @@
                      (screen w h new-rows))
                   ((null? old)
                      (loop row rows '(()) out shared))
-                  ; jos halutaan vain kokonaiset jaetut rivit (osittaisissa on riski ansi hajoamisille)
                   ;((equal? (car rows) (car old))
                   ;   (loop (+ row 1) (cdr rows) (cdr old) out (+ shared 1)))
                   (else
@@ -1142,7 +1160,9 @@
                   (let ((len (paren-hunt (cdr r) 1 1 40 41)))
                      (if (and len (> len d))
                         (values (* -1 d) len)
-                        (loop (cdr l) (cons (car l) r) (+ d 1)))))
+                        (if (null? l)
+                           (values #f #f)
+                           (loop (cdr l) (cons (car l) r) (+ d 1))))))
                ((null? l) (values #false #false))
                (else (loop (cdr l) (cons (car l) r) (+ d 1)))))))))
              
@@ -1242,6 +1262,18 @@
                                  (set-status-text env
                                     "No path yet.")
                                  mode b cx cy w h))))
+                     ((eq? k 'x)
+                        (let ((proc (get env 'subprocess)))
+                           (log " => sending to " proc)
+                           (if proc
+                              (let ((resp (communicate proc (get-selection b))))
+                                 (log " => " (runes->string (if resp resp null)))
+                                 (led env mode 
+                                    (buffer-append b (or (utf8-decode (or resp null)) null))
+                                    cx cy w h))
+                              (begin
+                                 (log " => no subprocess")
+                                 (led env mode b cx cy w h)))))
                      (else
                         (led env mode b cx cy w h))))
                ((enter)
