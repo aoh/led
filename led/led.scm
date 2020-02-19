@@ -80,12 +80,17 @@
             (tuple pid call stdin-write stdout-read))
          (else #false))))
 
-(define (wait-response fd)
-   (lets ((req (tuple 'read-timeout fd 5000))
+(define (wait-response fd timeout)
+   (lets ((req (tuple 'read-timeout fd timeout))
           (resp (interact 'iomux req)))
       (if (eq? req resp)
-         (vector->list
-            (try-get-block fd (* 16 1024) #f))
+         ;; can read now
+         (lets 
+            ((resp (try-get-block fd (* 16 1024) #f))
+             (more (wait-response fd 100)))
+            (if more
+               (append (vector->list resp) more)
+               (vector->list resp)))
          #false)))
 
 
@@ -95,7 +100,7 @@
       ((string? data)
          (communicate pipe (string->bytes data)))
       ((write-bytes (ref pipe 3) data)
-         (wait-response (ref pipe 4)))
+         (wait-response (ref pipe 4) 2000))
       (else
          #false)))
 
