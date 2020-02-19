@@ -875,8 +875,11 @@
    (get-byte-if
       (λ (x) (or (eq? x #\newline) (eq? x #\space)))))
 
-(define sub-owl 
-   (tuple 'subprocess (list "/usr/bin/ol")))
+(define get-spaced-word
+   (get-parses
+       ((skip (get-plus get-whitespace))
+        (path (get-plus (get-rune-if (lambda (x) (not (eq? x #\space)))))))
+      (list->string path)))
 
 (define get-file-command
    (get-parses
@@ -898,6 +901,12 @@
              (get-epsilon #false))))
       (tuple op path)))
 
+(define get-subprocess
+   (get-parses
+      ((skip (get-word "subprocess" 'foo))
+       (cmd  (get-plus get-spaced-word)))
+      (tuple 'subprocess cmd)))
+ 
 (define get-command
    (get-parses
       ((skip (get-star! get-whitespace))
@@ -906,7 +915,7 @@
             ;get-movement
             ;(get-action get-movement)
             get-file-command
-            (get-word "subowl" sub-owl)
+            get-subprocess 
             (get-word "delete" (tuple 'delete))
             (get-word "d" (tuple 'delete)))))
       val))
