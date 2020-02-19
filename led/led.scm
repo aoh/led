@@ -116,9 +116,18 @@
 (define (buffer-char b)
    (b (λ (pos l r len line) (if (pair? r) (car r) #false))))
 
+(define (length>=? l n)
+   (cond
+      ((eq? n 0) #true)
+      ((eq? l null) #false)
+      (else (length>=? (cdr l) (- n 1)))))
+
 (define (buffer-selection-delta b d)
    (b (λ (pos l r len line)
-      (buffer pos l r (max (+ len d) 0) line))))
+      (let ((lenp (max (+ len d) 0)))
+         (if (or (< d 1) (length>=? r lenp))
+            (buffer pos l r lenp line)
+            (buffer pos l r len line))))))
 
 ;; read current selection
 (define (get-selection b)
@@ -1560,16 +1569,18 @@
       (log "status-line got " msg " from " from ", keys " keys)
       (tuple-case msg
          ((update env buff)
-            (lets ((line (buffer-line buff))
-                   (p  (buffer-pos buff))
-                   (l  (buffer-selection-length buff))
-                   (info2 (str (if (eq? l 0) "" (str "[" l "] ")) line " " (now))))
-               (if (not (equal? info info2))
-                  (mail id
-                     (tuple 'status-line
-                        (pad-to w (string->list info2))
-                        1)))
-               (status-line id info2 w keys)))
+            (if (null? keys)
+               (lets ((line (buffer-line buff))
+                      (p  (buffer-pos buff))
+                      (l  (buffer-selection-length buff))
+                      (info2 (str (if (eq? l 0) "" (str "[" l "] ")) line " " (now))))
+                  (if (not (equal? info info2))
+                     (mail id
+                        (tuple 'status-line
+                           (pad-to w (string->list info2))
+                           1)))
+                  (status-line id info2 w keys))
+               (status-line id info w keys)))
          ((terminal-size w h)
             (status-line id info w keys))
          ((start-command key)
