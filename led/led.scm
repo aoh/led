@@ -1475,14 +1475,17 @@
                                  cx cy w h)
                               (led env mode b cx cy w h))))
                      ((eq? x #\e) ;; parent expression
-                        (lets ((back len (parent-expression b)))
+                        (lets ((back len (parent-expression b))
+                               (old-line (buffer-line b)))
                            (if back
                               (lets
-                                 ((b (seek-delta b back)))
+                                 ((b (seek-delta b back))
+                                  (new-line (buffer-line b)))
                                  (led env mode 
                                     (buffer-selection-delta (buffer-unselect b) len) 
                                     (bound 1 (+ 1 (buffer-line-pos b)) w)
-                                    1 w h))
+                                    (bound 1 (- cy (- old-line new-line)) h) 
+                                    w h))
                               (led env mode b cx cy w h))))
                      ((eq? x #\N) ;; numbers
                         (led (put env 'line-numbers (not (get env 'line-numbers #false)))
@@ -1609,7 +1612,14 @@
                (lets ((line (buffer-line buff))
                       (p  (buffer-pos buff))
                       (l  (buffer-selection-length buff))
-                      (info2 (str (if (eq? l 0) "" (str "[" l "] ")) line " " (now))))
+                      (info2 
+                         (str
+                            (get env 'path "*scratch*")
+                            " " 
+                            (if (eq? l 0) "" (str "[" l "] "))
+                            line 
+                            " " 
+                            (now))))
                   (if (not (equal? info info2))
                      (mail id
                         (tuple 'status-line
