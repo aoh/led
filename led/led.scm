@@ -418,6 +418,11 @@
    (b (λ (pos l r len line)
       (distance-to-newline l))))
 
+(define (buffer-line-end-pos b)
+   (b (λ (pos l r len line)
+      (distance-to-newline r))))
+
+
 (define (select-next-line b)
    (b
       (λ (pos l r len line)
@@ -1327,6 +1332,12 @@
                         (lets ((seln (get-selection b))
                                (env (put env 'yank seln)))
                            (led env mode  b cx cy w h)))
+                     ((eq? x #\$)
+                        (lets ((nforw (buffer-line-end-pos b))
+                               (b (seek-delta b nforw)))
+                           (led env mode b 
+                              (bound 1 (+ cx nforw) w)
+                              cy w h)))
                      ((eq? x #\n)
                         (let ((s (get env 'last-search)))
                            (log "running last search " s)
