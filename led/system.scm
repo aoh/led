@@ -7,13 +7,10 @@
    
    (import
       (owl base)
-      (owl sys)
-      (led log))
+      (owl sys))
    
    (begin
 
-      (define null '())
-      
       (define (sort-paths paths)
          (sort string<?
             (remove m/^\./ paths)))

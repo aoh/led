@@ -19,8 +19,6 @@
    
    (begin
 
-      (define null '())
-      
       ;;; paragraph formatting
 
       (define (pick-line data len)
