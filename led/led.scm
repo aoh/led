@@ -1737,6 +1737,10 @@
                            (begin
                               (refresh (cadr l))
                               (ui (cdr l) (cons (car l) r) i))))
+                     ((eq? x 'h)
+                        (let ((r (append (reverse l) r)))
+                           (refresh (car r))
+                           (ui (list (car r)) (cdr r) i)))
                      ((eq? x 'q) ;; close current buffer (from outside), may leave zombies for now
                         (lets ((l r (close-buffer l r)))
                            (if l
