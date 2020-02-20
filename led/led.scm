@@ -418,6 +418,22 @@
    (b (λ (pos l r len line)
       (distance-to-newline l))))
 
+(define (line-indent l n)
+   (cond
+      ((null? l) n)
+      ((eq? (car l) #\space)
+         (line-indent (cdr l) (cons #\space n)))
+      ((eq? (car l) #\tab)
+         (line-indent (cdr l) (cons #\tab n)))
+      ((eq? (car l) #\newline)
+         n)
+      (else
+         (line-indent (cdr l) null))))
+
+(define (buffer-line-indent b)
+   (b (lambda (pos l r len line)
+         (line-indent l null))))
+
 (define (buffer-line-end-pos b)
    (b (λ (pos l r len line)
       (distance-to-newline r))))
@@ -833,6 +849,7 @@
 
 (define empty-env
    (-> empty
+      (put 'autoindent #true) ;; for now
       (put 'undo null)
       (put 'redo null)))
 
@@ -1493,8 +1510,11 @@
             (tuple-case msg
                ((enter)
                   (lets
-                     ((b (buffer-append-noselect b (list #\newline))))
-                     (led env 'insert b 1 (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
+                     ((i (if (get env 'autoindent) (buffer-line-indent b) null))
+                      (b (buffer-append-noselect b (cons #\newline i))))
+                     (led env 'insert b 
+                        (bound 1 (+ (length i) 1) w)
+                        (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                ((key x)
                   (lets
                      ((b (buffer-append-noselect b (list x))))
@@ -1561,8 +1581,8 @@
 
 (define (empty-led-env id path)
    (if path
-      (put empty 'path path)
-      empty))
+      (put empty-env 'path path)
+      empty-env))
 
 (define (pad-to len lst)
    (let loop ((lst lst) (n (length lst)))
