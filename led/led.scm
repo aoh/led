@@ -51,6 +51,40 @@
    (let ((envelope (wait-mail)))
       (ref envelope 2)))
 
+
+;;; Clock  ----------------------------------------------------
+
+(define tz-offset (* 60 60 2))
+
+(define (pad-time x)
+   (if (< x 10) (str "0" x) x))
+
+(define (now)
+   (lets ((d m y H M S (date (+ tz-offset (time)))))
+      (values
+         (str d "." m "." y " " (pad-time H) ":" (pad-time M))
+         S)))
+
+(define (clock-server)
+   (mail 'iomux (tuple 'alarm 1000))
+   (let loop ((subscribers null))
+      (lets ((envelope (wait-mail))
+             (from msg envelope)
+             (time-str s (now)))
+         (cond
+            ((eq? from 'iomux) ;; the bell tolls
+               (mail 'iomux (tuple 'alarm (* 1000 (- 61 s))))
+               (if (pair? subscribers)
+                  (for-each
+                     (lambda (sub)
+                        (mail sub (tuple 'clock time-str)))
+                     subscribers))
+               (loop subscribers))
+            (else
+               (loop (cons from subscribers)))))))
+       
+
+
 ;;; Inferior REPL --------------------------------------------------
 
 (define (pipe)
@@ -1412,7 +1446,9 @@
                               (lets
                                  ((bp (seek-select b (car location) (cdr location))))
                                  (if bp 
-                                    (led env mode bp 1 1 w h)
+                                    (led env mode bp 
+                                       (bound 1 (+ 1 (buffer-line-pos bp)) w)
+                                       1 w h)
                                     (led env mode b cx cy w h)))
                               (led env mode b cx cy w h)))) 
                      ((eq? x #\c)
@@ -1623,71 +1659,73 @@
          (loop (cons #\space lst) (+ n 1))
          lst)))
 
-(define tz-offset (* 60 60 2))
+;; -> runes
+(define (render-info buff env time width)
+   (lets
+     ((line (buffer-line buff))
+      (p  (buffer-pos buff))
+      (l  (buffer-selection-length buff))
+      (info
+          (str
+             (get env 'path "*scratch*")
+             " " 
+             (if (eq? l 0) "" (str "[" l "] "))
+             line 
+             " " 
+             time))) 
+      (pad-to width (string->list info))))
 
-(define (pad-time x)
-   (if (< x 10) (str "0" x) x))
-
-(define (now)
-   (lets ((d m y H M S (date (+ tz-offset (time)))))
-      (str d "." m "." y " " (pad-time H) ":" (pad-time M) ":" (pad-time S))))
-
-(define (status-line id info w keys)
+(define (status-line env buff id info w keys c)
    (lets ((envelope (wait-mail))
           (from msg envelope))
       (log "status-line got " msg " from " from ", keys " keys)
       (tuple-case msg
          ((update env buff)
             (if (null? keys)
-               (lets ((line (buffer-line buff))
-                      (p  (buffer-pos buff))
-                      (l  (buffer-selection-length buff))
-                      (info2 
-                         (str
-                            (get env 'path "*scratch*")
-                            " " 
-                            (if (eq? l 0) "" (str "[" l "] "))
-                            line 
-                            " " 
-                            (now))))
+               (lets ((info2 (render-info buff env c w))) 
                   (if (not (equal? info info2))
                      (mail id
-                        (tuple 'status-line
-                           (pad-to w (string->list info2))
-                           1)))
-                  (status-line id info2 w keys))
-               (status-line id info w keys)))
+                        (tuple 'status-line info2 1)))
+                  (status-line env buff id info2 w keys c))
+               (status-line env buff id info w keys c)))
          ((terminal-size w h)
-            (status-line id info w keys))
+            (status-line env buff id info w keys c))
          ((start-command key)
             (mail id (tuple 'status-line (list key) 1))
-            (status-line id info w (list key)))
+            (status-line env buff id info w (list key) c))
          ((key x)
             (mail id (tuple 'status-line (reverse (cons x keys)) (+ 1 (length keys))))
             (mail id (tuple 'command-updated (reverse (cons x keys))))
-            (status-line id info w (cons x keys)))
+            (status-line env buff id info w (cons x keys) c))
+         ((clock c)
+            (if (pair? keys)
+               (status-line env buff id info w keys c)
+               (let ((info (render-info buff env c w)))
+                  (mail id (tuple 'status-line info 1))
+                  (status-line env buff id info w keys c))))
          ((backspace)
             (if (null? (cdr keys))
                (begin
                   (mail id (tuple 'command-aborted))
                   (mail id (tuple 'status-line null 1))
-                  (status-line id info w null))
+                  (status-line env buff id info w null c))
                (let ((keys (cdr keys)))
                   (mail id (tuple 'status-line (reverse keys) (+ 1 (length keys))))
-                  (status-line id info w keys))))
+                  (status-line env buff id info w keys c))))
          ((esc)
             (mail id (tuple 'command-aborted))
-            (status-line id info w null))
+            (status-line env buff id info w null c))
          ((enter)
             (mail id (tuple 'command-entered (reverse keys)))
             (mail id (tuple 'status-line null 1))
-            (status-line id info w null))
+            (status-line env buff id info w null c))
          (else
-            (status-line id info w keys)))))
+            (status-line env buff id info w keys c)))))
 
 (define (start-status-line id w)
    (mail id (tuple 'keep-me-posted))
-   (status-line id 0 w null))
+   (mail 'clock 'subscribe)
+   (status-line empty-env empty-buffer id 0 w null null))
 
 (define (status-pusher to)
    (mail to
@@ -1899,6 +1937,7 @@
             (start-input-terminal (start-ui x y args) ll)
             (log "Input terminal and UI running")
             (log "Screen running")
+            (thread 'clock (clock-server))
             (link (start-logger (get dict 'log)))
             ;(link (thread (pusher 'buff-2)))
             ;(link (thread (pusher 'buff-4)))
