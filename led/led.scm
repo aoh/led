@@ -192,6 +192,31 @@
    (b (λ (pos l r len line)
          (buffer pos l (append r data) len line))))
 
+(define (whitespace? char)
+   (cond
+      ((eq? char #\tab) #t)
+      ((eq? char #\space) #t)
+      ((eq? char #\newline) #t)
+      (else #f)))
+
+(define (word-length l)
+   (let loop ((l l) (n 0) (word? #true))
+      (cond
+         ((null? l) n)
+         ((whitespace? (car l))
+            (if word? 
+               (loop l n #false) ;; stop matching word
+               (loop (cdr l) (+ n 1) #f)))
+         (else
+            (if word?
+               (loop (cdr l) (+ n 1) #t)
+               n)))))
+               
+(define (buffer-next-word-length b)
+   (b (lambda (pos l r len line) 
+         (word-length (drop r len)))))
+
+            
 ;;; do-command 
 (define word-chars
    (fold (λ (ff x) (put ff x x))
@@ -1321,7 +1346,7 @@
                                  (led env mode b cx cy w h)))))
                      (else
                         (led env mode b cx cy w h))))
-               ((enter)
+               ((enter) ;; would treating this as C-m be more or less intuitive?
                   (lets
                      ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)) ;; fixme - cursor move
                       (cx (min w (max 1 (+ 1 (buffer-line-pos bp)))))
@@ -1355,6 +1380,11 @@
                            (led env mode b 
                               (bound 1 (+ cx nforw) w)
                               cy w h)))
+                     ((eq? x #\w)
+                        (lets ((word-length (buffer-next-word-length b)))
+                           (led env mode
+                              (buffer-selection-delta b word-length)
+                              cx cy w h)))
                      ((eq? x #\n)
                         (let ((s (get env 'last-search)))
                            (log "running last search " s)
