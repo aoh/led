@@ -31,6 +31,11 @@
    ;; just dropped if logger is not running
    (mail 'log x))
 
+(define (char-width n)
+   (if (eq? n #\tab)
+      3
+      1))
+
 (define (logger port)
    (lets ((envelope (wait-mail))
           (from msg envelope))
@@ -584,7 +589,8 @@
       (else
          (find-line-start (cdr l)
             (cons (car l) r)
-            (- i 1)))))
+            (- i 
+               (char-width (car l)))))))
 
 ;; number of things up to next newline or end
 
@@ -669,6 +675,8 @@
       ((eq? (car lst) -10) (cdr lst)) ;; selected
       (else (drop-upto-newline (cdr lst)))))
 
+
+      
 ;; take at most max-len values from lst, possibly drop the rest, cut at newline (removing it) if any
 (define (take-line lst max-len)
    ;(print "Taking line from " lst)
@@ -681,6 +689,9 @@
          ((or (eq? (car lst) #\newline) (eq? (car lst) -10))
             ;(print "Took line " (reverse taken))
             (values (reverse taken) (cdr lst)))
+         ((eq? (car lst) #\tab)
+            ;; 
+            (loop (cdr lst) (ilist #\_ #\_ #\_ taken) (max 0 (- n 3))))
          (else
             (loop (cdr lst) (cons (car lst) taken)  (- n 1))))))
 
@@ -769,7 +780,7 @@
                                     (render
                                       (cond
                                          ((eq? r 0) x)
-                                         ((eq? r 5) "")
+                                         ;((eq? r 5) "-")
                                          (else ""))
                                       null))))
                             line-numbers)
@@ -1495,7 +1506,7 @@
                         (let ((bp (seek-delta b -1)))
                            (if (or (not bp) (eq? (buffer-char bp) #\newline))
                               (led env mode b cx cy w h)
-                              (led env mode bp (max 1 (- cx 1)) cy w h))))
+                              (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h))))
                      ((eq? x #\l) ;; right
                         (let ((bp (seek-delta b +1)))
                            (if (or (not bp)
@@ -1503,7 +1514,7 @@
                                    (eq? (buffer-char b)  #\newline)
                                    )
                               (led env mode b cx cy w h)
-                              (led env mode bp (min w (+ cx 1)) cy w h))))
+                              (led env mode bp (min w (+ cx (char-width (buffer-char b)))) cy w h))))
                      ((eq? x #\>) ;; indent
                         (led env mode
                            (buffer-apply b (indent-selection env))
@@ -1668,7 +1679,7 @@
       (info
           (str
              (get env 'path "*scratch*")
-             " " 
+             ":" 
              (if (eq? l 0) "" (str "[" l "] "))
              line 
              " " 
