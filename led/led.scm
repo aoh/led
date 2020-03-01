@@ -1243,26 +1243,45 @@
             (put env 'message "write failed"))
          (put env 'message "no path"))))
 
-(define (paren-hunt l depth len inc dec)
+(define (closing-paren c)
    (cond
-      ((eq? depth 0)
+      ((eq? c #\() #\))
+      ((eq? c #\[) #\])
+      ((eq? c #\{) #\})
+      (else #f)))
+
+(define (opening-paren c)
+   (cond
+      ((eq? c #\)) #\()
+      ((eq? c #\]) #\[)
+      ((eq? c #\}) #\{)
+      (else #f)))
+
+ 
+(define (paren-hunt l closes len inc dec)
+   (cond
+      ((null? closes) 
          len)
-      ((null? depth)
-         #false)
       ((null? l)
          #false)
-      ((eq? (car l) inc)
-         (paren-hunt (cdr l) (+ depth 1) (+ len 1) inc dec))
-      ((eq? (car l) dec)
-         (paren-hunt (cdr l) (- depth 1) (+ len 1) inc dec))
+      ((eq? (car l) (car closes))
+         (paren-hunt (cdr l) (cdr closes) (+ len 1) inc dec))
+      ((closing-paren (car l)) =>
+         (lambda (cp)
+            (paren-hunt (cdr l) (cons cp closes) (+ len 1) inc dec)))
+      ((opening-paren (car l))
+         #false)
       (else
-         (paren-hunt (cdr l) depth (+ len 1) inc dec))))
+         (paren-hunt (cdr l) closes (+ len 1) inc dec))))
 
 (define (paren-hunter b)
    (b (λ (pos l r len line)
-      (if (and (pair? r) (eq? (car r) 40))
-         (paren-hunt (cdr r) 1 1 40 41)
-         #false))))
+      (if (pair? r)
+         (let ((cp (closing-paren (car r))))
+            (if cp
+               (paren-hunt (cdr r) (list cp) 1 40 41)
+               #false))
+         #false)))) 
 
 (define (parent-expression b)
    (b (lambda (pos l r len line)
@@ -1271,13 +1290,14 @@
          (let loop ((l (cdr l)) (r (cons (car l) r)) (d 1))
             (cond
                ((null? r) (values #f #f))
-               ((eq? (car r) 40)
-                  (let ((len (paren-hunt (cdr r) 1 1 40 41)))
-                     (if (and len (> len d))
-                        (values (* -1 d) len)
-                        (if (null? l)
-                           (values #f #f)
-                           (loop (cdr l) (cons (car l) r) (+ d 1))))))
+               ((closing-paren (car r)) =>
+                  (lambda (cp)
+                     (let ((len (paren-hunt (cdr r) (list cp) 1 40 41)))
+                        (if (and len (> len d))
+                           (values (* -1 d) len)
+                           (if (null? l)
+                              (values #f #f)
+                              (loop (cdr l) (cons (car l) r) (+ d 1)))))))
                ((null? l) (values #false #false))
                (else (loop (cdr l) (cons (car l) r) (+ d 1)))))))))
              
