@@ -86,6 +86,7 @@
                      subscribers))
                (loop subscribers))
             (else
+               (mail from (tuple 'clock time-str))
                (loop (cons from subscribers)))))))
        
 
