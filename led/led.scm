@@ -5,15 +5,16 @@
    (owl unicode)
    (only (owl sys) file? directory? kill sigkill)
    (owl terminal)
-   (owl sys)
    (owl proof)
    (owl unicode)
-   (owl date)
    (only (led system) led-dir->list)
    (owl args)
    (only (led clock) clock-server)
+   (only (led log) start-logger log)
+   (only (led subprocess) start-repl communicate)
    )
 
+;; bug: select-lng with existing selection -> car null
 
 (define (bound lo x hi)
   (cond
@@ -21,29 +22,10 @@
     ((< hi x) hi)
     (else x)))
 
-(define (log . x)
-   ;; just dropped if logger is not running
-   (mail 'log x))
-
 (define (char-width n)
    (if (eq? n #\tab)
       3
       1))
-
-(define (logger port)
-   (lets ((envelope (wait-mail))
-          (from msg envelope))
-      (print-to port from ": " msg)
-      (logger port)))
-
-(define (start-logger path)
-   (if path
-      (let ((port (open-output-file path)))
-         (if port
-            (begin
-               (thread 'log (logger port))
-               log)
-            (error "Cannot open log file " path)))))
 
 ;; discard sender
 (define (wait-message)
@@ -51,70 +33,6 @@
       (ref envelope 2)))
 
 
-       
-
-
-;;; Inferior REPL --------------------------------------------------
-
-(define (pipe)
-   (let ((pair (sys-prim 31 0 0 0)))
-      (values 
-         (car pair)    ;; read port
-         (cdr pair)))) ;; write port
-
-(define (dup2 old new)
-   (let ((res (sys-prim 30 old new #f)))
-      res))
-
-(define (start-repl call)
-   (lets ((stdin-read  stdin-write  (pipe))
-          (stdout-read stdout-write (pipe))
-          (pid (fork)))
-      (cond
-         ((eq? pid #true) ;; child proces
-            (dup2 stdin-read stdin)
-            (close-port stdin-write)
-            (dup2 stdout-write stdout)
-            (close-port stdout-read)
-            (exec (car call) call))
-         (pid
-            (close-port stdin-read)
-            (close-port stdout-write)
-            (tuple pid call stdin-write stdout-read))
-         (else #false))))
-
-(define (wait-response fd timeout)
-   (lets ((req (tuple 'read-timeout fd timeout))
-          (resp (interact 'iomux req)))
-      (if (eq? req resp)
-         ;; can read now
-         (lets 
-            ((resp (try-get-block fd (* 16 1024) #f))
-             (more (wait-response fd 100)))
-            (if more
-               (append (vector->list resp) more)
-               (vector->list resp)))
-         #false)))
-
-
-;; pipe = (send-fd . read-fd)
-(define (communicate pipe data)
-   (cond
-      ((string? data)
-         (communicate pipe (string->bytes data)))
-      ((write-bytes (ref pipe 3) data)
-         (wait-response (ref pipe 4) 2000))
-      (else
-         #false)))
-
-(define (close-pipe pipe)
-   (log "closing subprocess " pipe)
-   (kill (ref pipe 2) sigkill))
-
-;(define p (start-repl (list "/usr/bin/ol")))
-;(print "[" (bytes->string (communicate p "(iota 0 1 10)")) "]")
-;(print "[" (bytes->string (communicate p "(iota 0 1 20)")) "]")
-;(print "[" (bytes->string (communicate p "(iota 0 1 30)")) "]")
 
 ;;; Buffers --------------------------------------------------
 
@@ -1020,6 +938,12 @@
          get-command
          syntax-error-handler)))
 
+
+
+;;;
+;;; ( SCREEN SERVER )-----------------------------------------------------------------------
+;;;
+
 (define (compare new old p)
    (cond
       ((null? old)
@@ -1035,12 +959,6 @@
            (compare (cdr new) (cdr old) (+ p 1))))
       (else
          (values p new))))
-
-
-
-;;;
-;;; ( SCREEN SERVER )-----------------------------------------------------------------------
-;;;
 
 (define (screen w h old)
    ;; optimized update belongs here later
@@ -1101,6 +1019,15 @@
          (else
             (print "screen: wat " msg " from " from)
             (screen w h old)))))
+
+(define (start-screen w h)
+   ;(print "starting screen")
+   (let ((name 'screen))
+      (thread name (screen w h null))
+      (link name)
+      ;(clear-screen)
+      name))
+
 
 (define (clear-screen)
    (mail 'screen (tuple 'clear))
@@ -1740,13 +1667,6 @@
       (link name)
       name))
 
-(define (start-screen w h)
-   ;(print "starting screen")
-   (let ((name 'screen))
-      (thread name (screen w h null))
-      (link name)
-      ;(clear-screen)
-      name))
 
 (define (refresh window)
    ;(clear-screen)
