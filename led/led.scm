@@ -10,15 +10,9 @@
    (owl unicode)
    (owl date)
    (only (led system) led-dir->list)
-   (owl args))
-
-;; fixme: undo buffer two node types, crashes
-
-; 'screen <- #(update-screen lsts)
-;         <- #(set-cursor x y)
-; 'ui
-; 'buff-<n> + '(buff-<n> . status-line)
-;
+   (owl args)
+   (only (led clock) clock-server)
+   )
 
 
 (define (bound lo x hi)
@@ -57,37 +51,6 @@
       (ref envelope 2)))
 
 
-;;; Clock  ----------------------------------------------------
-
-(define tz-offset (* 60 60 2))
-
-(define (pad-time x)
-   (if (< x 10) (str "0" x) x))
-
-(define (now)
-   (lets ((d m y H M S (date (+ tz-offset (time)))))
-      (values
-         (str d "." m "." y " " (pad-time H) ":" (pad-time M))
-         S)))
-
-(define (clock-server)
-   (mail 'iomux (tuple 'alarm 1000))
-   (let loop ((subscribers null))
-      (lets ((envelope (wait-mail))
-             (from msg envelope)
-             (time-str s (now)))
-         (cond
-            ((eq? from 'iomux) ;; the bell tolls
-               (mail 'iomux (tuple 'alarm (* 1000 (- 61 s))))
-               (if (pair? subscribers)
-                  (for-each
-                     (lambda (sub)
-                        (mail sub (tuple 'clock time-str)))
-                     subscribers))
-               (loop subscribers))
-            (else
-               (mail from (tuple 'clock time-str))
-               (loop (cons from subscribers)))))))
        
 
 
@@ -297,27 +260,6 @@
                   pos)
                (else
                   (loop (cdr data) (+ pos 1)))))))))
-
-(define (find-balanced lst open close)
-   (let loop ((lst lst) (pos 0) (depth 0))
-      (cond
-         ((null? lst) #f)
-         ((eq? (car lst) open)
-            (loop (cdr lst) (+ pos 1) (+ depth 1)))
-         ((eq? (car lst) close)
-            (cond 
-               ((eq? depth 0) 
-                  #f)
-               ((eq? depth 1)
-                  (+ pos 1))
-               (else
-                  (loop (cdr lst) (+ pos 1) (- depth 1)))))
-         (else
-            (loop (cdr lst) (+ pos 1) depth)))))
-
-(example
-   (find-balanced '(L a R b) 'L 'R) = 3
-   (find-balanced '(L L a b R c L d R R e) 'L 'R) = 10)
 
 (define (maybe-car x)
    (if (pair? x)
@@ -1759,12 +1701,6 @@
    (mail 'clock 'subscribe)
    (status-line empty-env empty-buffer id 0 w null null))
 
-(define (status-pusher to)
-   (mail to
-      (tuple 'status-line (string->list (str "it's " (time-ms) " o-clock")) 3))
-   (sleep 30000)
-   (status-pusher to))
-
 (define (maybe-put ff k v)
    (if v (put ff k v) ff))
 
@@ -1911,14 +1847,6 @@
             ;(print-to 3 4 "watz " msg)
             (ui l r i)))))
 
-(define (pusher to)
-   (sleep 30000)
-   (mail to
-      (tuple 'push
-         (string->list
-            (str "pushing to " to " on " (date-str (time)) "\n"))))
-   (pusher to))
-
 (define (start-ui w h paths)
    (print "Starting ui")
    (lets ((name 'ui)
@@ -1971,10 +1899,6 @@
             (log "Screen running")
             (thread 'clock (clock-server))
             (link (start-logger (get dict 'log)))
-            ;(link (thread (pusher 'buff-2)))
-            ;(link (thread (pusher 'buff-4)))
-            ;(link (thread (status-pusher 'buff-1)))
-            ;(link (thread (status-pusher 'buff-3)))
             (let loop ()
                (let ((mail (wait-mail)))
                   ;(print mail)
