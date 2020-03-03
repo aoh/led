@@ -12,7 +12,9 @@
    (only (led clock) clock-server)
    (only (led log) start-logger log)
    (only (led subprocess) start-repl communicate)
-   )
+   (only (led parse) parse-runes get-command led-syntax-error-handler)
+   (only (led screen) start-screen print-to clear-screen)
+)
 
 ;; bug: select-lng with existing selection -> car null
 
@@ -249,7 +251,7 @@
 (define (nth-offset lst nth elem)
    (if (< nth 1)
       (begin
-         (print-to stderr "bug: nth-offset < 1")
+         (log "bug: nth-offset < 1")
          #false) ;; bug in call
       (let loop ((lst lst) (nth nth) (n 0))
          (cond
@@ -676,7 +678,7 @@
    (if (number? exp)
       exp
       (begin
-         (print-to stderr "unknown position " exp)
+         (log "unknown position " exp)
          #f)))
 
 (define (led-apply buff op)
@@ -684,7 +686,7 @@
       ((append val)
          (buffer-append buff val))
       (else
-         (print-to stderr (list 'waat op))
+         (log (list 'waat op))
          #false)))
 
 (define (push-undo env action)
@@ -772,7 +774,7 @@
             (print (runes->string data))
             (values buff env)))
       (else
-         (print-to stderr (list 'wat-eval exp))
+         (log (list 'wat-eval exp))
          (values #f #f))))
 
 
@@ -784,125 +786,9 @@
       (put 'undo null)
       (put 'redo null)))
 
-;;; PARSING ---------------------------------------------------
-
-(define get-integer
-   (get-parses
-      ((sign (get-one-of (get-word "-" -1) (get-word "+" +1) (get-epsilon +1)))
-       (first (get-byte-if (λ (x) (and (< #\0 x) (<= x #\9)))))
-       (rest (get-star! (get-byte-if (λ (x) (and (<= #\0 x) (<= x #\9)))))))
-      (* sign (fold (λ (n x) (+ (* n 10) (- x #\0))) 0 (cons first rest)))))
-
-(define get-movement
-   (get-one-of
-      (get-word "^" (tuple 'select 'beginning-of-line))
-      (get-word "0" (tuple 'select 'beginning-of-file))
-      (get-word "$" (tuple 'select 'end-of-file))
-      (get-word "%" (tuple 'select 'everything))
-      (get-word "." (tuple 'select 'current-line))
-      (get-word "@" (tuple 'select 'selection)) ; yo dawg
-      (get-parses
-         ((n get-integer))
-         (tuple 'select-line n))))
-
-(define (upto-line delim)
-   (get-either
-      (get-parses
-         ((skip (get-imm #\newline))
-          (skip (get-word delim null))
-          (skip (get-imm #\newline)))
-         null)
-      (get-parses
-         ((r get-rune)
-          (rs (upto-line delim)))
-         (cons r rs))))
-
-(define (get-action get-movement)
-   (get-one-of
-      (get-parses
-         ((skip (get-imm #\d)))
-         (tuple 'delete))
-      (get-parses
-         ((op (get-word "a" 'append))
-          (nl (get-imm #\newline))
-          (data (upto-line ".")))
-         (tuple 'append data))
-      (get-parses ((op (get-word "u" 'undo))) (tuple op))
-      (get-parses ((op (get-word "R" 'redo))) (tuple op))
-      (get-parses ((op (get-word "q" 'quit))) (tuple op))
-      (get-parses
-         ((op (get-imm #\,))
-          (next get-movement))
-         (tuple 'extend-selection next))
-      (get-parses
-         ((skip (get-imm #\p)))
-         (tuple 'print))))
-
-(define get-whitespace
-   (get-byte-if
-      (λ (x) (or (eq? x #\newline) (eq? x #\space)))))
-
-(define get-spaced-word
-   (get-parses
-       ((skip (get-plus get-whitespace))
-        (path (get-plus (get-rune-if (lambda (x) (not (eq? x #\space)))))))
-      (list->string path)))
-
-(define get-file-command
-   (get-parses
-      ((op
-         (get-one-of
-            (get-word "w" 'write-buffer)     ;; the whole buffer + mark saved, not just selection
-            (get-word "write" 'write-buffer)
-            (get-word "r" 'read)
-            (get-word "read" 'read)
-            (get-word "n" 'new-buffer)
-            (get-word "new" 'new-buffer)
-            ))
-       (path
-          (get-either
-             (get-parses
-                ((skip (get-plus get-whitespace))
-                 (path (get-plus get-rune)))
-                (list->string path))
-             (get-epsilon #false))))
-      (tuple op path)))
-
-(define get-subprocess
-   (get-parses
-      ((skip (get-word "subprocess" 'foo))
-       (cmd  (get-plus get-spaced-word)))
-      (tuple 'subprocess cmd)))
- 
-(define get-command
-   (get-parses
-      ((skip (get-star! get-whitespace))
-       (val
-         (get-one-of
-            ;get-movement
-            ;(get-action get-movement)
-            get-file-command
-            get-subprocess 
-            (get-word "delete" (tuple 'delete))
-            (get-word "d" (tuple 'delete)))))
-      val))
-
-(define (forward-read ll)
-   (if (pair? ll)
-      (forward-read (cdr ll))
-      ll))
-
-(define (syntax-error-handler recurse ll message)
-   (display "? ")
-   (recurse (forward-read ll)))
-
-
-;; -> tuple | #false
-(define (led-parse-runes s)
-   (get-parse get-command s #false))
 
 (define (led-eval-runes buff env s)
-   (let ((exp (led-parse-runes s)))
+   (let ((exp (parse-runes s)))
       (log "eval " s " -> " exp)
       (if exp
          (lets ((buffp envp (led-eval buff env exp)))
@@ -936,105 +822,10 @@
       (byte-stream->exp-stream
          (port->readline-byte-stream stdin)
          get-command
-         syntax-error-handler)))
+         led-syntax-error-handler)))
 
 
 
-;;;
-;;; ( SCREEN SERVER )-----------------------------------------------------------------------
-;;;
-
-(define (compare new old p)
-   (cond
-      ((null? old)
-         (values p new))
-      ((null? new)
-         (values p (list #\space))) ;; clear remaining line
-      ((eq? (car new) (car old))
-         (if (eq? (car new) 27)
-           (lets ((dp dl (compare (cdr new) (cdr old) (+ p 1))))
-             (if (null? dl)
-                (values dp dl)
-                (values p new)))
-           (compare (cdr new) (cdr old) (+ p 1))))
-      (else
-         (values p new))))
-
-(define (screen w h old)
-   ;; optimized update belongs here later
-   ;(print (list 'screen w h))
-   (lets
-      ((msg (wait-mail))
-       (from msg msg))
-      ;(print "screen -> " msg)
-      (log "screen: op " (ref msg 1) " from " from)
-      (tuple-case msg
-         ((update-screen new-rows)
-            (let loop ((row 1) (rows new-rows) (old old) (out (cursor-show null)) (shared 0))
-               (cond
-                  ((null? rows)
-                     (write-bytes stdout (cursor-hide out))
-                     ;(write-bytes stdout (set-cursor (render (str (list "shared " shared)) null) 10 10))
-                     (screen w h new-rows))
-                  ((null? old)
-                     (loop row rows '(()) out shared))
-                  ;((equal? (car rows) (car old))
-                  ;   (loop (+ row 1) (cdr rows) (cdr old) out (+ shared 1)))
-                  (else
-                     (lets
-                        ((offset row-left (compare (car rows) (car old) 1)))
-                        (if (null? row-left)
-                           (loop (+ row 1) (cdr rows) (cdr old) out (+ shared offset))
-                           (loop
-                              (+ row 1)
-                              (cdr rows)
-                              (cdr old)
-                              (set-cursor
-                                 (clear-line-right
-                                    (append (utf8-encode row-left) out))
-                                 offset row)
-                              (+ shared offset))))))))
-         ((clear)
-            (write-bytes stdout
-               (clear-screen null))
-            (screen w h null))
-         ((print-to x y thing)
-            (write-bytes stdout
-               (set-cursor
-                  (render thing null)
-                  (max x 1) (max y 1)))
-            (screen w h null))
-         ((print-bytes-to x y thing)
-            (write-bytes stdout
-               (set-cursor thing x y))
-            (screen w h null))
-         ((set-cursor x y)
-            (write-bytes stdout
-               (set-cursor null (max x 1) (max y 1)))
-            (screen w h old))
-         ((clear-line-right)
-            (write-bytes stdout
-               (clear-line-right null))
-            (screen w h null))
-         (else
-            (print "screen: wat " msg " from " from)
-            (screen w h old)))))
-
-(define (start-screen w h)
-   ;(print "starting screen")
-   (let ((name 'screen))
-      (thread name (screen w h null))
-      (link name)
-      ;(clear-screen)
-      name))
-
-
-(define (clear-screen)
-   (mail 'screen (tuple 'clear))
-   )
-
-(define (print-to x y . stuff)
-   (mail 'screen (tuple 'print-to x y (apply str stuff))))
 
 (define (overlay a b)
    (cond
@@ -1813,7 +1604,7 @@
                 (x y ll (get-terminal-size input)))
             (log "Terminal dimensions " (cons x y))
             (start-screen x y)
-            (clear-screen)
+            ;(clear-screen)
             (start-input-terminal (start-ui x y args) ll)
             (log "Input terminal and UI running")
             (log "Screen running")
