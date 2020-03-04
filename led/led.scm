@@ -15,6 +15,7 @@
    (only (led parse) parse-runes get-command led-syntax-error-handler)
    (only (led screen) start-screen print-to clear-screen)
    (led buffer)
+   (led env)
 )
 
 ;; bug: select-lng with existing selection -> car null
@@ -393,11 +394,7 @@
 
 ;;; Edit language, assumes local state, creates actions
 
-(define empty-env
-   (-> empty
-      (put 'autoindent #true) ;; for now
-      (put 'undo null)
-      (put 'redo null)))
+
 
 
 (define (led-eval-runes buff env s)
@@ -953,10 +950,7 @@
          (else
             (led env 'command b cx cy w h)))))
 
-(define (empty-led-env id path)
-   (if path
-      (put empty-env 'path path)
-      empty-env))
+
 
 
 
