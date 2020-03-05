@@ -25,6 +25,7 @@
    (only (led screen) start-screen print-to clear-screen)
    (led buffer)
    (led env)
+   (led input)
    (only (owl syscall) link kill)
    (only (led ui) start-ui)
    (led render)
@@ -104,7 +105,7 @@
                   (log "Failed to open " path " for writing.")
                   (values #f #f)))))
       ((new-buffer path)
-         (mail 'ui exp)
+         (mail 'ui (tuple 'open path))
          (values buff env))
       ((append text)
          (lets
@@ -736,22 +737,6 @@
             (thread status-thread-id
                (start-status-line id 80)))
          id)))
-
-(define (input-terminal input target)
-   (lfold
-      (λ (_ thing)
-         (log "input terminal: sending " thing " to " target)
-         (mail target thing))
-      'unused
-      input))
-
-(define (start-input-terminal target ll)
-   (let ((name 'input-terminal))
-      (thread name
-         (input-terminal ll target))
-      (link name)
-      name))
-
 
 (define version-str "led v0.2a")
 
