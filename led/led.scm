@@ -1,4 +1,5 @@
 #!/usr/bin/ol --run
+
 (import
    (prefix (owl parse) get-)
    (only (owl parse) byte-stream->exp-stream fd->exp-stream)
@@ -17,10 +18,10 @@
    (only (led screen) start-screen print-to clear-screen)
    (led buffer)
    (led env)
+   (only (owl syscall) link kill)
    (only (led ui) start-ui)
+   (led render)
 )
-
-;; bug: select-lng with existing selection -> car null
 
 (define (bound lo x hi)
   (cond
@@ -28,260 +29,14 @@
     ((< hi x) hi)
     (else x)))
 
-(define (char-width n)
-   (if (eq? n #\tab)
-      3
-      1))
 
 ;; discard sender
 (define (wait-message)
    (let ((envelope (wait-mail)))
       (ref envelope 2)))
 
-(define (maybe-car x)
-   (if (pair? x)
-      (car x)
-      #f))
-
-(import (only (owl syscall) link kill))
 
 
-;;; Screen rendering -----------------------------------------------------------------------
-
-;; flip sign in leading n values
-(define (mark-selected lst n)
-   (if (eq? n 0)
-      lst
-      (cons (* -1 (car lst))
-         (mark-selected (cdr lst) (- n 1)))))
-
-;; go to beginning, or after next newline, count down steps from i
-(define (find-line-start l r i)
-   (cond
-      ((null? l)
-         (values l r i))
-      ((eq? (car l) #\newline)
-         (values l r i))
-      (else
-         (find-line-start (cdr l)
-            (cons (car l) r)
-            (- i 
-               (char-width (car l)))))))
-
-;; number of things up to next newline or end
-
-;; ugly, number of steps to get from next newline up to same position or end of next line
-(define (distance-past-newline l n)
-   (let loop ((l l) (steps 0))
-      (cond
-         ((null? l) steps)
-         ((eq? (car l) #\newline)
-            (let loop2 ((l (cdr l)) (steps (+ steps 1)) (n n))
-               (cond
-                  ((null? l) steps)
-                  ((eq? n 0) steps)
-                  ((eq? (car l) #\newline) steps)
-                  (else
-                     (loop2 (cdr l) (+ steps 1) (- n 1))))))
-         (else
-            (loop (cdr l) (+ steps 1))))))
-
-;; -> false | offset
-(define (distance-to l x)
-   (let loop ((l l) (n 0))
-      (cond
-         ((null? l) #f)
-         ((eq? (car l) x) n)
-         (else (loop (cdr l) (+ n 1))))))
-
-;; buffer -> positive-offset missing-length
-(define (next-line-same-pos b)
-   (b
-      (λ (pos l r len line)
-         (lets ((lpos (or (distance-to l #\newline) (length l))) ;; maybe first line
-                (rlen (distance-to r #\newline)))
-            (if rlen ;; lines ahead
-               (lets ((r (drop r (+ rlen 1))) ;; also newline
-                      (rlen-next (or (distance-to r #\newline) (length r)))) ;; maybe last line
-                  (cond
-                     ((eq? rlen-next 0)
-                        ;; next line is empty
-                        (values (+ rlen 1) lpos))
-                     ((<= rlen-next lpos)
-                        ;; next line is short, need to move left
-                        (values (+ rlen rlen-next)
-                           (- lpos rlen-next -1)))
-                     (else
-                        (values (+ rlen 1 lpos) 0))))
-               (values #f #f)))))) ;; last line
-
-(define (prev-line-same-pos b)
-   (b
-      (λ (pos l r len line)
-         (lets ((lpos (distance-to l #\newline)))
-            (if lpos
-               (lets
-                  ((l (drop l (+ lpos 1)))
-                   (next-len (or (distance-to l #\newline) (length l))))
-                  (cond
-                     ((eq? next-len 0)
-                        ;; prev line is empty
-                        (values (* -1 (+ lpos 1)) lpos))
-                     ((<= next-len lpos)
-                        (values (* -1 (+ lpos 2)) (- lpos next-len -1)))
-                     (else
-                        (values (* -1 (+ lpos 1 (- next-len lpos))) 0))))
-               (values #f #f)))))) ;; first line
-
-(define (lines-back l r n)
-   ;(print "lines-back " n " from " r)
-   (cond
-      ((null? l)
-         r)
-      ((eq? n 0)
-         r)
-      (else
-         (lets ((l r _ (find-line-start (cdr l) (cons (car l) r) 0)))
-            (lines-back l r (- n 1))))))
-
-(define (drop-upto-newline lst)
-   (cond
-      ((null? lst) null)
-      ((eq? (car lst) #\newline) (cdr lst))
-      ((eq? (car lst) -10) (cdr lst)) ;; selected
-      (else (drop-upto-newline (cdr lst)))))
-
-
-      
-;; take at most max-len values from lst, possibly drop the rest, cut at newline (removing it) if any
-(define (take-line lst max-len)
-   ;(print "Taking line from " lst)
-   (let loop ((lst lst) (taken null) (n max-len))
-      (cond
-         ((eq? n 0)
-            (values (reverse taken) (drop-upto-newline lst)))
-         ((null? lst)
-            (loop lst (cons #\~ taken) 0))
-         ((or (eq? (car lst) #\newline) (eq? (car lst) -10))
-            ;(print "Took line " (reverse taken))
-            (values (reverse taken) (cdr lst)))
-         ((eq? (car lst) #\tab)
-            ;; 
-            (loop (cdr lst) (ilist #\_ #\_ #\_ taken) (max 0 (- n 3))))
-         (else
-            (loop (cdr lst) (cons (car lst) taken)  (- n 1))))))
-
-(define (handle-padding lst pad)
-   (cond
-      ((eq? pad 0)
-         lst)
-      ((null? lst)
-         null)
-      ((eq? (car lst) #\newline)
-         lst)
-      ((eq? (car lst) -10)
-         lst)
-      ((< pad 0)
-         (handle-padding (cdr lst) (+ pad 1)))
-      (else
-         (cons #\~ (handle-padding lst (- pad 1))))))
-
-(define (ansi-unselection lst)
-   (cond
-      ((null? lst)
-         (font-normal lst))
-      ((< (car lst) 0)
-         (cons (* (car lst) -1)
-            (ansi-unselection (cdr lst))))
-      (else
-         (font-normal lst))))
-
-(define (ansi-selection lst)
-   (cond
-      ((null? lst) lst)
-      ((< (car lst) 0)
-         (font-reverse (ansi-unselection lst)))
-      (else
-         (cons (car lst)
-            (ansi-selection (cdr lst))))))
-
-(define (render-line lst pad width)
-   (lets ((lst (handle-padding lst pad))
-          (row lst (take-line lst width)))
-      ;(print "Selected line " row)
-      (values (ansi-selection row) lst)))
-
-(define (render-lines r h n w ln)
-   (if (eq? h 0)
-      null
-      (lets ((l r (render-line r n w)))
-         ;(print h " line is " l " = " (list->string l))
-         (cons
-            ;(append (string->list (str ln ": ")) l)
-            l
-            (render-lines r (- h 1) n w (+ ln 1))))))
-
-(define (pad-to-length n lst)
-   (if (< (length lst) n)
-      (pad-to-length n (cons #\space lst))
-      lst))
-
-(define (render-buffer env buff w h cx cy)
-   (buff
-      (λ (pos l r len line)
-         (lets
-            ((rows (max 1 (- h 1)))
-             (line-col-width (+ 3 (string-length (str (+ (- (+ line 0) cy) rows)))))
-             (cols
-                (if (get env 'line-numbers)
-                   (max 1 (- w line-col-width))
-                   w))
-             (r (mark-selected r len))
-             (l r n (find-line-start l r (- cx 1)))
-             (r (lines-back l r (- cy 1)))
-             (lines
-               (render-lines r rows n cols (- line (- cy 1)))))
-            ;(print "Rendering lines starting from " r)
-            (if (get env 'line-numbers)
-               (lets
-                  ((line-numbers (iota (- (+ line 1) cy) 1 (+ line rows)))
-                   (lines (map (λ (x) (cons #\space (cons #\| (cons #\space x)))) lines))
-                   ;(lines (zip append (map (λ (x) (pad-to-length (- line-col-width 1) (render x null))) line-numbers) lines))
-                   (lines
-                      (zip append
-                         (map
-                            (λ (x)
-                              (pad-to-length (- line-col-width 3)
-                                 (let ((r (remainder x 10)))
-                                    (render
-                                      (cond
-                                         ((eq? r 0) x)
-                                         ;((eq? r 5) "-")
-                                         (else ""))
-                                      null))))
-                            line-numbers)
-                         lines))
-                   )
-                  (values lines line-col-width))
-               (values lines 0))))))
-
-
-(define (buffer->string buff)
-   (buff
-      (λ (pos l r len line)
-         (lets
-            ((title (str "--(" pos "+" len ", line " line ")-------------------------------------------------------\n"))
-             (pre (reverse l))
-             (dot (take r len))
-             (post (drop r len)))
-            (str
-               title
-               (runes->string pre)
-               (bytes->string (font-reverse null))
-               (runes->string dot)
-               (bytes->string (font-normal null))
-               (runes->string post)
-               "\n----------------------------------------------------------------------\n")))))
 
 
 ;;; LED evaluation ------------------------------------------
@@ -433,38 +188,6 @@
          get-command
          led-syntax-error-handler)))
 
-
-
-
-(define (overlay a b)
-   (cond
-      ((null? a)
-         b)
-      ((null? b)
-         a)
-      (else
-         (cons (car a)
-            (overlay (cdr a) (cdr b))))))
-
-(define (update-buffer-view env b w h cx cy)
-   (lets
-      ((lsts dcx (render-buffer env b w h cx cy))
-       (status-bytes (ref (get env 'status-line #f) 2))
-       (status-message (get env 'status-message null))
-       (lsts
-          (append lsts
-             (list
-                (overlay
-                   status-message
-                  (or status-bytes (list 32))))))
-       )
-      (mail 'ui
-         (tuple 'update-screen lsts))
-      (mail 'ui ;; may choose to use status line instead later
-         (tuple 'set-cursor (+ dcx cx) cy))
-      (log "status bytes are " status-bytes)
-      ))
-
 (define (next env b w h cx cy)
    (let ((m (check-mail)))
       (if m
@@ -590,6 +313,49 @@
 
 (define (find-mark env key)
    (get (get env 'marks empty) key))
+
+(define (maybe-car x)
+   (if (pair? x)
+      (car x)
+      #f))
+
+(define (next-line-same-pos b)
+   (b
+      (λ (pos l r len line)
+         (lets ((lpos (or (distance-to l #\newline) (length l))) ;; maybe first line
+                (rlen (distance-to r #\newline)))
+            (if rlen ;; lines ahead
+               (lets ((r (drop r (+ rlen 1))) ;; also newline
+                      (rlen-next (or (distance-to r #\newline) (length r)))) ;; maybe last line
+                  (cond
+                     ((eq? rlen-next 0)
+                        ;; next line is empty
+                        (values (+ rlen 1) lpos))
+                     ((<= rlen-next lpos)
+                        ;; next line is short, need to move left
+                        (values (+ rlen rlen-next)
+                           (- lpos rlen-next -1)))
+                     (else
+                        (values (+ rlen 1 lpos) 0))))
+               (values #f #f))))))
+
+(define (prev-line-same-pos b)
+   (b
+      (λ (pos l r len line)
+         (lets ((lpos (distance-to l #\newline)))
+            (if lpos
+               (lets
+                  ((l (drop l (+ lpos 1)))
+                   (next-len (or (distance-to l #\newline) (length l))))
+                  (cond
+                     ((eq? next-len 0)
+                        ;; prev line is empty
+                        (values (* -1 (+ lpos 1)) lpos))
+                     ((<= next-len lpos)
+                        (values (* -1 (+ lpos 2)) (- lpos next-len -1)))
+                     (else
+                        (values (* -1 (+ lpos 1 (- next-len lpos))) 0))))
+               (values #f #f))))))
 
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
