@@ -1,3 +1,4 @@
+#!/usr/bin/ol --run
 (import
    (prefix (owl parse) get-)
    (only (owl parse) byte-stream->exp-stream fd->exp-stream)
@@ -16,6 +17,7 @@
    (only (led screen) start-screen print-to clear-screen)
    (led buffer)
    (led env)
+   (only (led ui) start-ui)
 )
 
 ;; bug: select-lng with existing selection -> car null
@@ -35,9 +37,6 @@
 (define (wait-message)
    (let ((envelope (wait-mail)))
       (ref envelope 2)))
-
-
-
 
 (define (maybe-car x)
    (if (pair? x)
@@ -962,14 +961,14 @@
    (lambda (path)
       (log "default led opener working on " path)
       (lets 
-         ((id path)
+         ((id (or path (list '*scratch*)))
           (status-thread-id (cons id 'status-line)))
          (thread id
             (led
                (put (empty-led-env id path)
                   'status-thread-id status-thread-id)
                'command
-               (if path
+               (if (string? path)
                   (or
                      (file-buffer path)
                      (dir-buffer path)
@@ -998,119 +997,6 @@
       name))
 
 
-(define (refresh window)
-   (clear-screen)
-   (mail window (tuple 'refresh)))
-
-;; manage threads and their views
-;; decide which ones get to draw on screen
-
-(define (close-buffer l r)
-   (if (null? (cdr l))
-      (if (null? r)
-         (values #f #f)
-         (values (list (car r)) (cdr r)))
-      (values (cdr l) r)))
-
-(define (ui l r i)
-   (lets ((msg (wait-mail))
-          (from msg msg))
-      (log "ui: " msg " from " from)
-      (cond
-         ((eq? from 'input-terminal)
-            (tuple-case msg
-               ((ctrl x)
-                  (cond
-                     ((eq? x 'n)
-                        (if (null? r)
-                           (ui l r i)
-                           (begin
-                              (refresh (car r))
-                              (ui (cons (car r) l) (cdr r) i))))
-                     ((eq? x 'p)
-                        (if (null? (cdr l))
-                           (ui l r i)
-                           (begin
-                              (refresh (cadr l))
-                              (ui (cdr l) (cons (car l) r) i))))
-                     ((eq? x 'h)
-                        (let ((r (append (reverse l) r)))
-                           (refresh (car r))
-                           (ui (list (car r)) (cdr r) i)))
-                     ((eq? x 'q) ;; close current buffer (from outside), may leave zombies for now
-                        (halt 1)
-                        (lets ((l r (close-buffer l r)))
-                           (if l
-                              (begin
-                                 (refresh (car l))
-                                 (ui l r i))
-                              0)))
-                     ;((eq? x 'l)
-                     ;   (refresh (car l))
-                     ;   (ui l r i))
-                     (else
-                        (mail (car l) msg)
-                        (ui l r i))))
-               (else
-                  (mail (car l) msg)
-                  (ui l r i))))
-         ((eq? (ref msg 1) 'open)
-            (lets ((openers (get i 'openers null))
-                   (id (fold (lambda (out fn) (or out (fn (ref msg 2)))) #f openers)))
-               (if id
-                  (begin
-                     (mail id (tuple 'terminal-size (get i 'width 80) (get i 'height 30)))
-                     (ui (cons id l) r i))
-                  (ui l r i))))
-         ((eq? (ref msg 1) 'add-opener)
-            (log "installing new opener")
-            (ui l r
-               (put i 'openers (cons (ref msg 2) (get i 'openers null)))))
-         ((eq? (ref msg 1) 'buffer-closed)
-            (lets ((l (keep (lambda (x) (not (eq? x from))) l))
-                   (r (keep (lambda (x) (not (eq? x from))) r)))
-               (if (null? l)
-                  (if (null? r)
-                     (halt 0)
-                     (begin
-                        (refresh (car r))
-                        (ui (list (car r)) (cdr r) i)))
-                  (begin
-                     (refresh (car l))
-                     (ui l r i)))))
-         ((eq? (ref msg 1) 'terminal-size)
-            (lets ((_ w h msg))
-               (map
-                  (λ (id)
-                     (log "ui: forwarding terminal-size to " id)
-                     (mail id msg))
-                  (append l r))
-               (ui l r
-                  (-> i
-                     (put 'width w)
-                     (put 'height h)))))
-         ((eq? from (car l))
-            ;; forward print message from current window
-            (mail 'screen msg)
-            ;(print " - forwarding to screen")
-            (ui l r i))
-         ((eq? 'error (ref msg 1))
-            (log "UI received ERROR: " msg " from " from)
-            (ui l r i))
-         (else
-            ;(print-to 3 3 "waty" from)
-            ;(print-to 3 4 "watz " msg)
-            (ui l r i)))))
-
-(define (start-ui)
-   (print "Starting ui")
-   (lets ((name 'ui))
-      (thread name
-         (ui null null empty))
-      (link name)
-      ;; ui tells the size to client threads
-      name))
-
 (define version-str "led v0.2a")
 
 (define usage-text "led [args] [file-or-directory] ...")
@@ -1121,8 +1007,6 @@
       (version "-v" "--version" comment "show program version")
       (log "-L" "--log" has-arg comment "debug log file")
       ;(config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
-      ;(faketerm #f "--terminal" has-arg comment "fake terminal input stream source")
-      ;(record #f "--record" has-arg comment "record all terminal input to file")
       )))
 
 (define (start-led-threads dict args)
@@ -1150,7 +1034,9 @@
             (for-each
                (lambda (path)
                   (mail 'ui (tuple 'open path)))
-               args)
+               (if (null? args)
+                  (list #false)
+                  args))
             (let loop ()
                (let ((mail (wait-mail)))
                   ;(print mail)
