@@ -1,5 +1,12 @@
 #!/usr/bin/ol --run
 
+(define *expected-owl-version* "0.2a")
+
+(if (not (equal? *owl-version* *expected-owl-version*))
+   (begin
+      (print-to stderr "Warning: expected owl version " *expected-owl-version* ", but running in " *owl-version* ". Expect turbulence.")
+      (sleep 1000)))
+
 (import
    (prefix (owl parse) get-)
    (only (owl parse) byte-stream->exp-stream fd->exp-stream)
@@ -22,13 +29,12 @@
    (only (led ui) start-ui)
    (led render)
 )
-
+      
 (define (bound lo x hi)
   (cond
     ((< x lo) lo)
     ((< hi x) hi)
     (else x)))
-
 
 ;; discard sender
 (define (wait-message)
@@ -145,12 +151,6 @@
          (log (list 'wat-eval exp))
          (values #f #f))))
 
-
-;;; Edit language, assumes local state, creates actions
-
-
-
-
 (define (led-eval-runes buff env s)
    (let ((exp (parse-runes s)))
       (log "eval " s " -> " exp)
@@ -159,13 +159,10 @@
             (if buffp
                (values buffp envp)
                (begin
-                  (log "command " exp " failed")
+                  (set-status-text "no")
                   (values buff env))))
-         (values buff
-            (put env 'status-line
-               (tuple 'status-line
-                  (string->list "syntax error")
-                  #f))))))
+         (values buff 
+            (set-status-text env "syntax error")))))
 
 (define (led-repl buff env)
    (display "> ")
@@ -249,7 +246,6 @@
       ((eq? c #\]) #\[)
       ((eq? c #\}) #\{)
       (else #f)))
-
  
 (define (paren-hunt l closes len inc dec)
    (cond
@@ -293,9 +289,6 @@
                               (loop (cdr l) (cons (car l) r) (+ d 1)))))))
                ((null? l) (values #false #false))
                (else (loop (cdr l) (cons (car l) r) (+ d 1)))))))))
-             
-
-;;; Content Operations
 
 (define (indent-selection env)
    (lambda (data)
@@ -372,6 +365,8 @@
                (for-each
                   (λ (cli) (mail cli msg))
                   (get env 'clients null))
+               (clear-screen)
+               (update-buffer-view env b w h (min cx w) (min cy h))
                (led env mode b (min cx w) (min cy h) w h)))
          ((eq? op 'status-line)
             (led
@@ -402,7 +397,7 @@
                (if (eq? (car runes) #\/) ;; this is a search
                   (let ((pos (first-match b (cdr runes))))
                      (if pos
-                         (lets ((b (seek b pos))
+                         (lets ((b (seek-select b pos (length (cdr runes))))
                                 (lp (buffer-line-pos b)))
                             (led env mode b (if (>= lp w) 1 (+ lp 1)) 1 w h))
                          (led env mode b cx cy w h)))
@@ -490,10 +485,10 @@
                         (let ((s (get env 'last-search)))
                            (log "running last search " s)
                            (if s
-                              (let ((p (next-match b s)))
+                              (lets ((p len (next-match b s)))
                                  (log "next search match is " p)
                                  (if p
-                                    (lets ((b (seek b p))
+                                    (lets ((b (seek-select b p len))
                                            (lp (buffer-line-pos b)))
                                        (led env mode b (if (>= lp w) 1 (+ lp 1)) 1 w h))
                                     (led env mode b cx cy w h)))
@@ -715,11 +710,6 @@
          (else
             (led env 'command b cx cy w h)))))
 
-
-
-
-
-
 (define (maybe-put ff k v)
    (if v (put ff k v) ff))
 
@@ -740,7 +730,7 @@
                      (dir-buffer path)
                      (string-buffer (str "failed to read " path)))
                   (string-buffer ""))
-               1 1 80 30)) ;; <- ui sends terminal size as first message
+               1 1 10 10)) ;; <- ui sends terminal size as first message
          (link id)
          (link
             (thread status-thread-id
@@ -813,7 +803,10 @@
                   ))))))
 
 (define (main args)
-   (process-arguments (cdr args) command-line-rules usage-text start-led-threads))
+   (process-arguments (cdr args) 
+      command-line-rules 
+      usage-text 
+      start-led-threads))
 
 main
 

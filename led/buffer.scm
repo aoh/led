@@ -271,9 +271,9 @@
    (b (λ (pos l r len line)
       (let loop ((data (maybe-cdr r)) (pos (+ pos 1)))
          (cond
-            ((null? data) #false)
+            ((null? data) (values #false #false))
             ((match-prefix? data runes)
-               pos)
+               (values pos (length runes)))
             (else
                (loop (cdr data) (+ pos 1))))))))
 
