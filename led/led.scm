@@ -689,7 +689,7 @@
                       (s (list->string (get-selection bp))))
                      (cond
                         ((file? s)
-                           (mail 'ui (tuple 'new-buffer s))
+                           (mail 'ui (tuple 'open s))
                            (led env mode bp cx cy w h))
                         ((directory? s)
                            (let ((fs (or (led-dir->list s) null)))
@@ -958,26 +958,29 @@
 (define (maybe-put ff k v)
    (if v (put ff k v) ff))
 
-(define (new-buffer-window id path w h)
-   ;(print "new-buffer-window " id)
-   (let ((status-thread-id (cons id 'status-line)))
-      (thread id
-         (led
-            (put (empty-led-env id path)
-               'status-thread-id status-thread-id)
-             'command
-            (if path
-               (or
-                  (file-buffer path)
-                  (dir-buffer path)
-                  (string-buffer (str "failed to read " path)))
-               (string-buffer ""))
-            1 1 w h))
-      (link id)
-      (link
-         (thread status-thread-id
-            (start-status-line id w)))
-      id))
+(define default-led-opener
+   (lambda (path)
+      (log "default led opener working on " path)
+      (lets 
+         ((id path)
+          (status-thread-id (cons id 'status-line)))
+         (thread id
+            (led
+               (put (empty-led-env id path)
+                  'status-thread-id status-thread-id)
+               'command
+               (if path
+                  (or
+                     (file-buffer path)
+                     (dir-buffer path)
+                     (string-buffer (str "failed to read " path)))
+                  (string-buffer ""))
+               1 1 80 30)) ;; <- ui sends terminal size as first message
+         (link id)
+         (link
+            (thread status-thread-id
+               (start-status-line id 80)))
+         id)))
 
 (define (input-terminal input target)
    (lfold
@@ -1035,6 +1038,7 @@
                            (refresh (car r))
                            (ui (list (car r)) (cdr r) i)))
                      ((eq? x 'q) ;; close current buffer (from outside), may leave zombies for now
+                        (halt 1)
                         (lets ((l r (close-buffer l r)))
                            (if l
                               (begin
@@ -1050,14 +1054,18 @@
                (else
                   (mail (car l) msg)
                   (ui l r i))))
-         ((eq? (ref msg 1) 'new-buffer)
-            (let ((new
-                  (new-buffer-window
-                     (list (if (ref msg 2) (ref msg 2) '*scratch*))
-                     (ref msg 2)
-                     (get i 'width 80)
-                     (get i 'height 30))))
-               (ui (cons new l) r i)))
+         ((eq? (ref msg 1) 'open)
+            (lets ((openers (get i 'openers null))
+                   (id (fold (lambda (out fn) (or out (fn (ref msg 2)))) #f openers)))
+               (if id
+                  (begin
+                     (mail id (tuple 'terminal-size (get i 'width 80) (get i 'height 30)))
+                     (ui (cons id l) r i))
+                  (ui l r i))))
+         ((eq? (ref msg 1) 'add-opener)
+            (log "installing new opener")
+            (ui l r
+               (put i 'openers (cons (ref msg 2) (get i 'openers null)))))
          ((eq? (ref msg 1) 'buffer-closed)
             (lets ((l (keep (lambda (x) (not (eq? x from))) l))
                    (r (keep (lambda (x) (not (eq? x from))) r)))
@@ -1070,14 +1078,6 @@
                   (begin
                      (refresh (car l))
                      (ui l r i)))))
-         ((eq? from (car l))
-            ;; forward print message from current window
-            (mail 'screen msg)
-            ;(print " - forwarding to screen")
-            (ui l r i))
-         ((eq? 'error (ref msg 1))
-            (log "UI received ERROR: " msg " from " from)
-            (ui l r i))
          ((eq? (ref msg 1) 'terminal-size)
             (lets ((_ w h msg))
                (map
@@ -1089,27 +1089,26 @@
                   (-> i
                      (put 'width w)
                      (put 'height h)))))
+         ((eq? from (car l))
+            ;; forward print message from current window
+            (mail 'screen msg)
+            ;(print " - forwarding to screen")
+            (ui l r i))
+         ((eq? 'error (ref msg 1))
+            (log "UI received ERROR: " msg " from " from)
+            (ui l r i))
          (else
             ;(print-to 3 3 "waty" from)
             ;(print-to 3 4 "watz " msg)
             (ui l r i)))))
 
-(define (start-ui w h paths)
+(define (start-ui)
    (print "Starting ui")
-   (lets ((name 'ui)
-          (buffers
-             (if (null? paths)
-                (list (new-buffer-window (list 'scratch) #f w h))
-                (map (λ (x) (new-buffer-window x x w h)) paths))))
+   (lets ((name 'ui))
       (thread name
-         (ui
-            (list
-               (car buffers))
-            (cdr buffers)
-            empty))
+         (ui null null empty))
       (link name)
       ;; ui tells the size to client threads
-      (mail 'ui (tuple 'terminal-size w h))
       name))
 
 (define version-str "led v0.2a")
@@ -1138,14 +1137,20 @@
       (else
          (lets ((input (terminal-input empty))
                 (x y ll (get-terminal-size input)))
+            (link (start-logger (get dict 'log)))
             (log "Terminal dimensions " (cons x y))
             (start-screen x y)
-            ;(clear-screen)
-            (start-input-terminal (start-ui x y args) ll)
-            (log "Input terminal and UI running")
             (log "Screen running")
+            ;(clear-screen)
+            (start-input-terminal (start-ui) ll)
+            (log "Input terminal and UI running")
             (thread 'clock (clock-server))
-            (link (start-logger (get dict 'log)))
+            (mail 'ui (tuple 'add-opener default-led-opener))
+            (mail 'ui (tuple 'terminal-size x y))
+            (for-each
+               (lambda (path)
+                  (mail 'ui (tuple 'open path)))
+               args)
             (let loop ()
                (let ((mail (wait-mail)))
                   ;(print mail)
