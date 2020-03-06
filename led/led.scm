@@ -469,27 +469,32 @@
                ((enter) ;; would treating this as C-m be more or less intuitive?
                   (lets
                      ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)) ;; fixme - cursor move
-                      (cx (min w (max 1 (+ 1 (buffer-line-pos bp)))))
+                      (cx (nice-cx bp w))
                       (s (list->string (get-selection bp))))
                      (cond
                         ((file? s)
                            (mail 'ui (tuple 'open s))
                            (led env mode bp cx cy w h))
                         ((directory? s)
-                           (let ((fs (or (led-dir->list s) null)))
-                              (led (push-undo env (tuple b cx cy)) ;; fixme, new undo
-                                 mode
-                                 (buffer-replace bp
-                                   (foldr
+                           (lets 
+                              ((fs (or (led-dir->list s) null))
+                               (contents 
+                                  (foldr
                                       (lambda (path tail) (render path (if (null? tail) tail (cons 10 tail))))
                                       null fs))
+                               (delta (tuple (buffer-pos b) (string->list s) contents))
+                               (buff (apply-delta b delta)))
+                              (led (push-undo env delta)
+                                 mode buff
                                  cx cy w h)))
                         (else
                            (led env mode bp cx cy w h)))))
                ((key x)
                   (cond
                      ((eq? x #\i)
-                        (led (push-undo env (tuple b cx cy)) 'insert b cx cy w h))
+                        (led 
+                           (put env 'insert-start (buffer-pos b))
+                           'insert b cx cy w h))
                      ((eq? x #\y)
                         (lets ((seln (get-selection b))
                                (env (put env 'yank seln)))
@@ -533,17 +538,18 @@
                                  ((bp (seek-select b (car location) (cdr location))))
                                  (if bp 
                                     (led env mode bp 
-                                       (bound 1 (+ 1 (buffer-line-pos bp)) w)
+                                       (nice-cx bp w)
                                        1 w h)
                                     (led env mode b cx cy w h)))
                               (led env mode b cx cy w h)))) 
                      ((eq? x #\c)
                         (lets ((seln (get-selection b))
+                               (buff env (led-eval b env (tuple 'delete))) ;; <- should be merged in delta with insert result
                                (env (put env 'yank seln)))
                            (led
-                              (push-undo env (tuple b cx cy))
+                              env
                               'insert
-                              (buffer-delete b)
+                              buff
                               cx cy w h)))
                      ((eq? x #\.)
                         (if (= 0 (buffer-selection-length b))
@@ -564,11 +570,13 @@
                                (buff env (led-eval b env (tuple 'delete))))
                            (led env mode buff cx cy w h))) 
                      ((eq? x #\p)
-                        (led
-                           (push-undo env (tuple b cx cy))
-                           mode
-                           (buffer-replace b (get env 'yank null))
-                           cx cy w h))
+                        (lets ((seln (get-selection b))
+                               (delta (tuple (buffer-pos b) seln (get env 'yank null)))
+                               (buff (apply-delta b delta)))
+                           (led
+                              (push-undo env delta)
+                              mode
+                              buff cx cy w h)))
                      ((eq? x #\u)
                         (lets ((b env (led-eval b env (tuple 'undo))))
                            (led env mode b 
@@ -594,14 +602,20 @@
                                    )
                               (led env mode b cx cy w h)
                               (led env mode bp (min w (+ cx (char-width (buffer-char b)))) cy w h))))
-                     ((eq? x #\>) ;; indent
-                        (led env mode
-                           (buffer-apply b (indent-selection env))
-                           cx cy w h))
+                     ((eq? x #\>) ;; indent, move to led-eval
+                        (lets ((old (get-selection b))
+                               (new ((indent-selection env) old))
+                               (delta (tuple (buffer-pos b) old new))
+                               (buff (apply-delta b delta)))
+                           (led (push-undo env delta)
+                                mode buff cx cy w h)))
                      ((eq? x #\<) ;; unindent
-                        (led env mode
-                           (buffer-apply b (unindent-selection env))
-                           cx cy w h))
+                        (lets ((old (get-selection b))
+                               (new ((unindent-selection env) old))
+                               (delta (tuple (buffer-pos b) old new))
+                               (buff (apply-delta b delta)))
+                           (led (push-undo env delta)
+                                mode buff cx cy w h)))
                      ((eq? x #\j) ;; down
                         (lets ((delta nleft (next-line-same-pos b)))
                            (if delta
@@ -639,7 +653,7 @@
                                   (new-line (buffer-line b)))
                                  (led env mode 
                                     (buffer-selection-delta (buffer-unselect b) len) 
-                                    (bound 1 (+ 1 (buffer-line-pos b)) w)
+                                    (nice-cx b w)
                                     (bound 1 (- cy (- old-line new-line)) h) 
                                     w h))
                               (led env mode b cx cy w h))))
@@ -666,6 +680,15 @@
                   (led env mode b cx cy w h))))
          ((eq? mode 'insert)
             ;; insert mode
+            ;; next version planning:
+            ;;  - typing grows the actual selection. do in practice what conceptually happens.
+            ;;    + move screen with end of selection?
+            ;;    + hide cursor if necessary?
+            ;;    + use dim/bold/normal content
+            ;;    + need to store the original content for delta (typically empty)
+            ;;  - typing stores the entered keys to environment and generates a delta when exiting insert mode
+            ;;    + requires some faking of buffer content
+            ;;  - generate normal deltas to undo buffer, but push an insert mode starter there and perform a merge at return to command mode
             (tuple-case msg
                ((enter)
                   (lets
