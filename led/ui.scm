@@ -24,6 +24,13 @@
                (values (list (car r)) (cdr r)))
             (values (cdr l) r)))
       
+      (define (find-buffer l r p)
+         (cond
+            ((null? l) (values #f #f))
+            ((equal? (car l) p) (values l r))
+            (else (find-buffer (cdr l) (cons (car l) r) p))))
+     
+      ;; car of l is the active one 
       (define (ui l r i)
          (lets ((msg (wait-mail))
                 (from msg msg))
@@ -57,9 +64,6 @@
                                        (refresh (car l))
                                        (ui l r i))
                                     0)))
-                           ;((eq? x 'l)
-                           ;   (refresh (car l))
-                           ;   (ui l r i))
                            (else
                               (mail (car l) msg)
                               (ui l r i))))
@@ -67,13 +71,18 @@
                         (mail (car l) msg)
                         (ui l r i))))
                ((eq? (ref msg 1) 'open)
-                  (lets ((openers (get i 'openers null))
-                         (id (fold (lambda (out fn) (or out (fn (ref msg 2)))) #f openers)))
-                     (if id
+                  (lets ((lp rp (find-buffer (append (reverse r) l) null (ref msg 2))))
+                     (if lp
                         (begin
-                           (mail id (tuple 'terminal-size (get i 'width 80) (get i 'height 30)))
-                           (ui (cons id l) r i))
-                        (ui l r i))))
+                           (refresh (car lp))
+                           (ui lp rp  i))
+                        (lets ((openers (get i 'openers null))
+                               (id (fold (lambda (out fn) (or out (fn (ref msg 2)))) #f openers)))
+                           (if id
+                              (begin
+                                 (mail id (tuple 'terminal-size (get i 'width 80) (get i 'height 30)))
+                                 (ui (cons id l) r i))
+                              (ui l r i))))))
                ((eq? (ref msg 1) 'add-opener)
                   (log "installing new opener")
                   (ui l r
