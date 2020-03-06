@@ -111,7 +111,9 @@
             (get-word "delete" (tuple 'delete))
             (get-word "d" (tuple 'delete))
             (get-word "undo" (tuple 'undo))
-            (get-word "u" (tuple 'undo)))))
+            (get-word "u" (tuple 'undo))
+            (get-word "redo" (tuple 'redo))
+            (get-word "r" (tuple 'redo)))))
       val))
 
 (define (forward-read ll)

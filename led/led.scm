@@ -48,8 +48,6 @@
 
 
 
-;;; LED evaluation ------------------------------------------
-
 (define (led-eval-position buff env exp)
    ;(print "evaling position " exp)
    (if (number? exp)
@@ -78,6 +76,19 @@
 
 (define (clear-status-text env)
    (del env 'status-message))
+
+
+(define (pop-redo env)
+   (let ((stack (get env 'redo null)))
+      (if (null? stack)
+         (values env #false)
+         (values
+            (-> env
+               (put 'redo (cdr stack))
+               (put 'undo (cons (car stack) (get env 'undo null))))
+            (car stack)))))
+
+
 
 (define (led-eval buff env exp)
    (log "led-eval " exp)
@@ -138,9 +149,16 @@
             (values b (push-undo env delta)))) ;; no way to fail
       ((undo)
          (lets ((env delta (pop-undo env)))
-            (values 
-               (unapply-delta buff delta)
-               env)))
+            (if delta
+               (values (unapply-delta buff delta) env)
+               (values buff
+                  (set-status-text env "nothing to undo")))))
+      ((redo)
+         (lets ((env delta (pop-redo env)))
+            (if delta
+               (values (apply-delta buff delta) env)
+               (values buff
+                  (set-status-text env "nothing to redo")))))
       ((print)
          (let ((data (get-selection buff)))
             (print (runes->string data))
@@ -148,6 +166,8 @@
       (else
          (log (list 'wat-eval exp))
          (values #f #f))))
+
+;;; Line-based operation
 
 (define (led-eval-runes buff env s)
    (let ((exp (parse-runes s)))
@@ -157,7 +177,7 @@
             (if buffp
                (values buffp envp)
                (begin
-                  (set-status-text "no")
+                  (set-status-text env "no")
                   (values buff env))))
          (values buff 
             (set-status-text env "syntax error")))))
@@ -182,6 +202,10 @@
          (port->readline-byte-stream stdin)
          get-command
          led-syntax-error-handler)))
+
+
+
+;;; Visual operation
 
 (define (next env b w h cx cy)
    (let ((m (check-mail)))
@@ -348,16 +372,18 @@
                         (values (* -1 (+ lpos 1 (- next-len lpos))) 0))))
                (values #f #f))))))
 
+;; choose a nice vertical position for cursor given buffer
+(define (nice-cx b w)
+   (bound 1
+      (+ 1 (buffer-line-pos b))
+      w))
+
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
    (lets ((from msg (next env b w h cx cy))
           (op (ref msg 1)))
       (log "led: " mode " <- " msg " from " from)
       (cond
-         ((eq? op 'push)
-            (led env mode
-               (buffer-append-to-end b (ref msg 2))
-               cx cy w h))
          ((eq? op 'terminal-size)
             (lets ((_ w h msg))
                (for-each
@@ -451,7 +477,7 @@
                            (led env mode bp cx cy w h))
                         ((directory? s)
                            (let ((fs (or (led-dir->list s) null)))
-                              (led (push-undo env (tuple b cx cy))
+                              (led (push-undo env (tuple b cx cy)) ;; fixme, new undo
                                  mode
                                  (buffer-replace bp
                                    (foldr
@@ -533,12 +559,10 @@
                            1 cy w h))
                      ((eq? x #\d)
                         (lets ((seln (get-selection b))
-                               (env (put env 'yank seln)))
-                           (led
-                              (push-undo env (tuple b cx cy))
-                              mode
-                              (buffer-delete b)
-                              cx cy w h)))
+                               (env (put env 'yank seln))
+                               (action (tuple 'delete))
+                               (buff env (led-eval b env (tuple 'delete))))
+                           (led env mode buff cx cy w h))) 
                      ((eq? x #\p)
                         (led
                            (push-undo env (tuple b cx cy))
@@ -546,11 +570,17 @@
                            (buffer-replace b (get env 'yank null))
                            cx cy w h))
                      ((eq? x #\u)
-                        (lets ((env node (pop-undo env)))
-                           (if node
-                              (lets ((b cx cy node))
-                                 (led env mode b cx cy w h))
-                              (led env mode b cx cy w h))))
+                        (lets ((b env (led-eval b env (tuple 'undo))))
+                           (led env mode b 
+                              (nice-cx b w)
+                              1 
+                              w h)))
+                     ((eq? x #\r)
+                        (lets ((b env (led-eval b env (tuple 'redo))))
+                           (led env mode b 
+                              (nice-cx b w)
+                              1 
+                              w h)))
                      ((eq? x #\h) ;; left
                         (let ((bp (seek-delta b -1)))
                            (if (or (not bp) (eq? (buffer-char bp) #\newline))
