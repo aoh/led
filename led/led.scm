@@ -1,5 +1,7 @@
 #!/usr/bin/ol --run
 
+;; led-eval : buff env exp -> buff' env'
+
 (define *expected-owl-version* "0.2a")
 
 (if (not (equal? *owl-version* *expected-owl-version*))
@@ -56,18 +58,10 @@
          (log "unknown position " exp)
          #f)))
 
-(define (led-apply buff op)
-   (tuple-case op
-      ((append val)
-         (buffer-append buff val))
-      (else
-         (log (list 'waat op))
-         #false)))
-
-(define (push-undo env action)
+(define (push-undo env delta)
    (-> env
       (put 'redo null) ;; destroy future of alternative past
-      (put 'undo (cons action (get env 'undo null)))))
+      (put 'undo (cons delta (get env 'undo null)))))
 
 (define (pop-undo env)
    (let ((stack (get env 'undo null)))
@@ -109,11 +103,11 @@
          (values buff env))
       ((append text)
          (lets
-            ((action exp)
-             (b (led-apply buff action)))
+            ((delta (tuple (buffer-pos buff) (get-selection buff) text))
+             (b (apply-delta buff delta)))
             (if b
                (values b
-                  (push-undo env buff))
+                  (push-undo env delta))
                (values #f #f))))
       ((select-line n)
          (values
@@ -138,12 +132,15 @@
                   envp)
                (values #f #f))))
       ((delete)
-         (values
-            (buffer-delete buff)
-            (push-undo env buff)))
+         (lets
+            ((delta (tuple (buffer-pos buff) (get-selection buff) null))
+             (b (apply-delta buff delta)))
+            (values b (push-undo env delta)))) ;; no way to fail
       ((undo)
-         (lets ((env buff (pop-undo env)))
-            (values buff env)))
+         (lets ((env delta (pop-undo env)))
+            (values 
+               (unapply-delta buff delta)
+               env)))
       ((print)
          (let ((data (get-selection buff)))
             (print (runes->string data))
@@ -794,7 +791,6 @@
       start-led-threads))
 
 main
-
 
 
 
