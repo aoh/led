@@ -15,6 +15,7 @@
             
       seek                    ;; b n -> b' | #f
       seek-delta
+      buffer-get-range        ;; b start end -> (rune ...) | #f
       buffer-char             ;; b -> next-rune | #f
       buffer-selection-delta  ;; buff i -> buff'
       get-selection           ;; b -> (rune ...) 
@@ -95,7 +96,16 @@
                         0 (add-nl line (car l) -1))
                      #false))))
          (b find))
-            
+
+      (define (buffer-get-range b from to)
+         (let ((b (seek b from)))
+            (if b
+               (let ((r (buffer-right b)))
+                  (if (< to from)
+                     #false
+                     (take r (- to from))))
+               #f)))            
+
       (define (apply-delta buff delta)
          (log "delta " delta)
          (lets ((buff (seek buff (ref delta 1))))

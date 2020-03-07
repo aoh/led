@@ -114,12 +114,9 @@
          (values buff env))
       ((append text)
          (lets
-            ((delta (tuple (buffer-pos buff) (get-selection buff) text))
-             (b (apply-delta buff delta)))
-            (if b
-               (values b
-                  (push-undo env delta))
-               (values #f #f))))
+            ((buff (seek-delta buff (buffer-selection-length buff)))
+             (buff (buffer-unselect buff)))
+            (led-eval buff env (tuple 'insert text))))
       ((select-line n)
          (values
             (select-line buff n)
@@ -142,11 +139,13 @@
                   (merge-selections buff buffp)
                   envp)
                (values #f #f))))
+      ((replace new)
+         (lets ((delta (tuple (buffer-pos buff) (get-selection buff) new)))
+            (values
+               (apply-delta buff delta)
+               (push-undo env delta))))
       ((delete)
-         (lets
-            ((delta (tuple (buffer-pos buff) (get-selection buff) null))
-             (b (apply-delta buff delta)))
-            (values b (push-undo env delta)))) ;; no way to fail
+         (led-eval buff env (tuple 'replace null)))
       ((undo)
          (lets ((env delta (pop-undo env)))
             (if delta
@@ -492,9 +491,14 @@
                ((key x)
                   (cond
                      ((eq? x #\i)
-                        (led 
-                           (put env 'insert-start (buffer-pos b))
-                           'insert b cx cy w h))
+                        (lets
+                           ((old (get-selection b)) ;; data to be replaced by insert
+                            (env (put env 'insert-start (buffer-pos b)))
+                            (env (put env 'insert-original old))
+                            (b (buffer-delete b))) ;; remove old selection
+                           (led 
+                              env
+                              'insert b cx cy w h)))
                      ((eq? x #\y)
                         (lets ((seln (get-selection b))
                                (env (put env 'yank seln)))
@@ -704,14 +708,23 @@
                ((refresh)
                   (led env 'insert b cx cy w h))
                ((esc)
-                  (led env 'command b cx cy w h))
+                  (lets ((start (get env 'insert-start 0))
+                         (end (buffer-pos b))
+                         (delta 
+                            (tuple start 
+                               (get env 'insert-original null) 
+                               (buffer-get-range b start end))))
+                  (led 
+                     (push-undo env delta)
+                     'command
+                     b cx cy w h)))
                ((tab)
                   (lets ((b (buffer-append-noselect b (list #\space #\space #\space))))
                      (led env mode b (min w (+ cx 3)) cy w h)))
                ((ctrl k)
                   (cond
-                     ((eq? k 'c)
-                        (led env 'command b cx cy w h))
+                     ;((eq? k 'c)
+                     ;   (led env 'command b cx cy w h))
                      ((eq? k 'w)
                         (let ((pathp (get env 'path)))
                            (if pathp
@@ -736,7 +749,7 @@
                      (else
                         (led env 'insert b (min w (+ cx 1)) cy w h))))
                ((backspace)
-                  (if (> (buffer-pos b) 0)
+                  (if (> (buffer-pos b) (get env 'insert-start 0))
                      (lets
                         ((p (buffer-pos b))
                          (lp (buffer-line-pos b))
@@ -797,6 +810,7 @@
     `((help "-h" "--help" comment "show this thing")
       (version "-v" "--version" comment "show program version")
       (log "-L" "--log" has-arg comment "debug log file")
+      (repl "-r" "--repl" comment "line-based repl")
       ;(config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
       )))
 
@@ -809,6 +823,9 @@
       ((get dict 'version)
          (print version-str)
          0)
+      ((get dict 'repl)
+         (link (start-logger (get dict 'log)))
+         (led-repl (string-buffer "") empty-env))
       (else
          (lets ((input (terminal-input empty))
                 (x y ll (get-terminal-size input)))
