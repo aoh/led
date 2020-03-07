@@ -92,7 +92,10 @@
                          (r (keep (lambda (x) (not (eq? x from))) r)))
                      (if (null? l)
                         (if (null? r)
-                           (halt 0)
+                           (begin
+                              (print-to 1 (get i 'height 1) "all buffers closed")
+                              (sleep 100)
+                              (halt 0))
                            (begin
                               (refresh (car r))
                               (ui (list (car r)) (cdr r) i)))
