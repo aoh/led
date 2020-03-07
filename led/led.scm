@@ -47,7 +47,6 @@
 
 
 
-
 (define (led-eval-position buff env exp)
    ;(print "evaling position " exp)
    (if (number? exp)
@@ -481,8 +480,8 @@
                                   (foldr
                                       (lambda (path tail) (render path (if (null? tail) tail (cons 10 tail))))
                                       null fs))
-                               (delta (tuple (buffer-pos b) (string->list s) contents))
-                               (buff (apply-delta b delta)))
+                               (delta (tuple (buffer-pos bp) (string->list s) contents))
+                               (buff (apply-delta bp delta)))
                               (led (push-undo env delta)
                                  mode buff
                                  cx cy w h)))
@@ -546,15 +545,15 @@
                                        1 w h)
                                     (led env mode b cx cy w h)))
                               (led env mode b cx cy w h)))) 
-                     ((eq? x #\c)
-                        (lets ((seln (get-selection b))
-                               (buff env (led-eval b env (tuple 'delete))) ;; <- should be merged in delta with insert result
-                               (env (put env 'yank seln)))
-                           (led
-                              env
-                              'insert
-                              buff
-                              cx cy w h)))
+                     ;((eq? x #\c)
+                     ;   (lets ((seln (get-selection b))
+                     ;          (buff env (led-eval b env (tuple 'delete))) ;; <- should be merged in delta with insert result
+                     ;          (env (put env 'yank seln)))
+                     ;      (led
+                     ;         env
+                     ;         'insert
+                     ;         buff
+                     ;         cx cy w h)))
                      ((eq? x #\.)
                         (if (= 0 (buffer-selection-length b))
                            (led env mode (select-line b (buffer-line b)) 1 cy w h)
@@ -683,16 +682,6 @@
                (else
                   (led env mode b cx cy w h))))
          ((eq? mode 'insert)
-            ;; insert mode
-            ;; next version planning:
-            ;;  - typing grows the actual selection. do in practice what conceptually happens.
-            ;;    + move screen with end of selection?
-            ;;    + hide cursor if necessary?
-            ;;    + use dim/bold/normal content
-            ;;    + need to store the original content for delta (typically empty)
-            ;;  - typing stores the entered keys to environment and generates a delta when exiting insert mode
-            ;;    + requires some faking of buffer content
-            ;;  - generate normal deltas to undo buffer, but push an insert mode starter there and perform a merge at return to command mode
             (tuple-case msg
                ((enter)
                   (lets
@@ -749,7 +738,7 @@
                      (else
                         (led env 'insert b (min w (+ cx 1)) cy w h))))
                ((backspace)
-                  (if (> (buffer-pos b) (get env 'insert-start 0))
+                  (if (> (buffer-pos b) (get env 'insert-start 0)) ;; no backspacing out of area to be changed
                      (lets
                         ((p (buffer-pos b))
                          (lp (buffer-line-pos b))
