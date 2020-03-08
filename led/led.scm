@@ -324,11 +324,8 @@
                                   (foldr
                                       (lambda (path tail) (render path (if (null? tail) tail (cons 10 tail))))
                                       null fs))
-                               (delta (tuple (buffer-pos bp) (string->list s) contents))
-                               (buff (apply-delta bp delta)))
-                              (led (push-undo env delta)
-                                 mode buff
-                                 cx cy w h)))
+                               (buff env (led-eval bp env (tuple 'replace contents))))
+                              (led env mode buff cx cy w h)))
                         (else
                            (led env mode bp cx cy w h)))))
                ((key x)
@@ -417,11 +414,9 @@
                                (buff env (led-eval b env (tuple 'delete))))
                            (led env mode buff cx cy w h))) 
                      ((eq? x #\p)
-                        (lets ((seln (get-selection b))
-                               (delta (tuple (buffer-pos b) seln (get env 'yank null)))
-                               (buff (apply-delta b delta)))
+                        (lets ((buff env (led-eval b env (tuple 'replace (get env 'yank null)))))
                            (led
-                              (push-undo env delta)
+                              env
                               mode
                               buff cx cy w h)))
                      ((eq? x #\u)
@@ -450,19 +445,11 @@
                               (led env mode b cx cy w h)
                               (led env mode bp (min w (+ cx (char-width (buffer-char b)))) cy w h))))
                      ((eq? x #\>) ;; indent, move to led-eval
-                        (lets ((old (get-selection b))
-                               (new ((indent-selection env) old))
-                               (delta (tuple (buffer-pos b) old new))
-                               (buff (apply-delta b delta)))
-                           (led (push-undo env delta)
-                                mode buff cx cy w h)))
+                        (lets ((buff env (led-eval b env (tuple 'replace ((indent-selection env) (get-selection b))))))
+                           (led env mode buff cx cy w h)))
                      ((eq? x #\<) ;; unindent
-                        (lets ((old (get-selection b))
-                               (new ((unindent-selection env) old))
-                               (delta (tuple (buffer-pos b) old new))
-                               (buff (apply-delta b delta)))
-                           (led (push-undo env delta)
-                                mode buff cx cy w h)))
+                        (lets ((buff env (led-eval b env (tuple 'replace ((unindent-selection env) (get-selection b))))))
+                           (led env mode buff cx cy w h)))
                      ((eq? x #\j) ;; down
                         (lets ((delta nleft (next-line-same-pos b)))
                            (if delta
