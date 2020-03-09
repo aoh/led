@@ -11,12 +11,17 @@
   
    (begin
 
+(define get-natural
+   (get-parses
+      ((first (get-byte-if (λ (x) (and (< #\0 x) (<= x #\9)))))
+       (rest (get-star! (get-byte-if (λ (x) (and (<= #\0 x) (<= x #\9)))))))
+      (fold (λ (n x) (+ (* n 10) (- x #\0))) 0 (cons first rest))))
+
 (define get-integer
    (get-parses
       ((sign (get-one-of (get-word "-" -1) (get-word "+" +1) (get-epsilon +1)))
-       (first (get-byte-if (λ (x) (and (< #\0 x) (<= x #\9)))))
-       (rest (get-star! (get-byte-if (λ (x) (and (<= #\0 x) (<= x #\9)))))))
-      (* sign (fold (λ (n x) (+ (* n 10) (- x #\0))) 0 (cons first rest)))))
+       (value get-natural))
+      (* sign value)))
 
 (define get-movement
    (get-one-of
@@ -56,10 +61,6 @@
       (get-parses ((op (get-word "R" 'redo))) (tuple op))
       (get-parses ((op (get-word "q" 'quit))) (tuple op))
       (get-parses
-         ((op (get-imm #\,))
-          (next get-movement))
-         (tuple 'extend-selection next))
-      (get-parses
          ((skip (get-imm #\p)))
          (tuple 'print))))
 
@@ -83,6 +84,8 @@
             (get-word "read" 'read)
             (get-word "n" 'new-buffer)
             (get-word "new" 'new-buffer)
+            (get-word "d" 'new-buffer)
+            (get-word "new" 'new-buffer)
             ))
        (path
           (get-either
@@ -104,10 +107,14 @@
       ((skip (get-star! get-whitespace))
        (val
          (get-one-of
-            ;get-movement
+            get-movement
             ;(get-action get-movement)
             get-file-command
             get-subprocess 
+            (get-parses
+               ((op (get-imm #\,))
+                (next get-movement))
+               (tuple 'extend-selection next))
             (get-word "delete" (tuple 'delete))
             (get-word "d" (tuple 'delete))
             (get-word "undo" (tuple 'undo))

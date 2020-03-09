@@ -247,7 +247,11 @@
                (cond
                   ((eq? (maybe-car runes) #\:)
                      (lets ((buff env (led-eval-runes b env (cdr runes))))
-                        (led env 'command buff cx cy w h)))
+                        (led env 'command   ;; env always there, may have error message
+                           (or buff b)      ;; in case command fails
+                           (nice-cx buff w) ;; buffer may change from underneath 
+                           (min cy (buffer-line buff)) ;; ditto 
+                           w h)))
                   ((eq? (maybe-car runes) #\/)
                      (log "saving last search " (cdr runes))
                      (let ((env (put env 'last-search (cdr runes))))
@@ -536,8 +540,7 @@
                                (buffer-get-range b start end))))
                   (led 
                      (push-undo env delta)
-                     'command
-                     b cx cy w h)))
+                     'command b cx cy w h)))
                ((tab)
                   (lets ((b (buffer-append-noselect b (list #\space #\space #\space))))
                      (led env mode b (min w (+ cx 3)) cy w h)))
