@@ -1,3 +1,13 @@
+
+;; UI protocol
+; input-terminal + _ => depends
+; _ + #(open X)      => attempt to open a new buffer, or switch to it  
+; _ + #(add-opener X) => add a new function to perform an open action
+; _ + #(buffer-closed)    => drop sending buffer from list
+; _ + #(terminal-size w h) => notify sub-buffers
+; current + _        => send to screen
+; _ + #(yank _)      => notify all buffers that something was copied to yank buffer
+
 (define-library (led ui)
 
    (import
@@ -6,10 +16,17 @@
       (led log))
 
    (export
-      start-ui)
+      start-ui
+      ui-yank
+      )
 
    (begin
-            
+
+      ;; protocol helpers
+      
+      (define (ui-yank text)
+         (mail 'ui (tuple 'yank text)))
+                     
       (define (refresh window)
          (clear-screen)
          (mail window (tuple 'refresh)))
@@ -83,6 +100,12 @@
                                  (mail id (tuple 'terminal-size (get i 'width 80) (get i 'height 30)))
                                  (ui (cons id l) r i))
                               (ui l r i))))))
+               ((eq? (ref msg 1) 'yank)
+                  (log "ui forwarding yank to buffers")
+                  (map
+                     (lambda (id) (mail id msg))
+                     (append l r))
+                  (ui l r i))
                ((eq? (ref msg 1) 'add-opener)
                   (log "installing new opener")
                   (ui l r

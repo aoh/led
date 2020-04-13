@@ -30,7 +30,7 @@
    (led eval)
    (led input)
    (only (owl syscall) link kill)
-   (only (led ui) start-ui)
+   (only (led ui) start-ui ui-yank)
    (led render)
 )
       
@@ -241,6 +241,10 @@
          ((eq? op 'keep-me-posted)
             (led (put env 'clients (cons from (get env 'clients null)))
                mode b cx cy w h))
+         ((eq? op 'yank)
+            ;; yank message from elsewhere (or me). overwrite yank buffer
+            (led (put env 'yank (ref msg 2))
+               mode b cx cy w h))
          ((eq? op 'command-entered)
             (lets
                ((runes (ref msg 2)))
@@ -346,6 +350,7 @@
                      ((eq? x #\y)
                         (lets ((seln (get-selection b))
                                (env (put env 'yank seln)))
+                           (ui-yank seln)
                            (led env mode  b cx cy w h)))
                      ((eq? x #\$)
                         (lets ((nforw (buffer-line-end-pos b))
