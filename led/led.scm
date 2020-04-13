@@ -620,7 +620,7 @@
                   (or
                      (file-buffer path)
                      (dir-buffer path)
-                     (string-buffer (str "failed to read " path)))
+                     (string-buffer (str "")))
                   (string-buffer ""))
                1 1 10 10)) ;; <- ui sends terminal size as first message
          (link id)
