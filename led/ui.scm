@@ -116,8 +116,8 @@
                      (if (null? l)
                         (if (null? r)
                            (begin
-                              (print-to 1 (get i 'height 1) "all buffers closed")
-                              (sleep 100)
+                              ;(print-to 1 (get i 'height 1) "all buffers closed")
+                              ;(sleep 100)
                               (halt 0))
                            (begin
                               (refresh (car r))
