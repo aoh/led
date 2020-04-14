@@ -306,10 +306,17 @@
                         (let ((proc (get env 'subprocess)))
                            (log " => sending to " proc)
                            (if proc
-                              (let ((resp (communicate proc (get-selection b))))
-                                 (log " => " (runes->string (if resp resp null)))
-                                 (led env mode 
-                                    (buffer-append b (or (utf8-decode (or resp null)) null))
+                              (lets ((resp (communicate proc (get-selection b)))
+                                     (b (buffer-after-dot b))
+                                     (data (or (utf8-decode (or resp null)) null))
+                                     (delta (tuple (buffer-pos b) null data)))
+                                 (log " => " data)
+                                 (led 
+                                    (if (null? data)
+                                       (set-status-text env "No data received from subprocess.")
+                                       (push-undo env delta))
+                                    mode 
+                                    (buffer-append b data)
                                     cx cy w h))
                               (begin
                                  (log " => no subprocess")
