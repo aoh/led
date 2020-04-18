@@ -124,6 +124,12 @@
                (let ((data (get-selection buff)))
                   (print (runes->string data))
                   (values buff env)))
+            ((select what)
+               (cond
+                  ((eq? what 'everything)
+                     (values (select-everything buff) env))
+                  (else
+                     (values #f #f))))
             (else
                (log (list 'wat-eval exp))
                (values #f #f))))
@@ -131,6 +137,7 @@
       ;;; Line-based operation
 
       (define (led-eval-runes buff env s)
+         (log "eval: parse " s)
          (let ((exp (parse-runes s)))
             (log "eval " s " -> " exp)
             (if exp
@@ -139,6 +146,7 @@
                      (values buffp envp)
                      (begin
                         (set-status-text env "no")
+                        (log "eval: no")
                         (values buff env))))
                (values buff 
                   (set-status-text env "syntax error")))))

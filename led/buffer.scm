@@ -44,6 +44,7 @@
       select
       select-rest-of-line
       select-lines           ;; b from to
+      select-everything
       seek-start-of-line
       merge-selections
       select-line
@@ -433,7 +434,11 @@
                               (seek b (+ pos (+ start 1)))) ;; after newline
                            #false)))))))
       
-      
+      (define (select-everything b)
+         (b
+            (lambda (pos l r len line)
+               (let ((r (append (reverse l) r)))
+                  (buffer 0 null r (length r) 1)))))
       
       (define (distance-to-newline l)
          (let loop ((l l) (n 0))
