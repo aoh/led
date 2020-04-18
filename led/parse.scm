@@ -84,8 +84,6 @@
             (get-word "read" 'read)
             (get-word "n" 'new-buffer)
             (get-word "new" 'new-buffer)
-            (get-word "d" 'new-buffer)
-            (get-word "new" 'new-buffer)
             ))
        (path
           (get-either
