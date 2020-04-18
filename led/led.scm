@@ -288,6 +288,7 @@
                         (let ((b (seek-delta b (lines-up-offset b (max 1 (- h 1))))))
                            (led env mode b 1 (min cy (buffer-line b)) w h)))
                      ((eq? k 'l)
+                        (mail 'ui (tuple 'clear)) ;; clear screen
                         (led
                            (del env 'status-message)
                            mode b cx cy w h))
@@ -662,7 +663,7 @@
          (link (start-logger (get dict 'log)))
          (led-repl (string-buffer "") empty-env))
       (else
-         (lets ((input (terminal-input empty))
+         (lets ((input (terminal-input (put empty 'eof-exit? #f)))
                 (x y ll (get-terminal-size input)))
             (link (start-logger (get dict 'log)))
             (log "Terminal dimensions " (cons x y))
