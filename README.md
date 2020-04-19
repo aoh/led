@@ -1,80 +1,136 @@
-# led
+# Led: a simple text editor 
 
-[![Build status:](https://travis-ci.org/aoh/led.svg?branch=master)](https://travis-ci.org/aoh/led)
+Led is a simple text editor. It was written after realizing it is in the long run much easier write a 
+custom text editor than it is to configure an existing one. Text editors are simple. At least the good
+ones are. Not all simple ones are good, though. Led may become good, but in the meantime it is sufficient 
+to be good enough to handle all the needs I have at home and at work.
 
-Led is a fairly vi-compatible text editor. It was written mainly to get a
-vi, which has good support for editing multiple files, browsing directories
-and experimenting with useful extensions.
+While led is written from scratch, the key ideas in it are definitely not new. Led is based on vi, but 
+the edit operations bear more resemblence to the text editor Sam. The idea of using text from buffers 
+also for semantic operations was borrowed from Acme. Led is also written entirely in Lisp, much like 
+Emacs.
 
-Led is written in Owl Lisp, so the editor is highly portable across various
-UNIX flavors. The editor also compiles to a standalone binary which requires
-no external libraries.
+## Status
 
-## Current vi/ex features
+The editor was recently rewritten to enable some of the less vi-ish features. The editor is usable, 
+but many important features have not yet been added back to this version.
 
-Led has been used to implement itself after roughly first week of development.
+## Features
 
-Currently working features consist mainly of:
- - most usual vi edit mode commands
- - some ex commands
-   - e.g. `:ab lambda λ`, `:set showmatch`, `:set ai` and `:set sm`
- - autoindent and paren matching
- - ex command history
- - extended regular expressions (via owl)
+ - Not line based!
+ - Unicode support
+ - Infinite undo/redo
+ - Delta screen update
+ - Asynchronous thread-based operation
+ - Multiple buffers
+ - Subprocesses
+ - Portable
+ - No external dependencies, standalone binary! 
+ - Purely functional, no mutations allowed!
 
-## Currently implemented extensions
+# Building
 
- - multiple buffers
-    - `:n` opens a new buffer
-    - `Ctrl-n` and `Ctrl-p` switch buffers
-    - `:move <n>` moves buffer to position `n`
-    - `:q` and `Q` closes the current buffer
-  - directory buffers
-    - `$ led .` and `:n <directory>` open a buffer with directory contents
-    - `enter` on a line in directory buffer opens the file or toggles subdirectory contents
-       - `set recursive-open-directory=off` toggles behavior on directories
-    - otherwise it's a regular editable buffer to which you can add notes, paths, etc.
-  - experimental simple search buffers
-    - `:search <foo>` searches for the literal string `<foo>` from paths in the directory buffer at position 1, if it's there.
-    - the resulting buffer contains matching file paths, offsets and sample content
-    - pressing `enter` on the matching line jumps to the match
-  - some lisp extensions
-    - `:<range>l <lisp-extension>` calls the lisp function with contents of the range
-    - `:%l sort` sorts contents
-    - `:l date` replaces range with current date (you may want to `:set utc-offset +2.0`)
+   $ git clone https://haltp.org/git/led.git
+   $ cd led
+   $ make
+   $ bin/led .
 
-## Building
 
-```
-$ git clone https://gitlab.com/akihe/led.git
-$ cd led
-$ make
-$ bin/led .
-```
+# Commands
 
-## Common issues
+## Buffer commands
 
-Led does not automatically resize buffer after resizing terminal. Press `^L` to have it recompute the terminal size.
+These commands work everywhere regardless off buffer content and edit mode.
 
-File content search is really slow, if there are lots of files. You can remove directories holding uninteresting files from buffer 1 if this is an issue for now.
+Ctrl-n: switch to next buffer
 
-The cursor does not move when you press the arrow keys. You should be using `h`, `j`, `k` and `l`. Arrow keys will be added at some point though.
+Ctrl-p: switch to previous buffer
 
-Only extended regular expressions are currently supported.
+Ctrl-h: go to first buffer
 
-There is no line wrap. This is an opinionated feature.
-I'd rather see part of the real structure than a broken representation of all of it.
+Ctrl-q: forcibly close current buffer
 
-Terminal scrolling is fairly slow. This can be optimized, but I haven't bothered yet since `^F` and `^B` are fast enough even on a Raspberry Pi.
 
-## Goals
+### Command mode commands
 
-Led should end up having most or all of traditional ex/vi features 
-along with at least the current extensions in a fairly simple and tractable
-codebase.
+Ctrl-f: forward one page
 
-Led should extend the vi mindset with a way that makes non-trivial extensions 
-easy to be added afterwards as extensions. Current lisp extensions use of 
-`enter` as a somewhat semantics aware general purpose action are experimental 
-steps along these lines.
+Ctrl-b: back one page
 
+Ctrl-l: repaint and clear status message
+
+Ctrl-w: write current buffer
+
+Ctrl-x: send current selection to subprocess (if any) and paste output after selection
+
+Enter: open selected file or expand directory contents
+
+i: delete selectin and enter insert mode
+
+y: yank selection to copy buffer
+
+$: move to end of current line
+
+w: expand selection by one word 
+
+m: wait for a key and mark position 
+
+': wait for a key and jump to corresponding marked position
+
+.: select current line, including newline if present
+
+h: move left
+
+j: move down
+
+k: move up
+
+l: move right
+
+H: shrink selection by one letter (as in movement)
+
+J: grow selection to next line (as in movement)
+
+L: grow selection by one letter (as in movement)
+
+0: go to beginnig of line
+
+d: delete selection and place content to yank buffer
+
+p: replace selection with content of yank buffer
+
+u: undo command
+
+r: redo command
+
+>: indent selection
+
+<: unindent selection
+
+%: find matching paren forward
+
+e: select parent lisp expression of current selection
+
+W: select word to which current selection belongs 
+
+N: toggle line numbers
+
+/: start searching, currently always from beginnig of buffer
+
+n: find next match to last search
+
+Q: close buffer 
+
+### Inset mode
+
+Esc: exit instert mode
+
+Ctrl-w: write current buffer, including changes made in insert mode so far
+
+Arrows: move buffer viewport
+
+backspace: delete an inserted character (but stay in selection)
+
+
+
+#led
