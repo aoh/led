@@ -129,6 +129,8 @@
                      (values (select-everything buff) env))
                   ((eq? what 'current-line)
                      (values (select-line buff (buffer-line buff)) env))
+                  ((eq? what 'end-of-file) ;; select empty string at end of file
+                     (values (select-end-of-file buff) env))
                   (else
                      (values #f #f))))
             ((seq a b)

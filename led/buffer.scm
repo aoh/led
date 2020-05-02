@@ -44,6 +44,7 @@
       select
       select-rest-of-line
       select-lines           ;; b from to
+      select-end-of-file
       select-everything
       seek-start-of-line
       merge-selections
@@ -439,6 +440,15 @@
             (lambda (pos l r len line)
                (let ((r (append (reverse l) r)))
                   (buffer 0 null r (length r) 1)))))
+
+
+      (define (select-end-of-file b)
+         (b
+            (lambda (pos l r len line)
+               (lets
+                  ((n (length r))
+                   (l r line (walk l r n line)))
+                  (buffer (+ pos n) l r 0 line))))) 
       
       (define (distance-to-newline l)
          (let loop ((l l) (n 0))
