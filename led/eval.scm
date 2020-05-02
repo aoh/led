@@ -22,7 +22,6 @@
    (begin      
 
       (define (led-eval-position buff env exp)
-         ;(print "evaling position " exp)
          (if (number? exp)
             exp
             (begin
@@ -129,6 +128,11 @@
                   ((eq? what 'everything)
                      (values (select-everything buff) env))
                   (else
+                     (values #f #f))))
+            ((seq a b)
+               (lets ((bp ep (led-eval buff env a)))
+                  (if bp
+                     (led-eval bp ep b)
                      (values #f #f))))
             (else
                (log (list 'wat-eval exp))

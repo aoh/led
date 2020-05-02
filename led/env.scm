@@ -19,8 +19,8 @@
             
       (define (empty-led-env id path) 
          (if path
-               (put empty-env 'path path)
-                     empty-env))
+            (put empty-env 'path path)
+            empty-env))
 
       (define (set-status-text env string)
          (put env 'status-message (string->runes string)))
