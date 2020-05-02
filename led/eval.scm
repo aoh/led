@@ -127,6 +127,8 @@
                (cond
                   ((eq? what 'everything)
                      (values (select-everything buff) env))
+                  ((eq? what 'current-line)
+                     (values (select-line buff (buffer-line buff)) env))
                   (else
                      (values #f #f))))
             ((seq a b)
