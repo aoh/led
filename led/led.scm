@@ -33,7 +33,7 @@
    (only (led ui) start-ui ui-yank)
    (led render)
 )
-      
+
 (define (bound lo x hi)
   (cond
     ((< x lo) lo)
@@ -110,10 +110,10 @@
       ((eq? c #\]) #\[)
       ((eq? c #\}) #\{)
       (else #f)))
- 
+
 (define (paren-hunt l closes len inc dec)
    (cond
-      ((null? closes) 
+      ((null? closes)
          len)
       ((null? l)
          #false)
@@ -134,7 +134,7 @@
             (if cp
                (paren-hunt (cdr r) (list cp) 1 40 41)
                #false))
-         #false)))) 
+         #false))))
 
 (define (parent-expression b)
    (b (lambda (pos l r len line)
@@ -253,8 +253,8 @@
                      (lets ((buff env (led-eval-runes b env (cdr runes))))
                         (led env 'command   ;; env always there, may have error message
                            (or buff b)      ;; in case command fails
-                           (nice-cx buff w) ;; buffer may change from underneath 
-                           (min cy (buffer-line buff)) ;; ditto 
+                           (nice-cx buff w) ;; buffer may change from underneath
+                           (min cy (buffer-line buff)) ;; ditto
                            w h)))
                   ((eq? (maybe-car runes) #\/)
                      (log "saving last search " (cdr runes))
@@ -292,6 +292,16 @@
                         (led
                            (del env 'status-message)
                            mode b cx cy w h))
+                     ((eq? k 'e)
+                        (log "cleanup!")
+                        (lets ((exp
+                                 (tuple 'seq
+                                    (tuple 'select 'everything)
+                                    (tuple 'apply s/  *(\n)/\1/g)))
+                               (bp ep (led-eval b env exp)))
+                           (if bp
+                              (led ep mode bp 1 1 w h)
+                              (led (set-status-text env "Nothing to clean") mode b cx cy w h))))
                      ((eq? k 'w)
                         (let ((pathp (get env 'path)))
                            (if pathp
@@ -312,11 +322,11 @@
                                      (data (or (utf8-decode (or resp null)) null))
                                      (delta (tuple (buffer-pos b) null data)))
                                  (log " => " data)
-                                 (led 
+                                 (led
                                     (if (null? data)
                                        (set-status-text env "No data received from subprocess.")
                                        (push-undo env delta))
-                                    mode 
+                                    mode
                                     (buffer-append b data)
                                     cx cy w h))
                               (begin
@@ -334,9 +344,9 @@
                            (mail 'ui (tuple 'open s))
                            (led env mode bp cx cy w h))
                         ((directory? s)
-                           (lets 
+                           (lets
                               ((fs (or (led-dir->list s) null))
-                               (contents 
+                               (contents
                                   (foldr
                                       (lambda (path tail) (render path (if (null? tail) tail (cons 10 tail))))
                                       null fs))
@@ -352,7 +362,7 @@
                             (env (put env 'insert-start (buffer-pos b)))
                             (env (put env 'insert-original old))
                             (b (buffer-delete b))) ;; remove old selection
-                           (led 
+                           (led
                               env
                               'insert b cx cy w h)))
                      ((eq? x #\y)
@@ -363,7 +373,7 @@
                      ((eq? x #\$)
                         (lets ((nforw (buffer-line-end-pos b))
                                (b (seek-delta b nforw)))
-                           (led env mode b 
+                           (led env mode b
                               (bound 1 (+ cx nforw) w)
                               cy w h)))
                      ((eq? x #\w)
@@ -385,11 +395,11 @@
                               (led env mode b cx cy w h))))
                      ((eq? x #\m)
                         (lets ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key)))))
-                           (led 
+                           (led
                               (add-mark env (ref (ref envelope 2) 2) (buffer-pos b) (buffer-selection-length b))
                               mode b cx cy w h)))
                      ((eq? x #\')
-                        (lets 
+                        (lets
                            ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
                             (from msg envelope)
                             (_ key msg)
@@ -397,12 +407,12 @@
                            (if location
                               (lets
                                  ((bp (seek-select b (car location) (cdr location))))
-                                 (if bp 
-                                    (led env mode bp 
+                                 (if bp
+                                    (led env mode bp
                                        (nice-cx bp w)
                                        1 w h)
                                     (led env mode b cx cy w h)))
-                              (led env mode b cx cy w h)))) 
+                              (led env mode b cx cy w h))))
                      ;((eq? x #\c)
                      ;   (lets ((seln (get-selection b))
                      ;          (buff env (led-eval b env (tuple 'delete))) ;; <- should be merged in delta with insert result
@@ -429,7 +439,7 @@
                                (env (put env 'yank seln))
                                (action (tuple 'delete))
                                (buff env (led-eval b env (tuple 'delete))))
-                           (led env mode buff cx cy w h))) 
+                           (led env mode buff cx cy w h)))
                      ((eq? x #\p)
                         (lets ((buff env (led-eval b env (tuple 'replace (get env 'yank null)))))
                            (led
@@ -438,15 +448,15 @@
                               buff cx cy w h)))
                      ((eq? x #\u)
                         (lets ((b env (led-eval b env (tuple 'undo))))
-                           (led env mode b 
+                           (led env mode b
                               (nice-cx b w)
-                              1 
+                              1
                               w h)))
                      ((eq? x #\r)
                         (lets ((b env (led-eval b env (tuple 'redo))))
-                           (led env mode b 
+                           (led env mode b
                               (nice-cx b w)
-                              1 
+                              1
                               w h)))
                      ((eq? x #\h) ;; left
                         (let ((bp (seek-delta b -1)))
@@ -502,10 +512,10 @@
                               (lets
                                  ((b (seek-delta b back))
                                   (new-line (buffer-line b)))
-                                 (led env mode 
-                                    (buffer-selection-delta (buffer-unselect b) len) 
+                                 (led env mode
+                                    (buffer-selection-delta (buffer-unselect b) len)
                                     (nice-cx b w)
-                                    (bound 1 (- cy (- old-line new-line)) h) 
+                                    (bound 1 (- cy (- old-line new-line)) h)
                                     w h))
                               (led env mode b cx cy w h))))
                      ((eq? x #\N) ;; numbers
@@ -536,7 +546,7 @@
                   (lets
                      ((i (if (get env 'autoindent) (buffer-line-indent b) null))
                       (b (buffer-append-noselect b (cons #\newline i))))
-                     (led env 'insert b 
+                     (led env 'insert b
                         (bound 1 (+ (length i) 1) w)
                         (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                ((key x)
@@ -548,11 +558,11 @@
                ((esc)
                   (lets ((start (get env 'insert-start 0))
                          (end (buffer-pos b))
-                         (delta 
-                            (tuple start 
-                               (get env 'insert-original null) 
+                         (delta
+                            (tuple start
+                               (get env 'insert-original null)
                                (buffer-get-range b start end))))
-                  (led 
+                  (led
                      (push-undo env delta)
                      'command b cx cy w h)))
                ((tab)
@@ -593,7 +603,7 @@
                          (b (select b (- p 1) p))
                          (b (buffer-delete b)))
                         (if (eq? lp 0)
-                           (led env mode b 
+                           (led env mode b
                               (min w (+ 1 (buffer-line-pos b)))
                               (max (- cy 1) 1) w h)
                            (led env mode b (max 1 (- cx 1)) cy w h)))
@@ -617,7 +627,7 @@
 (define default-led-opener
    (lambda (path)
       (log "default led opener working on " path)
-      (lets 
+      (lets
          ((id (or path (list '*scratch*)))
           (status-thread-id (cons id 'status-line)))
          (thread id
@@ -692,9 +702,9 @@
                   ))))))
 
 (define (main args)
-   (process-arguments (cdr args) 
-      command-line-rules 
-      usage-text 
+   (process-arguments (cdr args)
+      command-line-rules
+      usage-text
       start-led-threads))
 
 main

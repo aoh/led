@@ -10,19 +10,19 @@
       (led env)
       (owl readline)
       )
-   
+
    (export
       led-eval   ;; buff env exp -> buff' env' | #f env' (with error message)
       led-eval-runes
       led-repl   ;; maybe move elsewhere later
-      
+
       push-undo
       pop-undo
-     
-      dirty?    ;; env -> bool, is the buffer dirty (has unsaved changes) 
+
+      dirty?    ;; env -> bool, is the buffer dirty (has unsaved changes)
       )
 
-   (begin      
+   (begin
 
       (define (led-eval-position buff env exp)
          (if (number? exp)
@@ -39,12 +39,12 @@
       ;; use the undo stack as a marker of last saved status
       (define (mark-saved env)
          (put env 'saved (get env 'undo null)))
-     
+
       (define (dirty? env)
-         (not (equal? 
-            (get env 'undo null) 
+         (not (equal?
+            (get env 'undo null)
             (get env 'saved null))))
-         
+
       (define (pop-undo env)
          (let ((stack (get env 'undo null)))
             (if (null? stack)
@@ -75,7 +75,7 @@
                   (if fd
                      (let ((data (buffer->bytes buff)))
                         (if (write-bytes fd data)
-                           (values 
+                           (values buff
                               (set-status-text
                                  (-> env
                                     (mark-saved)
@@ -101,11 +101,11 @@
                   (log " => call " call)
                   (log " => subprocess " info)
                   (if info
-                     (values buff 
-                        (set-status-text 
+                     (values buff
+                        (set-status-text
                            (put env 'subprocess info)
                            (str "Started " info)))
-                     (values buff 
+                     (values buff
                         (set-status-text env "no")))))
             ((extend-selection movement)
                (lets ((buffp envp (led-eval buff env movement)))
@@ -159,6 +159,12 @@
                       (kill (get env 'status-thread 'id))
                       (mail 'ui (tuple 'buffer-closed))
                       (exit-thread 42))))
+            ((apply func)
+               (lets ((old (get-selection buff))
+                      (new (func old)))
+                  (if (equal? old new)
+                     (values #f #f) ;; nothing to do
+                     (led-eval buff env (tuple 'replace new)))))
             (else
                (log (list 'wat-eval exp))
                (values #f #f))))
@@ -177,7 +183,7 @@
                         (set-status-text env "no")
                         (log "eval: no")
                         (values buff env))))
-               (values buff 
+               (values buff
                   (set-status-text env "syntax error")))))
 
       (define (led-repl buff env)

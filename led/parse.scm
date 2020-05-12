@@ -1,14 +1,15 @@
 (define-library (led parse)
 
-   (import 
+   (import
       (owl base)
+      (only (owl regex) get-replace-regex)
       (prefix (owl parse) get-))
 
-   (export 
+   (export
       parse-runes
       get-command
       led-syntax-error-handler)
-  
+
    (begin
 
       (define get-natural
@@ -16,13 +17,13 @@
             ((first (get-byte-if (λ (x) (and (< #\0 x) (<= x #\9)))))
              (rest (get-star! (get-byte-if (λ (x) (and (<= #\0 x) (<= x #\9)))))))
             (fold (λ (n x) (+ (* n 10) (- x #\0))) 0 (cons first rest))))
-      
+
       (define get-integer
          (get-parses
             ((sign (get-one-of (get-word "-" -1) (get-word "+" +1) (get-epsilon +1)))
              (value get-natural))
             (* sign value)))
-      
+
       (define get-movement
          (get-one-of
             (get-word "^" (tuple 'select 'beginning-of-line))
@@ -34,7 +35,7 @@
             (get-parses
                ((n get-integer))
                (tuple 'select-line n))))
-      
+
       (define (upto-line delim)
          (get-either
             (get-parses
@@ -46,17 +47,17 @@
                ((r get-rune)
                 (rs (upto-line delim)))
                (cons r rs))))
-      
+
       (define get-whitespace
          (get-byte-if
             (λ (x) (or (eq? x #\newline) (eq? x #\space)))))
-      
+
       (define get-spaced-word
          (get-parses
              ((skip (get-plus get-whitespace))
               (path (get-plus (get-rune-if (lambda (x) (not (eq? x #\space)))))))
             (list->string path)))
-      
+
       (define get-file-command
          (get-parses
             ((op
@@ -76,13 +77,13 @@
                       (list->string path))
                    (get-epsilon #false))))
             (tuple op path)))
-      
+
       (define get-subprocess
          (get-parses
             ((skip (get-word "subprocess" 'foo))
              (cmd  (get-plus get-spaced-word)))
             (tuple 'subprocess cmd)))
-       
+
       (define get-command
          (get-parses
             ((skip (get-star! get-whitespace))
@@ -90,7 +91,7 @@
                (get-one-of
                   get-movement
                   get-file-command
-                  get-subprocess 
+                  get-subprocess
                   (get-parses
                      ((op (get-imm #\,))
                       (next get-movement))
@@ -103,6 +104,9 @@
                   (get-word "r" (tuple 'redo))
                   (get-word "q!" (tuple 'quit #t))
                   (get-word "q" (tuple 'quit #f))
+                  (get-parses
+                     ((val get-replace-regex))
+                     (tuple 'apply val))
                   )))
             val))
 
@@ -116,22 +120,22 @@
          (get-parses
             ((cmds (get-plus! get-command)))
             (sequence cmds)))
-      
+
       (define (forward-read ll)
          (if (pair? ll)
             (forward-read (cdr ll))
             ll))
-      
+
       (define (led-syntax-error-handler recurse ll message)
          (display "? ")
          (recurse (forward-read ll)))
-      
-      
+
+
       ;; -> tuple | #false
       (define (parse-runes s)
          (get-parse get-commands s #false))
-      
-      
+
+
 ))
 
 
