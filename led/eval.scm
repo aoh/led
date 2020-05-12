@@ -152,6 +152,13 @@
                   (if bp
                      (led-eval bp ep b)
                      (values #f #f))))
+            ((quit force?)
+               (if (and (dirty? env) (not force?))
+                  (values #f #f)
+                  (begin
+                      (kill (get env 'status-thread 'id))
+                      (mail 'ui (tuple 'buffer-closed))
+                      (exit-thread 42))))
             (else
                (log (list 'wat-eval exp))
                (values #f #f))))

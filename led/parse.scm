@@ -47,23 +47,6 @@
                 (rs (upto-line delim)))
                (cons r rs))))
       
-      (define (get-action get-movement)
-         (get-one-of
-            (get-parses
-               ((skip (get-imm #\d)))
-               (tuple 'delete))
-            (get-parses
-               ((op (get-word "a" 'append))
-                (nl (get-imm #\newline))
-                (data (upto-line ".")))
-               (tuple 'append data))
-            (get-parses ((op (get-word "u" 'undo))) (tuple op))
-            (get-parses ((op (get-word "R" 'redo))) (tuple op))
-            (get-parses ((op (get-word "q" 'quit))) (tuple op))
-            (get-parses
-               ((skip (get-imm #\p)))
-               (tuple 'print))))
-      
       (define get-whitespace
          (get-byte-if
             (λ (x) (or (eq? x #\newline) (eq? x #\space)))))
@@ -106,7 +89,6 @@
              (val
                (get-one-of
                   get-movement
-                  ;(get-action get-movement)
                   get-file-command
                   get-subprocess 
                   (get-parses
@@ -118,7 +100,10 @@
                   (get-word "undo" (tuple 'undo))
                   (get-word "u" (tuple 'undo))
                   (get-word "redo" (tuple 'redo))
-                  (get-word "r" (tuple 'redo)))))
+                  (get-word "r" (tuple 'redo))
+                  (get-word "q!" (tuple 'quit #t))
+                  (get-word "q" (tuple 'quit #f))
+                  )))
             val))
 
       (define (sequence cmds)

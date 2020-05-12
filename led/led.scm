@@ -512,15 +512,11 @@
                         (led (put env 'line-numbers (not (get env 'line-numbers #false)))
                            mode b cx cy w h))
                      ((eq? x #\Q)
-                        ;; clean up, notify UI we are done and finish
-                        (if (dirty? env)
+                        (lets ((bp ep (led-eval b env (tuple 'quit #f))))
+                           ;; only exits on failure
                            (led
                               (set-status-text env "Buffer has unsaved content.")
-                              mode b cx cy w h)
-                           (begin
-                              (kill (get env 'status-thread'id))
-                              (mail 'ui (tuple 'buffer-closed))
-                              42)))
+                              mode b cx cy w h)))
                      ((eq? x #\W)
                         (lets ((b (buffer-select-current-word b))
                                (seln (get-selection b))
