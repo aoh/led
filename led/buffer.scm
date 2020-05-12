@@ -7,26 +7,26 @@
       (owl proof)
       (only (led env) empty-env)
       (led log))
-   
-   (export 
+
+   (export
       buffer
       apply-delta
       unapply-delta
-            
+
       seek                    ;; b n -> b' | #f
       seek-delta
       buffer-get-range        ;; b start end -> (rune ...) | #f
       buffer-char             ;; b -> next-rune | #f
       buffer-selection-delta  ;; buff i -> buff'
-      get-selection           ;; b -> (rune ...) 
+      get-selection           ;; b -> (rune ...)
       buffer-pos              ;; b -> n
-      buffer-selection-length ;; b -> n 
+      buffer-selection-length ;; b -> n
       buffer-unselect         ;; b -> b' (select null string at same pos)
       buffer-line             ;; b -> n (current line number)
       buffer-left             ;; b -> (rune ...), reverse
       buffer-right            ;; b -> (rune ...), in order
       buffer-line-pos         ;; b -> n (position in current line)
-      buffer-line-end-pos     ;; b -> n 
+      buffer-line-end-pos     ;; b -> n
       buffer-delete           ;; b -> b' (delete selection)
       empty-buffer
       string-buffer           ;; string -> b
@@ -56,9 +56,9 @@
 
       start-status-line
    )
-   
+
    (begin
-      
+
       (define (buffer pos l r len line)
          (λ (op) (op pos l r len line)))
 
@@ -72,7 +72,7 @@
 
       (define (buffer-right b)
          (b (λ (pos l r len line) r)))
-      
+
       (define (buffer-left b)
          (b (λ (pos l r len line) l)))
 
@@ -106,7 +106,7 @@
                   (if (< to from)
                      #false
                      (take r (- to from))))
-               #f)))            
+               #f)))
 
       (define (apply-delta buff delta)
          (log "delta " delta)
@@ -117,54 +117,54 @@
                      (let ((r (drop-prefix r (ref delta 2))))
                         (if r
                            (buffer pos l (append (ref delta 3) r) (length (ref delta 3)) line)
-                          #false)))) 
+                          #false))))
                #false)))
 
       (define (unapply-delta buff delta)
          (lets ((pos old new delta))
             (apply-delta buff (tuple pos new old))))
-             
+
       (define (buffer-char b)
          (b (λ (pos l r len line) (if (pair? r) (car r) #false))))
-      
+
       (define (length>=? l n)
          (cond
             ((eq? n 0) #true)
             ((eq? l null) #false)
             (else (length>=? (cdr l) (- n 1)))))
-      
+
       (define (buffer-selection-delta b d)
          (b (λ (pos l r len line)
             (let ((lenp (max (+ len d) 0)))
                (if (or (< d 1) (length>=? r lenp))
                   (buffer pos l r lenp line)
                   (buffer pos l r len line))))))
-      
+
       ;; read current selection
       (define (get-selection b)
          (b (λ (pos l r len line) (take r len))))
-      
+
       (define (buffer-pos b)
          (b (λ (pos l r len line) pos)))
-      
+
       ;; current line (at start of dot)
       (define (buffer-line b)
          (b (λ (pos l r len line) line)))
-      
-      
-      
+
+
+
       (define (buffer-selection-length b)
          (b (λ (pos l r len line) len)))
-      
+
       (define (buffer-unselect b)
          (b (λ (pos l r len line) (buffer pos l r 0 line))))
-      
+
       (define empty-buffer
          (buffer 0 null null 0 1))
-      
+
       (define (string-buffer str)
          (buffer 0 null (string->list str) 0 1))
-      
+
       (define (drop-seq r ds k)
          (cond
             ((null? ds) (k r))
@@ -173,7 +173,7 @@
                (drop-seq (cdr r) (cdr ds) k))
             (else
                #false)))
-               
+
       ;; action = #(pos del-content new-content)
       (define (buffer-action buff action)
          (lets ((pos old new action)
@@ -185,14 +185,14 @@
                         (lambda (r)
                            (buffer pos l (append new r) (length new) line)))))
                #f)))
-            
-      
+
+
       (define (seek-delta b n)
          (b (λ (pos l r len line) (seek b (+ pos n)))))
-      
+
       (define (buffer->bytes b)
          (b (λ (pos l r len line) (utf8-encode (append (reverse l) r)))))
-      
+
       ;; -> buffer | #false
       (define (file-buffer path)
          (log (str "trying to open " path " as file"))
@@ -202,7 +202,7 @@
                   (buffer 0 null data 0 1)
                   #false))
             #false))
-      
+
       ;; -> buffer | #false
       (define (dir-buffer path)
          (log (str "trying to open " path " as directory"))
@@ -218,7 +218,7 @@
       (define (buffer-append-to-end b data)
          (b (λ (pos l r len line)
                (buffer pos l (append r data) len line))))
-      
+
       ;;; Word processing
       (define (whitespace? char)
          (cond
@@ -226,42 +226,42 @@
             ((eq? char #\space) #t)
             ((eq? char #\newline) #t)
             (else #f)))
-      
+
       (define (word-length l)
          (let loop ((l l) (n 0) (word? #true))
             (cond
                ((null? l) n)
                ((whitespace? (car l))
-                  (if word? 
+                  (if word?
                      (loop l n #false) ;; stop matching word
                      (loop (cdr l) (+ n 1) #f)))
                (else
                   (if word?
                      (loop (cdr l) (+ n 1) #t)
                      n)))))
-                     
+
       (define (buffer-next-word-length b)
-         (b (lambda (pos l r len line) 
+         (b (lambda (pos l r len line)
                (word-length (drop r len)))))
-      
-                  
-      ;;; do-command 
+
+
+      ;;; do-command
       (define word-chars
          (fold (λ (ff x) (put ff x x))
             empty
             (string->list
                "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/_!?<>.:+-*")))
-      
-      (define (word-char? x) 
+
+      (define (word-char? x)
          (get word-chars x))
-      
+
       (define (word-chars l)
          (cond
             ((null? l) l)
             ((word-char? (car l))
                (cons (car l) (word-chars (cdr l))))
             (else null)))
-      
+
       (define (buffer-select-current-word b)
          (b (λ (pos l r len line)
             (lets ((dl (length (word-chars l)))
@@ -269,7 +269,7 @@
                (buffer-selection-delta
                   (buffer-unselect (seek b (- pos dl)))
                   (+ dl dr))))))
-      
+
       (define (walk l r len line)
          (if (eq? len 0)
             (values l r line)
@@ -278,7 +278,7 @@
                   (cdr r)
                   (- len 1)
                   (+ line (if (eq? this #\newline) 1 0))))))
-      
+
       ;; append after current dot, select added content
       (define (buffer-append b val)
          (b
@@ -291,7 +291,7 @@
                      l (append val r)
                      (length val)
                      line)))))
-      
+
       (define (buffer-after-dot b)
          (b
             (λ (pos l r len line)
@@ -299,9 +299,9 @@
                   ((new-pos (+ pos len))
                    (l r line (walk l r len line)))
                   (buffer new-pos l r 0 line)))))
-      
+
       ;; in-buffer search
-      
+
       (define (match-prefix? lst pat)
          (cond
             ((null? pat) #t)
@@ -309,7 +309,7 @@
             ((eq? (car lst) (car pat))
                (match-prefix? (cdr lst) (cdr pat)))
             (else #f)))
-      
+
       (define (first-match b runes)
          (b (λ (pos l r len line)
             (let ((data (append (reverse l) r)))
@@ -320,13 +320,12 @@
                         pos)
                      (else
                         (loop (cdr data) (+ pos 1)))))))))
-      
-      
+
       (define (maybe-cdr x)
          (if (pair? x)
             (cdr x)
             x))
-      
+
       (define (next-match b runes)
          (b (λ (pos l r len line)
             (let loop ((data (maybe-cdr r)) (pos (+ pos 1)))
@@ -336,14 +335,13 @@
                      (values pos (length runes)))
                   (else
                      (loop (cdr data) (+ pos 1))))))))
-      
-      
+
       (define (length>=? l n)
          (cond
             ((eq? n 0) #t)
             ((null? n) #f)
             (else (length>=? (cdr l) (- n 1)))))
-      
+
       (define (seek-select b pos len)
          (let ((b (seek b pos)))
             (if b
@@ -352,7 +350,7 @@
                         (buffer pos l r len line)
                         #f)))
                #false)))
-      
+
       (define (select b from to)
          (let ((b (seek b from)))
             (cond
@@ -361,7 +359,7 @@
                (else
                   (b (λ (pos l r len line)
                         (buffer pos l r (- to from) line)))))))
-      
+
       (define (nth-offset lst nth elem)
          (if (< nth 1)
             (begin
@@ -376,14 +374,14 @@
                         (loop (cdr lst) (- nth 1) (+ n 1))))
                   (else
                      (loop (cdr lst) nth (+ n 1)))))))
-      
+
       (example
          (nth-offset '(a a x a x a a x a) 1 'x) = 2
          (nth-offset '(a a x a x a a x a) 2 'x) = 4
          (nth-offset '(a a x a x a a x a) 3 'x) = 7
          (nth-offset '(a a x a x a a x a) 4 'x) = #false)
-      
-      
+
+
       ;; select rest of line including newline, if there
       (define (select-rest-of-line b)
          (b
@@ -392,7 +390,7 @@
                   (if end
                      (buffer pos l r (+ end 1) line)
                      (buffer pos l r (length r) line)))))) ;; partial line
-      
+
       ;; select empty string at beginning of current line
       (define (seek-start-of-line b)
          (b
@@ -411,7 +409,7 @@
                      (if (<= pos posb) ;; start from ba
                         (buffer pos l r (- (max (+ pos len) (+ posb lenb)) pos) line)
                         (merge-selections bb ba)))))))
-      
+
       (define (select-line b n)
          (b
             (λ (pos l r len line)
@@ -434,7 +432,7 @@
                            (select-rest-of-line
                               (seek b (+ pos (+ start 1)))) ;; after newline
                            #false)))))))
-      
+
       (define (select-everything b)
          (b
             (lambda (pos l r len line)
@@ -448,8 +446,8 @@
                (lets
                   ((n (length r))
                    (l r line (walk l r n line)))
-                  (buffer (+ pos n) l r 0 line))))) 
-      
+                  (buffer (+ pos n) l r 0 line)))))
+
       (define (distance-to-newline l)
          (let loop ((l l) (n 0))
             (cond
@@ -457,11 +455,11 @@
                ((eq? (car l) #\newline) n)
                (else
                   (loop (cdr l) (+ n 1))))))
-      
+
       (define (buffer-line-pos b)
          (b (λ (pos l r len line)
             (distance-to-newline l))))
-      
+
       (define (line-indent l n)
          (cond
             ((null? l) n)
@@ -473,15 +471,15 @@
                n)
             (else
                (line-indent (cdr l) null))))
-      
+
       (define (buffer-line-indent b)
          (b (lambda (pos l r len line)
                (line-indent l null))))
-      
+
       (define (buffer-line-end-pos b)
          (b (λ (pos l r len line)
             (distance-to-newline r))))
-      
+
       (define (select-lines b from to)
          (let
             ((bf (select-line b from))
@@ -489,11 +487,11 @@
             (if (and bf bt)
                (merge-selections bf bt)
                #false)))
-      
+
       (define (buffer-append-noselect b v)
          (buffer-after-dot
             (buffer-append b v)))
-      
+
       ;; replace selection with value
       (define (buffer-replace b val)
          (b
@@ -502,23 +500,23 @@
                   (append val (drop r len))
                   (length val)
                   line))))
-      
+
       ;; delete selection
       (define (buffer-delete b)
          (b
             (λ (pos l r len line)
                (buffer pos l (drop r len) 0 line))))
-      
+
       (define (buffer-apply b func)
          (buffer-replace b (func (get-selection b))))
-      
-       
+
+
       (define (pad-to len lst)
          (let loop ((lst lst) (n (length lst)))
             (if (< n len)
                (loop (cons #\space lst) (+ n 1))
                lst)))
-       
+
       ;; -> runes
       (define (render-info buff env time width)
          (lets
@@ -528,13 +526,13 @@
             (info
                 (str
                    (get env 'path "*scratch*")
-                   ":" 
+                   ":"
                    (if (eq? l 0) "" (str "[" l "] "))
-                   line 
-                   " " 
-                   time))) 
+                   line
+                   " "
+                   time)))
             (pad-to width (string->list info))))
-       
+
       (define (status-line env buff id info w keys c)
          (lets ((envelope (wait-mail))
                 (from msg envelope))
@@ -542,7 +540,7 @@
             (tuple-case msg
                ((update env buff)
                   (if (null? keys)
-                     (lets ((info2 (render-info buff env c w))) 
+                     (lets ((info2 (render-info buff env c w)))
                         (if (not (equal? info info2))
                            (mail id
                               (tuple 'status-line info2 1)))
@@ -581,12 +579,12 @@
                   (status-line env buff id info w null c))
                (else
                   (status-line env buff id info w keys c)))))
-      
-      
+
+
       (define (start-status-line id w)
          (mail id (tuple 'keep-me-posted))
             (mail 'clock 'subscribe)
                (status-line empty-env empty-buffer id 0 w null null))
-      
-      
+
+
       ))

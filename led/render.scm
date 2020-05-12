@@ -12,19 +12,19 @@
       )
 
    (begin
-            
+
       ;; flip sign in leading n values
       (define (mark-selected lst n)
          (if (eq? n 0)
             lst
             (cons (* -1 (car lst))
                (mark-selected (cdr lst) (- n 1)))))
-      
+
       (define (char-width n)
          (if (eq? n #\tab)
             3
             1))
-      
+
       ;; go to beginning, or after next newline, count down steps from i
       (define (find-line-start l r i)
          (cond
@@ -35,11 +35,11 @@
             (else
                (find-line-start (cdr l)
                   (cons (car l) r)
-                  (- i 
+                  (- i
                      (char-width (car l)))))))
-      
+
       ;; number of things up to next newline or end
-      
+
       ;; ugly, number of steps to get from next newline up to same position or end of next line
       (define (distance-past-newline l n)
          (let loop ((l l) (steps 0))
@@ -55,7 +55,7 @@
                            (loop2 (cdr l) (+ steps 1) (- n 1))))))
                (else
                   (loop (cdr l) (+ steps 1))))))
-      
+
       ;; -> false | offset
       (define (distance-to l x)
          (let loop ((l l) (n 0))
@@ -63,7 +63,7 @@
                ((null? l) #f)
                ((eq? (car l) x) n)
                (else (loop (cdr l) (+ n 1))))))
-      
+
       (define (lines-back l r n)
          (cond
             ((null? l)
@@ -73,16 +73,16 @@
             (else
                (lets ((l r _ (find-line-start (cdr l) (cons (car l) r) 0)))
                   (lines-back l r (- n 1))))))
-      
+
       (define (drop-upto-newline lst)
          (cond
             ((null? lst) null)
             ((eq? (car lst) #\newline) (cdr lst))
             ((eq? (car lst) -10) (cdr lst)) ;; selected
             (else (drop-upto-newline (cdr lst)))))
-      
-      
-            
+
+
+
       ;; take at most max-len values from lst, possibly drop the rest, cut at newline (removing it) if any
       (define (take-line lst max-len)
          ;(print "Taking line from " lst)
@@ -96,11 +96,11 @@
                   ;(print "Took line " (reverse taken))
                   (values (reverse taken) (cdr lst)))
                ((eq? (car lst) #\tab)
-                  ;; 
+                  ;;
                   (loop (cdr lst) (ilist #\_ #\_ #\_ taken) (max 0 (- n 3))))
                (else
                   (loop (cdr lst) (cons (car lst) taken)  (- n 1))))))
-      
+
       (define (handle-padding lst pad)
          (cond
             ((eq? pad 0)
@@ -115,7 +115,7 @@
                (handle-padding (cdr lst) (+ pad 1)))
             (else
                (cons #\~ (handle-padding lst (- pad 1))))))
-      
+
       (define (ansi-unselection lst)
          (cond
             ((null? lst)
@@ -125,7 +125,7 @@
                   (ansi-unselection (cdr lst))))
             (else
                (font-normal lst))))
-      
+
       (define (ansi-selection lst)
          (cond
             ((null? lst) lst)
@@ -134,13 +134,13 @@
             (else
                (cons (car lst)
                   (ansi-selection (cdr lst))))))
-      
+
       (define (render-line lst pad width)
          (lets ((lst (handle-padding lst pad))
                 (row lst (take-line lst width)))
             ;(print "Selected line " row)
             (values (ansi-selection row) lst)))
-      
+
       (define (render-lines r h n w ln)
          (if (eq? h 0)
             null
@@ -150,12 +150,12 @@
                   ;(append (string->list (str ln ": ")) l)
                   l
                   (render-lines r (- h 1) n w (+ ln 1))))))
-      
+
       (define (pad-to-length n lst)
          (if (< (length lst) n)
             (pad-to-length n (cons #\space lst))
             lst))
-      
+
       (define (render-buffer env buff w h cx cy)
          (buff
             (λ (pos l r len line)
@@ -194,7 +194,7 @@
                          )
                         (values lines line-col-width))
                      (values lines 0))))))
-      
+
       (define (overlay a b)
          (cond
             ((null? a)
@@ -204,7 +204,7 @@
             (else
                (cons (car a)
                   (overlay (cdr a) (cdr b))))))
-      
+
       (define (update-buffer-view env b w h cx cy)
          (lets
             ((lsts dcx (render-buffer env b w h cx cy))
@@ -223,7 +223,7 @@
                (tuple 'set-cursor (+ dcx cx) cy))
             (log "status bytes are " status-bytes)
             ))
-      
-      
-      
+
+
+
       ))

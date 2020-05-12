@@ -1,7 +1,7 @@
 
 ;; UI protocol
 ; input-terminal + _ => depends
-; _ + #(open X)      => attempt to open a new buffer, or switch to it  
+; _ + #(open X)      => attempt to open a new buffer, or switch to it
 ; _ + #(add-opener X) => add a new function to perform an open action
 ; _ + #(buffer-closed)    => drop sending buffer from list
 ; _ + #(terminal-size w h) => notify sub-buffers
@@ -23,31 +23,31 @@
    (begin
 
       ;; protocol helpers
-      
+
       (define (ui-yank text)
          (mail 'ui (tuple 'yank text)))
-                     
+
       (define (refresh window)
          (clear-screen)
          (mail window (tuple 'refresh)))
-      
+
       ;; manage threads and their views
       ;; decide which ones get to draw on screen
-      
+
       (define (close-buffer l r)
          (if (null? (cdr l))
             (if (null? r)
                (values #f #f)
                (values (list (car r)) (cdr r)))
             (values (cdr l) r)))
-      
+
       (define (find-buffer l r p)
          (cond
             ((null? l) (values #f #f))
             ((equal? (car l) p) (values l r))
             (else (find-buffer (cdr l) (cons (car l) r) p))))
-     
-      ;; car of l is the active one 
+
+      ;; car of l is the active one
       (define (ui l r i)
          (lets ((msg (wait-mail))
                 (from msg msg))
@@ -148,7 +148,7 @@
                   ;(print-to 3 3 "waty" from)
                   ;(print-to 3 4 "watz " msg)
                   (ui l r i)))))
-      
+
       (define (start-ui)
          (print "Starting ui")
          (lets ((name 'ui))
@@ -157,6 +157,6 @@
             (link name)
             ;; ui tells the size to client threads
             name))
-      
+
 ))
 

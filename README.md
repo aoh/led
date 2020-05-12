@@ -1,18 +1,18 @@
-# Led: a simple text editor 
+# Led: a simple text editor
 
-Led is a simple text editor. It was written after realizing it is in the long run much easier write a 
+Led is a simple text editor. It was written after realizing it is in the long run much easier write a
 custom text editor than it is to configure an existing one. Text editors are simple. At least the good
-ones are. Not all simple ones are good, though. Led may become good, but in the meantime it is sufficient 
+ones are. Not all simple ones are good, though. Led may become good, but in the meantime it is sufficient
 to be good enough to handle all the needs I have at home and at work.
 
-While led is written from scratch, the key ideas in it are definitely not new. Led is based on vi, but 
-the edit operations bear more resemblence to the text editor Sam. The idea of using text from buffers 
-also for semantic operations was borrowed from Acme. Led is also written entirely in Lisp, much like 
+While led is written from scratch, the key ideas in it are definitely not new. Led is based on vi, but
+the edit operations bear more resemblence to the text editor Sam. The idea of using text from buffers
+also for semantic operations was borrowed from Acme. Led is also written entirely in Lisp, much like
 Emacs.
 
 ## Status
 
-The editor was recently rewritten to enable some of the less vi-ish features. The editor is usable, 
+The editor was recently rewritten to enable some of the less vi-ish features. The editor is usable,
 but many important features have not yet been added back to this version.
 
 ## Features
@@ -25,7 +25,7 @@ but many important features have not yet been added back to this version.
  - Multiple buffers
  - Subprocesses
  - Portable
- - No external dependencies, standalone binary! 
+ - No external dependencies, standalone binary!
  - Purely functional, no mutations allowed!
 
 # Building
@@ -71,9 +71,9 @@ y: yank selection to copy buffer
 
 $: move to end of current line
 
-w: expand selection by one word 
+w: expand selection by one word
 
-m: wait for a key and mark position 
+m: wait for a key and mark position
 
 ': wait for a key and jump to corresponding marked position
 
@@ -111,7 +111,7 @@ r: redo command
 
 e: select parent lisp expression of current selection
 
-W: select word to which current selection belongs 
+W: select word to which current selection belongs
 
 N: toggle line numbers
 
@@ -119,7 +119,7 @@ N: toggle line numbers
 
 n: find next match to last search
 
-Q: close buffer 
+Q: close buffer
 
 ### Inset mode
 

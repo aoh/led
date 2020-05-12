@@ -7,7 +7,7 @@
 
    (export
       start-input-terminal)
-   
+
    (begin
       (define (input-terminal input target)
          (lfold
@@ -16,7 +16,7 @@
                (mail target thing))
             'unused
             input))
-      
+
       (define (start-input-terminal target ll)
          (let ((name 'input-terminal))
             (thread name

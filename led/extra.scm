@@ -1,22 +1,22 @@
 ;;;
-;;; Extra processing functions
+;;; Extra processing functions, TODO convert
 ;;;
 
 (define-library (led extra)
 
    ;; there are intentionally no led-specific imports
-   
+
    (import
       (owl base)
       (owl date))
-  
-   (export 
+
+   (export
       extra-functions
       find-extra
       format-merged
       format-lines
       )
-   
+
    (begin
 
       ;;; paragraph formatting
@@ -44,11 +44,11 @@
          (if (and (pair? data) (eq? (car data) #\space))
             (drop-leading-space (cdr data))
             data))
-      
+
       (define (format-lines data)
          (if (null? data)
             null
-            (lets 
+            (lets
                ((data (drop-leading-space data))
                 (this rest (pick-line data 80)))
                (if this
@@ -102,6 +102,6 @@
             (if (pair? res)
                (cdr res)
                #false)))))
-         
-       
-                        
+
+
+

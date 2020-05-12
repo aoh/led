@@ -1,21 +1,21 @@
 
 (define-library (led screen)
-   
+
    (import
       (owl base)
       (owl unicode)
       (owl terminal)
       (led log))
-   
+
    (export
       start-screen
-      
+
       clear-screen
       print-to)
-   
+
    (begin
-      
-      
+
+
       (define (compare new old p)
          (cond
             ((null? old)
@@ -31,7 +31,7 @@
                  (compare (cdr new) (cdr old) (+ p 1))))
             (else
                (values p new))))
-      
+
       (define (screen w h old)
          ;; optimized update belongs here later
          ;(print (list 'screen w h))
@@ -91,7 +91,7 @@
                (else
                   (print "screen: wat " msg " from " from)
                   (screen w h old)))))
-      
+
       (define (start-screen w h)
          ;(print "starting screen")
          (let ((name 'screen))
@@ -99,15 +99,15 @@
             (link name)
             ;(clear-screen)
             name))
-      
-      
+
+
       (define (clear-screen)
          (mail 'screen (tuple 'clear))
          )
-      
+
       (define (print-to x y . stuff)
          (mail 'screen (tuple 'print-to x y (apply str stuff))))
-      
+
       ))
 
 
