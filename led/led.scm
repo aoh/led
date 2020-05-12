@@ -513,9 +513,14 @@
                            mode b cx cy w h))
                      ((eq? x #\Q)
                         ;; clean up, notify UI we are done and finish
-                        (kill (get env 'status-thread'id))
-                        (mail 'ui (tuple 'buffer-closed))
-                        42)
+                        (if (dirty? env)
+                           (led
+                              (set-status-text env "Buffer has unsaved content.")
+                              mode b cx cy w h)
+                           (begin
+                              (kill (get env 'status-thread'id))
+                              (mail 'ui (tuple 'buffer-closed))
+                              42)))
                      ((eq? x #\W)
                         (lets ((b (buffer-select-current-word b))
                                (seln (get-selection b))

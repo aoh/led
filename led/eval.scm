@@ -17,7 +17,10 @@
       led-repl   ;; maybe move elsewhere later
       
       push-undo
-      pop-undo)
+      pop-undo
+     
+      dirty?    ;; env -> bool, is the buffer dirty (has unsaved changes) 
+      )
 
    (begin      
 
@@ -33,6 +36,15 @@
             (put 'redo null) ;; destroy future of alternative past
             (put 'undo (cons delta (get env 'undo null)))))
 
+      ;; use the undo stack as a marker of last saved status
+      (define (mark-saved env)
+         (put env 'saved (get env 'undo null)))
+     
+      (define (dirty? env)
+         (not (equal? 
+            (get env 'undo null) 
+            (get env 'saved null))))
+         
       (define (pop-undo env)
          (let ((stack (get env 'undo null)))
             (if (null? stack)
@@ -63,9 +75,11 @@
                   (if fd
                      (let ((data (buffer->bytes buff)))
                         (if (write-bytes fd data)
-                           (values buff
+                           (values 
                               (set-status-text
-                                 (put env 'path path)
+                                 (-> env
+                                    (mark-saved)
+                                    (put 'path path))
                                  (str "Wrote " (length data) "b to " path ".")))
                            (values #f
                               (set-status-text env (str "Failed to write to " path ".")))))
