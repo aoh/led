@@ -154,13 +154,23 @@
                ((null? l) (values #false #false))
                (else (loop (cdr l) (cons (car l) r) (+ d 1)))))))))
 
+(define indent-after-newlines
+   (string->regex "s/\\n/\\n   /g"))
+
 (define (indent-selection env)
    (lambda (data)
-      (ilist #\space #\space #\space (s/(\n)/\1   /g data))))
+      (ilist #\space #\space #\space
+         (indent-after-newlines data))))
+
+(define unindent-after-newlines
+   (string->regex "s/\\n   /\n/g"))
+
+(define unindent-start
+   (string->regex "s/^   //"))
 
 (define (unindent-selection env)
    (lambda (data)
-      (s/^   // (s/(\n)   /\1/g data))))
+      (unindent-start (unindent-after-newlines data))))
 
 (define (add-mark env key pos len)
    (log "marking " (list->string (list key)) " as " pos " + " len)
@@ -219,6 +229,9 @@
    (bound 1
       (+ 1 (buffer-line-pos b))
       w))
+
+(define remove-trailing-spaces
+   (string->regex "s/  *\\n/\\n/g"))
 
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
@@ -297,7 +310,7 @@
                         (lets ((exp
                                  (tuple 'seq
                                     (tuple 'select 'everything)
-                                    (tuple 'apply s/  *(\n)/\1/g)))
+                                    (tuple 'apply remove-trailing-spaces)))
                                (bp ep (led-eval b env exp)))
                            (if bp
                               (led ep mode bp 1 1 w h)

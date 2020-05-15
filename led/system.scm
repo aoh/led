@@ -11,9 +11,12 @@
 
    (begin
 
+      (define leading-dot?
+         (string->regex "m/^\\./"))
+
       (define (sort-paths paths)
          (sort string<?
-            (remove m/^\./ paths)))
+            (remove leading-dot? paths)))
 
       (define (led-dir-recursive->list path)
          (if (directory? path)

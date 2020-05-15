@@ -55,9 +55,11 @@
                   (cons this (format-lines rest))
                   (list data)))))
 
+      (define remove-duplicate-space (string->regex "s/  */ /g"))
+
       (define (format-merged settings lines)
          (format-lines
-            (s/  */ /g ;; remove duplicate spaces
+            (remove-duplicate-spaces
                (fold ;; join by spaces
                   (λ (x tl)
                      (if (null? tl) x (append x (cons #\space tl))))
