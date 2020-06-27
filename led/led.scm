@@ -484,7 +484,7 @@
                                    (eq? (buffer-char b)  #\newline)
                                    )
                               (led env mode b cx cy w h)
-                              (led env mode bp (nice-cx bp w))
+                              (led env mode bp (nice-cx bp w)
                                  ;; could also move cy when jumping over selection
                                  cy w h))))
                      ((eq? x #\>) ;; indent, move to led-eval
