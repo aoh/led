@@ -477,13 +477,16 @@
                               (led env mode b cx cy w h)
                               (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h))))
                      ((eq? x #\l) ;; right
-                        (let ((bp (seek-delta b +1)))
+                        (lets
+                           ((delta (max 1 (buffer-selection-length b)))
+                            (bp (seek-delta b delta)))
                            (if (or (not bp)
-                                   ;(eq? (buffer-char bp) #\newline)
                                    (eq? (buffer-char b)  #\newline)
                                    )
                               (led env mode b cx cy w h)
-                              (led env mode bp (min w (+ cx (char-width (buffer-char b)))) cy w h))))
+                              (led env mode bp (nice-cx bp w))
+                                 ;; could also move cy when jumping over selection
+                                 cy w h))))
                      ((eq? x #\>) ;; indent, move to led-eval
                         (lets ((buff env (led-eval b env (tuple 'replace ((indent-selection env) (get-selection b))))))
                            (led env mode buff cx cy w h)))
