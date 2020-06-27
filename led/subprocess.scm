@@ -2,7 +2,7 @@
 
    (import
       (owl base)
-      (only (owl sys) exec fork sigkill)
+      (only (owl sys) exec fork sigkill kill)
       (led log))
 
    (export
@@ -64,7 +64,8 @@
 
       (define (close-pipe pipe)
          (log "closing subprocess " pipe)
-         (kill (ref pipe 2) sigkill))
+         (kill (ref pipe 2) sigkill)
+         )
 
       ))
 
