@@ -233,6 +233,29 @@
 (define remove-trailing-spaces
    (string->regex "s/  *\\n/\\n/g"))
 
+(define (first-line lst)
+   (foldr
+      (lambda (x tl)
+         (if (eq? x #\newline)
+            null
+            (cons x tl)))
+      '()
+      lst))
+
+(define (show-matching-paren env b)
+   (lets
+      ((b (seek-delta b -1)) ;; move back inside expression
+       (back len (parent-expression b)))
+      (if back
+         (lets
+            ((b (seek-delta b back))
+             (b (buffer-selection-delta b len))
+             (seln (get-selection b)))
+            (set-status-text env
+               (list->string
+                  (take (first-line seln) 20))))
+         (set-status-text env "?"))))
+
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
    (lets ((from msg (next env b w h cx cy))
@@ -568,7 +591,13 @@
                ((key x)
                   (lets
                      ((b (buffer-append-noselect b (list x))))
-                     (led env 'insert b (min w (+ cx 1)) cy w h)))
+                     (if (eq? x 41) ;; closing paren
+                        (show-matching-paren env b))
+                     (led
+                        (if (eq? x 41)
+                           (show-matching-paren env b)
+                           env)
+                        'insert b (min w (+ cx 1)) cy w h)))
                ((refresh)
                   (led env 'insert b cx cy w h))
                ((esc)
