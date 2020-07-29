@@ -51,7 +51,7 @@
       (define (ui l r i)
          (lets ((msg (wait-mail))
                 (from msg msg))
-            (log "ui: " msg " from " from)
+            ; (log "ui: " msg " from " from)
             (cond
                ((eq? from 'input-terminal)
                   (tuple-case msg

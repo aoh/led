@@ -9,6 +9,7 @@
       (owl parse)
       (led env)
       (owl readline)
+      (led extra)
       )
 
    (export
@@ -23,6 +24,10 @@
       )
 
    (begin
+
+      ;; env name -> (data -> data)
+      (define (led-eval-call env name)
+         (find-extra name))
 
       (define (led-eval-position buff env exp)
          (if (number? exp)
@@ -161,10 +166,16 @@
                       (exit-thread 42))))
             ((apply func)
                (lets ((old (get-selection buff))
-                      (new (func old)))
+                      (new (func env old)))
                   (if (equal? old new)
                      (values #f #f) ;; nothing to do
                      (led-eval buff env (tuple 'replace new)))))
+            ((call name)
+               (let ((func (led-eval-call env name)))
+                  (if func
+                     (led-eval buff env (tuple 'apply func))
+                     (values #f
+                        (set-status-text env "no such extension")))))
             (else
                (log (list 'wat-eval exp))
                (values #f #f))))

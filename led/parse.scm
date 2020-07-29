@@ -78,6 +78,12 @@
                    (get-epsilon #false))))
             (tuple op path)))
 
+      (define get-call
+         (get-parses
+            ((skip (get-word "call" 'call))
+             (op get-spaced-word)) ; <- could be converted to a list
+            (tuple 'call op)))
+
       (define get-subprocess
          (get-parses
             ((skip (get-word "subprocess" 'foo))
@@ -92,6 +98,7 @@
                   get-movement
                   get-file-command
                   get-subprocess
+                  get-call                            ;; extension
                   (get-parses
                      ((op (get-imm #\,))
                       (next get-movement))

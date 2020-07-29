@@ -230,9 +230,6 @@
       (+ 1 (buffer-line-pos b))
       w))
 
-(define remove-trailing-spaces
-   (string->regex "s/  *\\n/\\n/g"))
-
 (define (first-line lst)
    (foldr
       (lambda (x tl)
@@ -333,11 +330,18 @@
                         (lets ((exp
                                  (tuple 'seq
                                     (tuple 'select 'everything)
-                                    (tuple 'apply remove-trailing-spaces)))
+                                    (tuple 'call "clean")))
                                (bp ep (led-eval b env exp)))
                            (if bp
                               (led ep mode bp 1 1 w h)
                               (led (set-status-text env "Nothing to clean") mode b cx cy w h))))
+                     ((eq? k 'j)
+                        (log "formatting")
+                        (lets ((exp (tuple 'call "fmt"))
+                               (bp ep (led-eval b env exp)))
+                           (if bp
+                              (led ep mode bp cx cy w h)
+                              (led (set-status-text env "nothing happened") mode b cx cy w h))))
                      ((eq? k 'w)
                         (let ((pathp (get env 'path)))
                            (if pathp
