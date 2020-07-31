@@ -2,7 +2,7 @@
 
 ;; led-eval : buff env exp -> buff' env'
 
-(define *expected-owl-version* "0.2a")
+(define *expected-owl-version* "0.1.23")
 
 (if (not (equal? *owl-version* *expected-owl-version*))
    (begin
@@ -581,6 +581,8 @@
                         (led (clear-status-text env) 'enter-command b cx cy w h))
                      (else
                         (led env mode b cx cy w h))))
+               ((esc)
+                  (led env mode (buffer-unselect b) cx cy w h))
                (else
                   (led env mode b cx cy w h))))
          ((eq? mode 'insert)
