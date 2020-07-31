@@ -102,16 +102,25 @@
                   (select-line buff n)
                   env))
             ((subprocess call)
-               (let ((info (start-repl call)))
-                  (log " => call " call)
-                  (log " => subprocess " info)
-                  (if info
+               (cond
+                  ((get env 'subprocess)
                      (values buff
-                        (set-status-text
-                           (put env 'subprocess info)
-                           (str "Started " info)))
+                        (set-status-text env 
+                           (str (get env 'subprocess)))))
+                  ((null? call)
                      (values buff
-                        (set-status-text env "no")))))
+                        (set-status-text env "no subprocess")))
+                  (else
+                     (let ((info (start-repl call)))
+                        (log " => call " call)
+                        (log " => subprocess " info)
+                        (if info
+                           (values buff
+                              (set-status-text
+                                 (put env 'subprocess info)
+                                 (str "Started " info)))
+                           (values buff
+                              (set-status-text env "no")))))))
             ((extend-selection movement)
                (lets ((buffp envp (led-eval buff env movement)))
                   (if buffp
