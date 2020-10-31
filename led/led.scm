@@ -45,8 +45,6 @@
    (let ((envelope (wait-mail)))
       (ref envelope 2)))
 
-
-
 ;;; Visual operation
 
 (define (next env b w h cx cy)
@@ -154,6 +152,7 @@
                ((null? l) (values #false #false))
                (else (loop (cdr l) (cons (car l) r) (+ d 1)))))))))
 
+;; might make sense to require \n.
 (define indent-after-newlines
    (string->regex "s/\\n/\\n   /g"))
 
@@ -603,7 +602,7 @@
                         (if (eq? x 41)
                            (show-matching-paren env b)
                            env)
-                        'insert b (min w (+ cx 1)) cy w h)))
+                        'insert b (min w (+ cx (char-width x))) cy w h)))
                ((refresh)
                   (led env 'insert b cx cy w h))
                ((esc)

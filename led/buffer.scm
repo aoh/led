@@ -6,7 +6,8 @@
       (only (led system) led-dir->list)
       (owl proof)
       (only (led env) empty-env)
-      (led log))
+      (led log)
+      )
 
    (export
       buffer
@@ -457,13 +458,16 @@
                (else
                   (loop (cdr l) (+ n 1))))))
 
+      ;; now that there are different representations for characters, we should have a clear
+      ;; abstraction barrier between code working on unicode code points and code working on 
+      ;; representations of them. this is one function where we leak such information.      
       (define (offset-to-newline l)
          (let loop ((l l) (n 0))
             (cond
                ((null? l) n)
                ((eq? (car l) #\newline) n)
                ((eq? (car l) #\tab)
-                  (+ n 3))
+                  (loop (cdr l) (+ n 3)))
                (else
                   (loop (cdr l) (+ n 1))))))
 
