@@ -227,7 +227,7 @@
 ;; choose a nice vertical position for cursor given buffer
 (define (nice-cx b w)
    (bound 1
-      (+ 1 (buffer-line-pos b))
+      (+ 1 (buffer-line-offset b))
       w))
 
 (define (first-line lst)

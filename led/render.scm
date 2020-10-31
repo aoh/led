@@ -221,7 +221,7 @@
                (tuple 'update-screen lsts))
             (mail 'ui ;; may choose to use status line instead later
                (tuple 'set-cursor (+ dcx cx) cy))
-            (log "status bytes are " status-bytes)
+            ;(log "status bytes are " status-bytes)
             ))
 
 

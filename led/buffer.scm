@@ -25,7 +25,8 @@
       buffer-line             ;; b -> n (current line number)
       buffer-left             ;; b -> (rune ...), reverse
       buffer-right            ;; b -> (rune ...), in order
-      buffer-line-pos         ;; b -> n (position in current line)
+      buffer-line-pos         ;; b -> n (character position in current line)
+      buffer-line-offset      ;; b -> n (visual position in current line)
       buffer-line-end-pos     ;; b -> n
       buffer-delete           ;; b -> b' (delete selection)
       empty-buffer
@@ -456,9 +457,25 @@
                (else
                   (loop (cdr l) (+ n 1))))))
 
+      (define (offset-to-newline l)
+         (let loop ((l l) (n 0))
+            (cond
+               ((null? l) n)
+               ((eq? (car l) #\newline) n)
+               ((eq? (car l) #\tab)
+                  (+ n 3))
+               (else
+                  (loop (cdr l) (+ n 1))))))
+
+      ;; character count
       (define (buffer-line-pos b)
          (b (λ (pos l r len line)
             (distance-to-newline l))))
+
+      ;; visual position
+      (define (buffer-line-offset b)
+         (b (λ (pos l r len line)
+            (offset-to-newline l))))
 
       (define (line-indent l n)
          (cond

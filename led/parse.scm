@@ -80,7 +80,10 @@
 
       (define get-call
          (get-parses
-            ((skip (get-word "call" 'call))
+            ((skip
+               (get-either
+                  (get-word "call" 'call)
+                  (get-word "l" 'call))) ;; old [l]isp command
              (op get-spaced-word)) ; <- could be converted to a list
             (tuple 'call op)))
 
@@ -113,8 +116,11 @@
                   (get-word "q" (tuple 'quit #f))
                   (get-parses
                      ((val get-replace-regex))
-                     (tuple 'apply val))
-                  )))
+                     (begin
+                        (tuple 'apply
+                           (lambda (env data)
+                              (val data)))))
+                     )))
             val))
 
       (define (sequence cmds)

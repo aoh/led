@@ -105,7 +105,7 @@
                (cond
                   ((get env 'subprocess)
                      (values buff
-                        (set-status-text env 
+                        (set-status-text env
                            (str (get env 'subprocess)))))
                   ((null? call)
                      (values buff
