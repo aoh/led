@@ -29,9 +29,13 @@
                   (map led-dir-recursive->list sorted-subs)))
             (list path)))
 
+      (define strip-trailing-slashes
+         (string->regex "s/\\/*$//"))
+
       ;; path -> ("path/a" "path/b" ...) | #false
       (define (led-dir->list path)
-         (let ((contents (dir->list path)))
+         (lets ((path (strip-trailing-slashes path))
+                (contents (dir->list path)))
             (cond
                ((not contents)
                   #false)

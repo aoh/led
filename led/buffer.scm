@@ -246,13 +246,12 @@
          (b (lambda (pos l r len line)
                (word-length (drop r len)))))
 
-
-      ;;; do-command
+      ;;; do-command, switch to non-word-chars later?
       (define word-chars
          (fold (λ (ff x) (put ff x x))
             empty
             (string->list
-               "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/_!?<>.:+-*")))
+               "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/_!?<>.:+-*åäöÅÄÖ")))
 
       (define (word-char? x)
          (get word-chars x))
@@ -459,8 +458,8 @@
                   (loop (cdr l) (+ n 1))))))
 
       ;; now that there are different representations for characters, we should have a clear
-      ;; abstraction barrier between code working on unicode code points and code working on 
-      ;; representations of them. this is one function where we leak such information.      
+      ;; abstraction barrier between code working on unicode code points and code working on
+      ;; representations of them. this is one function where we leak such information.
       (define (offset-to-newline l)
          (let loop ((l l) (n 0))
             (cond

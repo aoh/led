@@ -150,7 +150,6 @@
                   (ui l r i)))))
 
       (define (start-ui)
-         (print "Starting ui")
          (lets ((name 'ui))
             (thread name
                (ui null null empty))
