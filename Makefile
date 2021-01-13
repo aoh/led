@@ -2,7 +2,7 @@ CC?=gcc
 OFLAGS=-O1
 CFLAGS=-O2 -Wall
 PREFIX=/usr
-OWLURL=https://haltp.org/files/ol-0.1.23.c.gz
+OWLURL=https://haltp.org/files/ol-0.2.c.gz
 OL=bin/ol
 
 everything: bin/led # .parrot

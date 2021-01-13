@@ -1,7 +1,7 @@
 (define-library (led parse)
 
    (import
-      (owl base)
+      (owl toplevel)
       (only (owl regex) get-replace-regex)
       (prefix (owl parse) get-))
 

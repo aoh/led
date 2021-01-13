@@ -1,7 +1,7 @@
 (define-library (led render)
 
    (import
-      (owl base)
+      (owl toplevel)
       (only (owl terminal) font-normal font-reverse)
       (led log))
 

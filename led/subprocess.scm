@@ -1,7 +1,7 @@
 (define-library (led subprocess)
 
    (import
-      (owl base)
+      (owl toplevel)
       (only (owl sys) exec fork sigkill kill)
       (led log))
 

@@ -2,7 +2,7 @@
 (define-library (led screen)
 
    (import
-      (owl base)
+      (owl toplevel)
       (owl unicode)
       (owl terminal)
       (led log))

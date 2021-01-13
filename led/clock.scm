@@ -1,7 +1,7 @@
 (define-library (led clock)
 
    (import
-      (owl base)
+      (owl toplevel)
       (owl date))
 
    (export clock-server)

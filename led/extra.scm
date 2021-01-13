@@ -7,7 +7,7 @@
    ;; there are intentionally no led-specific imports, other than log
 
    (import
-      (owl base)
+      (owl toplevel)
       (owl date)
       (owl proof)
       (only (led log) log)

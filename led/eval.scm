@@ -1,7 +1,7 @@
 
 (define-library (led eval)
    (import
-      (owl base)
+      (owl toplevel)
       (led log)
       (led buffer)
       (only (led subprocess) start-repl)
@@ -37,7 +37,7 @@
                #f)))
 
       (define (push-undo env delta)
-         (-> env
+         (pipe env
             (put 'redo null) ;; destroy future of alternative past
             (put 'undo (cons delta (get env 'undo null)))))
 
@@ -55,7 +55,7 @@
             (if (null? stack)
                (values env #false)
                (values
-                  (-> env
+                  (pipe env
                      (put 'undo (cdr stack))
                      (put 'redo (cons (car stack) (get env 'redo null))))
                   (car stack)))))
@@ -65,7 +65,7 @@
             (if (null? stack)
                (values env #false)
                (values
-                  (-> env
+                  (pipe env
                      (put 'redo (cdr stack))
                      (put 'undo (cons (car stack) (get env 'undo null))))
                   (car stack)))))
@@ -82,7 +82,7 @@
                         (if (write-bytes fd data)
                            (values buff
                               (set-status-text
-                                 (-> env
+                                 (pipe env
                                     (mark-saved)
                                     (put 'path path))
                                  (str "Wrote " (length data) "b to " path ".")))

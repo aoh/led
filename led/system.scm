@@ -6,7 +6,7 @@
       led-dir-recursive->list)
 
    (import
-      (owl base)
+      (owl toplevel)
       (owl sys))
 
    (begin

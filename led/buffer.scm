@@ -1,6 +1,6 @@
 (define-library (led buffer)
    (import
-      (owl base)
+      (owl toplevel)
       (owl unicode)
       (only (owl sys) file? directory?)
       (only (led system) led-dir->list)

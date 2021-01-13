@@ -1,6 +1,6 @@
 (define-library (led env)
    (import
-      (owl base))
+      (owl toplevel))
 
    (export
       empty-env
@@ -12,7 +12,7 @@
    (begin
 
       (define empty-env
-         (-> empty
+         (pipe empty
             (put 'autoindent #true) ;; for now
             (put 'undo null)
             (put 'redo null)))

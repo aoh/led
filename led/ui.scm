@@ -11,7 +11,7 @@
 (define-library (led ui)
 
    (import
-      (owl base)
+      (owl toplevel)
       (led screen)
       (led log))
 
@@ -133,7 +133,7 @@
                            (mail id msg))
                         (append l r))
                      (ui l r
-                        (-> i
+                        (pipe i
                            (put 'width w)
                            (put 'height h)))))
                ((eq? from (car l))

@@ -1,7 +1,7 @@
 (define-library (led input)
 
    (import
-      (owl base)
+      (owl toplevel)
       (led log)
       (owl terminal))
 

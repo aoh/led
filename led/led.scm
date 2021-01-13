@@ -2,7 +2,7 @@
 
 ;; led-eval : buff env exp -> buff' env'
 
-(define *expected-owl-version* "0.1.23")
+(define *expected-owl-version* "0.2")
 
 (if (not (equal? *owl-version* *expected-owl-version*))
    (begin

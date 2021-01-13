@@ -1,5 +1,5 @@
 (define-library (led log)
-   (import (owl base))
+   (import (owl toplevel))
 
    (export
       log start-logger)
