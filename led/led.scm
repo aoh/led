@@ -29,6 +29,7 @@
    (led env)
    (led eval)
    (led input)
+   (led documentation)
    (only (owl syscall) link kill)
    (only (led ui) start-ui ui-yank)
    (led render)
@@ -674,29 +675,48 @@
 (define (maybe-put ff k v)
    (if v (put ff k v) ff))
 
+
+;; (help), etc
+(define (list-buffer x)
+   (log "List buffer " x)
+   (if (eq? (car x) 'help)
+      (begin
+         (log "Opening help buffer")
+         (help-buffer x))
+      (begin
+         (log "Unknown list")
+         #f)))
+
 (define default-led-opener
    (lambda (path)
-      (log "default led opener working on " path)
+      (log "UI: opening buffer " path)
       (lets
          ((id (or path (list '*scratch*)))
           (status-thread-id (cons id 'status-line)))
          (thread id
             (led
-               (put (empty-led-env id path)
+               (put (empty-led-env id (if (string? path) path #f))
                   'status-thread-id status-thread-id)
                'command
-               (if (string? path)
-                  (or
-                     (file-buffer path)
-                     (dir-buffer path)
-                     (string-buffer (str "")))
-                  (string-buffer ""))
+               (cond
+                  ((string? path)
+                     (or
+                        (file-buffer path)
+                        (dir-buffer path)
+                        (string-buffer "")))
+                  ((pair? path)
+                     (list-buffer path)
+                     )
+                  (else
+                     (string-buffer "")))
                1 1 10 10)) ;; <- ui sends terminal size as first message
          (link id)
          (link
             (thread status-thread-id
                (start-status-line id 80)))
          id)))
+
+
 
 (define version-str "led v0.2a")
 
@@ -707,9 +727,11 @@
     `((help "-h" "--help" comment "show this thing")
       (version "-v" "--version" comment "show program version")
       (log "-L" "--log" has-arg comment "debug log file")
-      (repl "-r" "--repl" comment "line-based repl")
+      ;(repl "-r" "--repl" comment "line-based repl") ;; not currently in use
       ;(config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
       )))
+
+
 
 (define (start-led-threads dict args)
    (cond

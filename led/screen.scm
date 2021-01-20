@@ -39,7 +39,7 @@
             ((msg (wait-mail))
              (from msg msg))
             ;(print "screen -> " msg)
-            (log "screen: op " (ref msg 1) " from " from)
+            ;(log "screen: op " (ref msg 1) " from " from)
             (tuple-case msg
                ((update-screen new-rows)
                   (let loop ((row 1) (rows new-rows) (old old) (out (cursor-show null)) (shared 0))

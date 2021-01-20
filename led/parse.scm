@@ -106,6 +106,7 @@
                      ((op (get-imm #\,))
                       (next get-movement))
                      (tuple 'extend-selection next))
+                  (get-word "help" (tuple 'help ""))
                   (get-word "delete" (tuple 'delete))
                   (get-word "d" (tuple 'delete))
                   (get-word "undo" (tuple 'undo))

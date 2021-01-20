@@ -185,6 +185,9 @@
                      (led-eval buff env (tuple 'apply func))
                      (values #f
                         (set-status-text env "no such extension")))))
+            ((help subject)
+               (mail 'ui (tuple 'open (list 'help subject)))
+               (values buff env))
             (else
                (log (list 'wat-eval exp))
                (values #f #f))))
