@@ -1,3 +1,12 @@
+;; Buffers
+;;
+;; A buffer holds the data being edited. It is a prod-tuple holding the
+;; current character position, left and right character lists, current
+;; selection length and line number of start of selection.
+;;
+;; Lines are counted from 1 for compatibility with ed & vi.
+;;
+
 (define-library (led buffer)
    (import
       (owl toplevel)
@@ -62,7 +71,7 @@
    (begin
 
       (define (buffer pos l r len line)
-         (λ (op) (op pos l r len line)))
+         (prod pos l r len line))
 
       (define (drop-prefix lst prefix)
          (cond
@@ -199,10 +208,15 @@
       (define (file-buffer path)
          (log (str "trying to open " path " as file"))
          (if (file? path)
-            (let ((data (utf8-decode (file->list path))))
-               (if data
-                  (buffer 0 null data 0 1)
-                  #false))
+            (lets
+               ((bytes (file->list path))
+                (data (utf8-decode bytes)))
+               (cond
+                  ((not bytes) #false)
+                  ((not data)
+                     (buffer 0 null bytes 0 1))
+                  (else
+                     (buffer 0 null data 0 1))))
             #false))
 
       ;; -> buffer | #false
@@ -404,6 +418,7 @@
                         (buffer pos l r 0 line))
                      (else
                         (loop (- pos 1) (cdr l) (cons (car l) r))))))))
+
       (define (merge-selections ba bb)
          (ba (λ (pos l r len line)
                (bb (λ (posb lb rb lenb lineb)
@@ -600,11 +615,10 @@
                (else
                   (status-line env buff id info w keys c)))))
 
-
       (define (start-status-line id w)
          (mail id (tuple 'keep-me-posted))
             (mail 'clock 'subscribe)
                (status-line empty-env empty-buffer id 0 w null null))
 
 
-      ))
+))

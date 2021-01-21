@@ -21,9 +21,29 @@
                (mark-selected (cdr lst) (- n 1)))))
 
       (define (char-width n)
-         (if (eq? n #\tab)
-            3
-            1))
+         (cond
+            ((lesser? n 32)
+               ;; an ASCII control character, temporarily dot
+               (if (eq? n #\tab)
+                  3
+                  1)) ;; temporarily dot
+            ((eq? n 127)
+               ;; del, temp dot
+               1)
+            (else
+               1)))
+
+      ;; char tail -> tail' len
+      (define (represent char tail)
+         (cond
+            ((lesser? char 32)
+               (if (eq? char #\tab)
+                  (values (ilist #\_ #\_ #\_ tail) 3)
+                  (values (cons #\. tail) 1)))
+            ((eq? char 127)
+               (values (cons #\. tail) 1))
+            (else
+               (values (cons char tail) 1))))
 
       ;; go to beginning, or after next newline, count down steps from i
       (define (find-line-start l r i)
@@ -83,6 +103,7 @@
 
 
 
+
       ;; take at most max-len values from lst, possibly drop the rest, cut at newline (removing it) if any
       (define (take-line lst max-len)
          ;(print "Taking line from " lst)
@@ -95,11 +116,11 @@
                ((or (eq? (car lst) #\newline) (eq? (car lst) -10))
                   ;(print "Took line " (reverse taken))
                   (values (reverse taken) (cdr lst)))
-               ((eq? (car lst) #\tab)
-                  ;;
-                  (loop (cdr lst) (ilist #\_ #\_ #\_ taken) (max 0 (- n 3))))
+               ;((eq? (car lst) #\tab)
+               ;   (loop (cdr lst) (ilist #\_ #\_ #\_ taken) (max 0 (- n 3))))
                (else
-                  (loop (cdr lst) (cons (car lst) taken)  (- n 1))))))
+                  (lets ((taken width (represent (car lst) taken)))
+                     (loop (cdr lst) taken (max 0 (- n width))))))))
 
       (define (handle-padding lst pad)
          (cond

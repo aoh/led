@@ -701,7 +701,7 @@
                (cond
                   ((string? path)
                      (or
-                        (file-buffer path)
+                        (file-buffer path) ;; <- grab encoding to env later
                         (dir-buffer path)
                         (string-buffer "")))
                   ((pair? path)
