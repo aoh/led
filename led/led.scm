@@ -31,7 +31,7 @@
    (led input)
    (led documentation)
    (only (owl syscall) link kill)
-   (only (led ui) start-ui ui-yank)
+   (only (led ui) start-ui ui-yank ui-get-yank)
    (led render)
 )
 
@@ -253,6 +253,7 @@
                   (take (first-line seln) 20))))
          (set-status-text env "?"))))
 
+;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
    (lets ((from msg (next env b w h cx cy))
@@ -273,10 +274,6 @@
                mode b cx cy w h))
          ((eq? op 'keep-me-posted)
             (led (put env 'clients (cons from (get env 'clients null)))
-               mode b cx cy w h))
-         ((eq? op 'yank)
-            ;; yank message from elsewhere (or me). overwrite yank buffer
-            (led (put env 'yank (ref msg 2))
                mode b cx cy w h))
          ((eq? op 'command-entered)
             (lets
@@ -407,7 +404,8 @@
                               'insert b cx cy w h)))
                      ((eq? x #\y)
                         (lets ((seln (get-selection b))
-                               (env (put env 'yank seln)))
+                               ;(env (put env 'yank seln))
+                               )
                            (ui-yank seln)
                            (led env mode  b cx cy w h)))
                      ((eq? x #\$)
@@ -453,15 +451,6 @@
                                        1 w h)
                                     (led env mode b cx cy w h)))
                               (led env mode b cx cy w h))))
-                     ;((eq? x #\c)
-                     ;   (lets ((seln (get-selection b))
-                     ;          (buff env (led-eval b env (tuple 'delete))) ;; <- should be merged in delta with insert result
-                     ;          (env (put env 'yank seln)))
-                     ;      (led
-                     ;         env
-                     ;         'insert
-                     ;         buff
-                     ;         cx cy w h)))
                      ((eq? x #\.)
                         (if (= 0 (buffer-selection-length b))
                            (led env mode (select-line b (buffer-line b)) 1 cy w h)
@@ -475,17 +464,17 @@
                            (seek-start-of-line b)
                            1 cy w h))
                      ((eq? x #\d)
-                        (lets ((seln (get-selection b))
-                               (env (put env 'yank seln))
-                               (action (tuple 'delete))
-                               (buff env (led-eval b env (tuple 'delete))))
+                        (ui-yank (get-selection b))
+                        (lets ((buff env (led-eval b env (tuple 'delete))))
                            (led env mode buff cx cy w h)))
                      ((eq? x #\p)
-                        (lets ((buff env (led-eval b env (tuple 'replace (get env 'yank null)))))
-                           (led
-                              env
-                              mode
-                              buff cx cy w h)))
+                        (let ((data (ui-get-yank)))
+                           (if data
+                              (lets ((buff env (led-eval b env (tuple 'replace data))))
+                                 (led env mode buff cx cy w h))
+                              (led
+                                 (put env 'status-message "nothing yanked")
+                                 mode b cx cy w h))))
                      ((eq? x #\u)
                         (lets ((b env (led-eval b env (tuple 'undo))))
                            (led env mode b

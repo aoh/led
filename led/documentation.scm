@@ -33,8 +33,8 @@ COMMAND MODE ------------------------------------------------------------------
    L - grow the current selection by 1 character
 
    d - delete the current selection and copy it
-   p - paste last copied content over the selection
-   y - copy current selection
+   p - paste last copied content over the current selection
+   y - copy current selection to a global buffer
 
    n - repeat last search forwards
    m<char> - save a mark named by char to current selection (offset and length)

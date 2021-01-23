@@ -18,7 +18,7 @@
    (export
       start-ui
       ui-yank
-      )
+      ui-get-yank)
 
    (begin
 
@@ -26,6 +26,10 @@
 
       (define (ui-yank text)
          (mail 'ui (tuple 'yank text)))
+
+      (define (ui-get-yank)
+         (interact 'ui
+            (tuple 'get-yank)))
 
       (define (refresh window)
          (clear-screen)
@@ -47,7 +51,10 @@
             ((equal? (car l) p) (values l r))
             (else (find-buffer (cdr l) (cons (car l) r) p))))
 
-      ;; car of l is the active one
+      ;; buffers are corresponding thread ids
+      ;; l[eft], buffers, car is the active one
+      ;; r[ight], buffers
+      ;; i[nformation], global data
       (define (ui l r i)
          (lets ((msg (wait-mail))
                 (from msg msg))
@@ -100,12 +107,17 @@
                                  (mail id (tuple 'terminal-size (get i 'width 80) (get i 'height 30)))
                                  (ui (cons id l) r i))
                               (ui l r i))))))
+
+               ;; yanking
                ((eq? (ref msg 1) 'yank)
-                  (log "ui forwarding yank to buffers")
-                  (map
-                     (lambda (id) (mail id msg))
-                     (append l r))
+                   ;; replace replace yanks with something like (store/load [key] [value])
+                  (ui l r
+                     (put i 'yank (ref msg 2))))
+               ((eq? (ref msg 1) 'get-yank)
+                  ;; get-yank (sync) -> yanked data | #f
+                  (mail from (get i 'yank #f))
                   (ui l r i))
+
                ((eq? (ref msg 1) 'add-opener)
                   (log "installing new opener")
                   (ui l r
