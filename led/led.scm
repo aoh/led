@@ -253,6 +253,12 @@
                   (take (first-line seln) 20))))
          (set-status-text env "?"))))
 
+(define (selection-printable-length b)
+      (fold
+         (lambda (s c) (+ s (char-width c)))
+         0
+         (get-selection b)))
+
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
@@ -399,13 +405,9 @@
                             (env (put env 'insert-start (buffer-pos b)))
                             (env (put env 'insert-original old))
                             (b (buffer-delete b))) ;; remove old selection
-                           (led
-                              env
-                              'insert b cx cy w h)))
+                           (led env 'insert b cx cy w h)))
                      ((eq? x #\y)
-                        (lets ((seln (get-selection b))
-                               ;(env (put env 'yank seln))
-                               )
+                        (lets ((seln (get-selection b)))
                            (ui-yank seln)
                            (led env mode  b cx cy w h)))
                      ((eq? x #\$)
@@ -492,15 +494,21 @@
                            (if (or (not bp) (eq? (buffer-char bp) #\newline))
                               (led env mode b cx cy w h)
                               (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h))))
-                     ((eq? x #\l) ;; right
+                     ((eq? x #\l) ;; right, over selection
                         (lets
                            ((delta (max 1 (buffer-selection-length b)))
+                            (delta-cx
+                              (max (selection-printable-length b)
+                                 (let ((next (buffer-char b)))
+                                    (if next (char-width next) 0))))
                             (bp (seek-delta b delta)))
                            (if (or (not bp)
-                                   (eq? (buffer-char b)  #\newline)
-                                   )
+                                   (eq? (buffer-char b)  #\newline))
                               (led env mode b cx cy w h)
-                              (led env mode bp (nice-cx bp w)
+                              (led env mode bp
+                                 (if (< (+ cx delta-cx) w)
+                                    (+ cx delta-cx)
+                                    (nice-cx bp w))
                                  ;; could also move cy when jumping over selection
                                  cy w h))))
                      ((eq? x #\>) ;; indent, move to led-eval
