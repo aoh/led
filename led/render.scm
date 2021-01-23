@@ -196,23 +196,15 @@
                   (if (get env 'line-numbers)
                      (lets
                         ((line-numbers (iota (- (+ line 1) cy) 1 (+ line rows)))
-                         (lines (map (λ (x) (cons #\space (cons #\| (cons #\space x)))) lines))
-                         ;(lines (zip append (map (λ (x) (pad-to-length (- line-col-width 1) (render x null))) line-numbers) lines))
+                         (lines (map (λ (x) (cons #\space (cons #\space x))) lines))
                          (lines
                             (zip append
                                (map
                                   (λ (x)
-                                    (pad-to-length (- line-col-width 3)
-                                       (let ((r (remainder x 10)))
-                                          (render
-                                            (cond
-                                               ((eq? r 0) x)
-                                               ;((eq? r 5) "-")
-                                               (else ""))
-                                            null))))
+                                    (pad-to-length (- line-col-width 2)
+                                       (render x null)))
                                   line-numbers)
-                               lines))
-                         )
+                               lines)))
                         (values lines line-col-width))
                      (values lines 0))))))
 
