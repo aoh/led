@@ -17,21 +17,40 @@
       (define (mark-selected lst n)
          (if (eq? n 0)
             lst
-            (cons (* -1 (car lst))
+            (cons (* -1 (+ 1 (car lst)))
                (mark-selected (cdr lst) (- n 1)))))
 
       (define (char-width n)
          (cond
             ((lesser? n 32)
                ;; an ASCII control character, temporarily dot
-               (if (eq? n #\tab)
-                  3
-                  1)) ;; temporarily dot
+               (cond
+                  ((eq? (type n) type-fix-)
+                     (char-width (- (* n -1) 1)))
+                  (else
+                     (if (eq? n #\tab)
+                        3
+                        4))))
             ((eq? n 127)
-               ;; del, temp dot
-               1)
+               4)
             (else
                1)))
+
+      (define hex
+         (let ((cs (vector #\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9
+                           #\a #\b #\c #\d #\e #\f)))
+            (lambda (c)
+               (vector-ref cs c))))
+
+      (define (render-hex x tail)
+         (if (< x 0)
+            (render-hex (- (* x -1) 1) tail)
+            (ilist
+               (hex (band x #b1111))
+               (hex (band (>> x 4) #b1111))
+               #\x
+               #\0
+               tail)))
 
       ;; char tail -> tail' len
       (define (represent char tail)
@@ -39,9 +58,9 @@
             ((lesser? char 32)
                (if (eq? char #\tab)
                   (values (ilist #\_ #\_ #\_ tail) 3)
-                  (values (cons #\. tail) 1)))
+                  (values (render-hex char tail) 4)))
             ((eq? char 127)
-               (values (cons #\. tail) 1))
+               (values (render-hex char tail) 4))
             (else
                (values (cons char tail) 1))))
 
@@ -116,8 +135,6 @@
                ((or (eq? (car lst) #\newline) (eq? (car lst) -10))
                   ;(print "Took line " (reverse taken))
                   (values (reverse taken) (cdr lst)))
-               ;((eq? (car lst) #\tab)
-               ;   (loop (cdr lst) (ilist #\_ #\_ #\_ taken) (max 0 (- n 3))))
                (else
                   (lets ((taken width (represent (car lst) taken)))
                      (loop (cdr lst) taken (max 0 (- n width))))))))
@@ -142,7 +159,7 @@
             ((null? lst)
                (font-normal lst))
             ((< (car lst) 0)
-               (cons (* (car lst) -1)
+               (cons (* (+ (car lst) 1) -1)
                   (ansi-unselection (cdr lst))))
             (else
                (font-normal lst))))
