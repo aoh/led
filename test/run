@@ -1,21 +1,19 @@
-#!/bin/bash
+#!/bin/sh
 
-echo "" > config
 test -f failures && rm failures
 
 echo "Starting tests"
-for foo in *.io
+for foo in test/*.lex
 do
    echo " - $foo"
-   ("$@" --terminal "$foo" -c config > /dev/null 2>&1;
-    cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; echo "WANTED:"; cat -A $foo.ok; echo "RESULT:"; cat -A $foo.out;echo "$foo" >> failures; };
+   ("$@" -r < "$foo" > /dev/null 2>&1;
+    cmp "$foo.out" "$foo.ok" || { echo "Test $foo failed: $(diff $foo.ok $foo.out)"; echo "$foo" >> failures; };
     rm "$foo.out") &
 done
 
-echo "Running tests"
 wait
 
 test -s failures && echo "Tests failed: $(cat failures)" && exit 1
 
-rm failures config 2>/dev/null
+rm failures 2>/dev/null
 echo "Tests passed"

@@ -5,10 +5,10 @@ PREFIX=/usr
 OWLURL=https://haltp.org/files/ol-0.2.c.gz
 OL=bin/ol
 
-everything: bin/led # .parrot
+everything: bin/led .parrot
 
-.parrot: bin/led 
-	cd test && sh ./run ../bin/led
+.parrot: bin/led
+	test/run bin/led
 	touch .parrot
 
 # gcc takes a while on a raspberry. this is a lot faster.
@@ -18,9 +18,6 @@ fasltest: led.fasl bin/ol
 bin/led: led.c
 	mkdir -p bin
 	$(CC) $(CFLAGS) -o bin/led led.c
-
-#led.c: led/*.scm $(OL)
-#	$(OL) $(OFLAGS) -o led.c led/led.scm
 
 led.c: led/*.scm $(OL)
 	$(OL) $(OFLAGS) -o led.c led/led.scm

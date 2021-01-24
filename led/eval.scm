@@ -2,15 +2,17 @@
 (define-library (led eval)
    (import
       (owl toplevel)
+      (owl parse)
+      (owl readline)
+      (only (owl sys) isatty)
       (led log)
       (led buffer)
-      (only (led subprocess) start-repl)
-      (led parse)
-      (owl parse)
-      (led env)
-      (owl readline)
       (led extra)
-      )
+      (led parse)
+      (led env)
+      (only (led system) led-path->runes)
+      (only (led subprocess) start-repl)
+      (only (led render) render-content))
 
    (export
       led-eval   ;; buff env exp -> buff' env' | #f env' (with error message)
@@ -89,6 +91,13 @@
                            (values #f
                               (set-status-text env (str "Failed to write to " path ".")))))
                      (values #f (set-status-text env "Failed to open file for writing")))))
+            ((read path)
+               (let ((data (led-path->runes path)))
+                  (if data
+                     (led-eval buff env (tuple 'replace data))
+                     (values
+                        #f
+                        (set-status-text env (str "Cannot read '" path "'"))))))
             ((new-buffer path)
                (mail 'ui (tuple 'open path))
                (values buff env))
@@ -101,6 +110,9 @@
                (values
                   (select-line buff n)
                   env))
+            ((print)
+               (print (list->string (render-content (get-selection buff))))
+               (values buff env))
             ((subprocess call)
                (cond
                   ((get env 'subprocess)
@@ -209,24 +221,33 @@
                (values buff
                   (set-status-text env "syntax error")))))
 
+      (define (prompt env)
+         (let ((p (get env 'prompt ": ")))
+            (if p
+               (display p))))
+
       (define (led-repl buff env)
-         (display "> ")
+         (prompt env)
          (lfold
-            (λ (buff-env exp)
-               (lets ((buff env buff-env)
+            (λ (state exp)
+               (print exp)
+               (lets ((buff env <- state)
                       (buff env (led-eval buff env exp)))
                   (if buff
                      (begin
                         ;(print (buffer->string buff))
                         ;(print-buffer buff)
-                        (display "> ")
-                        (cons buff env))
+                        (prompt env)
+                        (prod buff env))
                      (begin
                         (print "?")
-                        buff-env))))
-            (cons buff env)
+                        (prompt env)
+                        state))))
+            (prod buff env)
             (byte-stream->exp-stream
-               (port->readline-byte-stream stdin)
+               (if (isatty stdin)
+                  (port->readline-byte-stream stdin)
+                  (port->byte-stream stdin))
                get-command
                led-syntax-error-handler)))
 

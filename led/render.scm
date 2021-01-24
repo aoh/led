@@ -9,6 +9,7 @@
       update-buffer-view
       char-width          ;; rune -> n
       distance-to         ;; lst x -> offset | #f, a shared utility function
+      render-content      ;; runes -> printable-char-list
       )
 
    (begin
@@ -64,6 +65,17 @@
             (else
                (values (cons char tail) 1))))
 
+      (define (render-content cs)
+         (foldr
+            (lambda (char tail)
+               (if (eq? char #\newline)
+                  ;; for repl use
+                  (cons char tail)
+                  (lets ((bs len
+                           (represent char tail)))
+                     bs)))
+            null cs))
+
       ;; go to beginning, or after next newline, count down steps from i
       (define (find-line-start l r i)
          (cond
@@ -117,7 +129,7 @@
          (cond
             ((null? lst) null)
             ((eq? (car lst) #\newline) (cdr lst))
-            ((eq? (car lst) -10) (cdr lst)) ;; selected
+            ((eq? (car lst) -11) (cdr lst)) ;; selected
             (else (drop-upto-newline (cdr lst)))))
 
 
@@ -132,7 +144,7 @@
                   (values (reverse taken) (drop-upto-newline lst)))
                ((null? lst)
                   (loop lst (cons #\~ taken) 0))
-               ((or (eq? (car lst) #\newline) (eq? (car lst) -10))
+               ((or (eq? (car lst) #\newline) (eq? (car lst) -11))
                   ;(print "Took line " (reverse taken))
                   (values (reverse taken) (cdr lst)))
                (else
@@ -147,7 +159,7 @@
                null)
             ((eq? (car lst) #\newline)
                lst)
-            ((eq? (car lst) -10)
+            ((eq? (car lst) -11)
                lst)
             ((< pad 0)
                (handle-padding (cdr lst) (+ pad 1)))

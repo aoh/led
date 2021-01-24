@@ -9,7 +9,6 @@
 
    (export
       start-screen
-
       clear-screen
       print-to)
 

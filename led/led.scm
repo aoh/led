@@ -700,7 +700,7 @@
                      (or
                         (file-buffer path) ;; <- grab encoding to env later
                         (dir-buffer path)
-                        (string-buffer "")))
+                        (string-buffer "Tabula rasa")))
                   ((pair? path)
                      (list-buffer path)
                      )
@@ -724,7 +724,7 @@
     `((help "-h" "--help" comment "show this thing")
       (version "-v" "--version" comment "show program version")
       (log "-L" "--log" has-arg comment "debug log file")
-      ;(repl "-r" "--repl" comment "line-based repl") ;; not currently in use
+      (repl "-r" "--repl" comment "line-based repl")
       ;(config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
       )))
 

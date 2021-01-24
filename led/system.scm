@@ -3,10 +3,12 @@
    (export
       directory? ;; temporary
       led-dir->list
+      led-path->runes
       led-dir-recursive->list)
 
    (import
       (owl toplevel)
+      (owl unicode)
       (owl sys))
 
    (begin
@@ -14,6 +16,13 @@
       (define leading-dot?
          (string->regex "m/^\\./"))
 
+      (define (led-path->runes path)
+         (let ((data (file->list path)))
+            (and data
+               (or
+                  (utf8-decode data)
+                  data))))
+            
       (define (sort-paths paths)
          (sort string<?
             (remove leading-dot? paths)))

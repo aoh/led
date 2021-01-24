@@ -42,7 +42,7 @@
                ((skip (get-imm #\newline))
                 (skip (get-word delim null))
                 (skip (get-imm #\newline)))
-               null)
+               '(#\newline))
             (get-parses
                ((r get-rune)
                 (rs (upto-line delim)))
@@ -58,6 +58,19 @@
               (path (get-plus (get-rune-if (lambda (x) (not (eq? x #\space)))))))
             (list->string path)))
 
+      ;; up to dot, replace selection
+      (define get-insert
+         (get-parses
+            ((skip (get-word "i\n" 'insert))
+             (content (upto-line ".")))
+            (tuple 'replace content)))
+
+      (define (get-non-rune x)
+         (get-parses
+            ((y get-rune)
+             (verify (not (= x y)) #f))
+            y))
+
       (define get-file-command
          (get-parses
             ((op
@@ -72,8 +85,8 @@
              (path
                 (get-either
                    (get-parses
-                      ((skip (get-plus get-whitespace))
-                       (path (get-plus get-rune)))
+                      ((skip (get-plus (get-imm #\space)))
+                       (path (get-plus (get-non-rune #\newline))))
                       (list->string path))
                    (get-epsilon #false))))
             (tuple op path)))
@@ -111,10 +124,12 @@
                   (get-word "d" (tuple 'delete))
                   (get-word "undo" (tuple 'undo))
                   (get-word "u" (tuple 'undo))
+                  (get-word "p" (tuple 'print))
                   (get-word "redo" (tuple 'redo))
                   (get-word "r" (tuple 'redo))
                   (get-word "q!" (tuple 'quit #t))
                   (get-word "q" (tuple 'quit #f))
+                  get-insert
                   (get-parses
                      ((val get-replace-regex))
                      (begin
