@@ -31,7 +31,7 @@
    (led input)
    (led documentation)
    (only (owl syscall) link kill)
-   (only (led ui) start-ui ui-yank ui-get-yank)
+   (only (led ui) start-ui ui-put-yank ui-get-yank)
    (led render)
 )
 
@@ -259,6 +259,109 @@
          0
          (get-selection b)))
 
+;; UI actions, to be bound to key bindings in env
+
+
+(define (ui-left env mode b cx cy w h led)
+   (lets ((bp env (led-eval b env (tuple 'left))))
+      (if (or (not bp) (eq? (buffer-char bp) #\newline))
+         (led env mode b cx cy w h)
+         (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h))))
+
+(define (ui-down env mode b cx cy w h led)
+   (lets ((delta nleft (next-line-same-pos b)))
+      (if delta
+         (led env mode (seek-delta b delta)
+            (max 1 (- cx nleft))
+            (min (- h 1) (+ cy 1)) w h)
+         (led env mode b cx cy w h))))
+
+(define (ui-up env mode b cx cy w h led)
+   (lets ((delta nleft (prev-line-same-pos b)))
+      (if delta
+         (led env mode (seek-delta b delta) (- cx nleft) (max 1 (- cy 1)) w h)
+         (led env mode b cx cy w h))))
+
+(define (ui-right env mode b cx cy w h led)
+   (lets
+      ((delta (max 1 (buffer-selection-length b)))
+       (delta-cx
+         (max (selection-printable-length b)
+            (let ((next (buffer-char b)))
+               (if next (char-width next) 0))))
+       (bp (seek-delta b delta)))
+      (if (or (not bp)
+              (eq? (buffer-char b)  #\newline))
+         (led env mode b cx cy w h)
+         (led env mode bp
+            (if (< (+ cx delta-cx) w)
+               (+ cx delta-cx)
+               (nice-cx bp w))
+            ;; could also move cy when jumping over selection
+            cy w h))))
+
+(define (ui-enter-insert-mode env mode b cx cy w h led)
+   (lets
+      ((old (get-selection b)) ;; data to be replaced by insert
+       (env (put env 'insert-start (buffer-pos b)))
+       (env (put env 'insert-original old))
+       (b (buffer-delete b))) ;; remove old selection
+      (led env 'insert b cx cy w h)))
+
+
+(define (ui-yank env mode b cx cy w h led)
+   (lets ((seln (get-selection b)))
+      (ui-put-yank seln)
+      (led env mode  b cx cy w h)))
+
+(define (ui-next-match env mode b cx cy w h led)
+   (let ((s (get env 'last-search)))
+      (if s
+         (lets ((p len (next-match b s)))
+            (log "next search match is " p)
+            (if p
+               (lets ((b (seek-select b p len))
+                      (lp (buffer-line-pos b)))
+                  (led env mode b (if (>= lp w) 1 (+ lp 1)) 1 w h))
+               (led env mode b cx cy w h)))
+         (led env mode b cx cy w h))))
+
+;; as in vi, but a more led-ish interpretation would be to select up to end of line,
+;; so that the vi-command C would become $i, and and change up to beginning of line
+;; could be 0i
+(define (ui-line-end env mode b cx cy w h led)
+   (lets ((nforw (buffer-line-end-pos b))
+          (b (seek-delta b nforw)))
+      (led env mode b
+         (bound 1 (+ cx nforw) w)
+         cy w h)))
+
+(define (ui-select-word env mode b cx cy w h led)
+   (lets ((word-length (buffer-next-word-length b)))
+      (led env mode
+         (buffer-selection-delta b word-length)
+         cx cy w h)))
+
+(define (ui-add-mark env mode b cx cy w h led)
+   (lets ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key)))))
+      (led
+         (add-mark env (ref (ref envelope 2) 2) (buffer-pos b) (buffer-selection-length b))
+         mode b cx cy w h)))
+
+(define *default-command-mode-key-bindings*
+   (ff
+      #\h ui-left
+      #\l ui-right
+      #\j ui-down
+      #\k ui-up
+      #\i ui-enter-insert-mode
+      #\y ui-yank
+      #\n ui-next-match
+      #\$ ui-line-end
+      #\w ui-select-word
+      #\m ui-add-mark
+      ))
+
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
    ;(print (list 'buffer-window b cx cy w h))
@@ -384,7 +487,7 @@
                       (s (list->string (get-selection bp))))
                      (cond
                         ((file? s)
-                           (mail 'ui (tuple 'open s))
+                           (mail 'ui (tuple 'open s env)) ;; <- actually we want a subset, but whole env for now
                            (led env mode bp cx cy w h))
                         ((directory? s)
                            (lets
@@ -398,186 +501,118 @@
                         (else
                            (led env mode bp cx cy w h)))))
                ((key x)
-                  (cond
-                     ((eq? x #\i)
-                        (lets
-                           ((old (get-selection b)) ;; data to be replaced by insert
-                            (env (put env 'insert-start (buffer-pos b)))
-                            (env (put env 'insert-original old))
-                            (b (buffer-delete b))) ;; remove old selection
-                           (led env 'insert b cx cy w h)))
-                     ((eq? x #\y)
-                        (lets ((seln (get-selection b)))
-                           (ui-yank seln)
-                           (led env mode  b cx cy w h)))
-                     ((eq? x #\$)
-                        (lets ((nforw (buffer-line-end-pos b))
-                               (b (seek-delta b nforw)))
-                           (led env mode b
-                              (bound 1 (+ cx nforw) w)
-                              cy w h)))
-                     ((eq? x #\w)
-                        (lets ((word-length (buffer-next-word-length b)))
-                           (led env mode
-                              (buffer-selection-delta b word-length)
-                              cx cy w h)))
-                     ((eq? x #\n)
-                        (let ((s (get env 'last-search)))
-                           (log "running last search " s)
-                           (if s
-                              (lets ((p len (next-match b s)))
-                                 (log "next search match is " p)
-                                 (if p
-                                    (lets ((b (seek-select b p len))
-                                           (lp (buffer-line-pos b)))
-                                       (led env mode b (if (>= lp w) 1 (+ lp 1)) 1 w h))
-                                    (led env mode b cx cy w h)))
-                              (led env mode b cx cy w h))))
-                     ((eq? x #\m)
-                        (lets ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key)))))
-                           (led
-                              (add-mark env (ref (ref envelope 2) 2) (buffer-pos b) (buffer-selection-length b))
-                              mode b cx cy w h)))
-                     ((eq? x #\')
-                        (lets
-                           ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
-                            (from msg envelope)
-                            (_ key msg)
-                            (location (find-mark env key)))
-                           (if location
+                  (let ((handler (get (get env 'command-mode-key-bindings empty) x)))
+                     (if handler
+                        (handler env mode b cx cy w h led)
+                        (cond
+
+
+                           ((eq? x #\')
                               (lets
-                                 ((bp (seek-select b (car location) (cdr location))))
-                                 (if bp
-                                    (led env mode bp
-                                       (nice-cx bp w)
-                                       1 w h)
-                                    (led env mode b cx cy w h)))
-                              (led env mode b cx cy w h))))
-                     ((eq? x #\.)
-                        (if (= 0 (buffer-selection-length b))
-                           (led env mode (select-line b (buffer-line b)) 1 cy w h)
-                           (led env mode b cx cy w h)))
-                     ((eq? x #\L)
-                        (led env mode (buffer-selection-delta b +1) cx cy w h))
-                     ((eq? x #\H)
-                        (led env mode (buffer-selection-delta b -1) cx cy w h))
-                     ((eq? x #\0)
-                        (led env mode
-                           (seek-start-of-line b)
-                           1 cy w h))
-                     ((eq? x #\d)
-                        (ui-yank (get-selection b))
-                        (lets ((buff env (led-eval b env (tuple 'delete))))
-                           (led env mode buff cx cy w h)))
-                     ((eq? x #\p)
-                        (let ((data (ui-get-yank)))
-                           (if data
-                              (lets ((buff env (led-eval b env (tuple 'replace data))))
-                                 (led env mode buff cx cy w h))
-                              (led
-                                 (put env 'status-message "nothing yanked")
-                                 mode b cx cy w h))))
-                     ((eq? x #\u)
-                        (lets ((b env (led-eval b env (tuple 'undo))))
-                           (led env mode b
-                              (nice-cx b w)
-                              1
-                              w h)))
-                     ((eq? x #\r)
-                        (lets ((b env (led-eval b env (tuple 'redo))))
-                           (led env mode b
-                              (nice-cx b w)
-                              1
-                              w h)))
-                     ((eq? x #\h) ;; left
-                        (let ((bp (seek-delta b -1)))
-                           (if (or (not bp) (eq? (buffer-char bp) #\newline))
-                              (led env mode b cx cy w h)
-                              (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h))))
-                     ((eq? x #\l) ;; right, over selection
-                        (lets
-                           ((delta (max 1 (buffer-selection-length b)))
-                            (delta-cx
-                              (max (selection-printable-length b)
-                                 (let ((next (buffer-char b)))
-                                    (if next (char-width next) 0))))
-                            (bp (seek-delta b delta)))
-                           (if (or (not bp)
-                                   (eq? (buffer-char b)  #\newline))
-                              (led env mode b cx cy w h)
-                              (led env mode bp
-                                 (if (< (+ cx delta-cx) w)
-                                    (+ cx delta-cx)
-                                    (nice-cx bp w))
-                                 ;; could also move cy when jumping over selection
-                                 cy w h))))
-                     ((eq? x #\>) ;; indent, move to led-eval
-                        (lets ((buff env (led-eval b env (tuple 'replace ((indent-selection env) (get-selection b))))))
-                           (led env mode buff cx cy w h)))
-                     ((eq? x #\<) ;; unindent
-                        (lets ((buff env (led-eval b env (tuple 'replace ((unindent-selection env) (get-selection b))))))
-                           (led env mode buff cx cy w h)))
-                     ((eq? x #\j) ;; down
-                        (lets ((delta nleft (next-line-same-pos b)))
-                           (if delta
-                              (led env mode (seek-delta b delta)
-                                 (max 1 (- cx nleft))
-                                 (min (- h 1) (+ cy 1)) w h)
-                              (led env mode b cx cy w h))))
-                     ((eq? x #\J) ;; select down
-                        (lets
-                           ((pos (buffer-pos b))
-                            (len (buffer-selection-length b))
-                            (bx  (seek b (+ pos len)))
-                            (delta nleft (next-line-same-pos bx)))
-                           (if delta
-                              (led env mode (buffer-selection-delta b delta) cx cy w h)
-                              (led env mode b cx cy w h))))
-                     ((eq? x #\k) ;; up
-                        (lets ((delta nleft (prev-line-same-pos b)))
-                           (if delta
-                              (led env mode (seek-delta b delta) (- cx nleft) (max 1 (- cy 1)) w h)
-                              (led env mode b cx cy w h))))
-                     ((eq? x #\%)
-                        (lets ((delta (paren-hunter b)))
-                           (if (and delta (> delta 0))
+                                 ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
+                                  (from msg envelope)
+                                  (_ key msg)
+                                  (location (find-mark env key)))
+                                 (if location
+                                    (lets
+                                       ((bp (seek-select b (car location) (cdr location))))
+                                       (if bp
+                                          (led env mode bp
+                                             (nice-cx bp w)
+                                             1 w h)
+                                          (led env mode b cx cy w h)))
+                                    (led env mode b cx cy w h))))
+                           ((eq? x #\.)
+                              (if (= 0 (buffer-selection-length b))
+                                 (led env mode (select-line b (buffer-line b)) 1 cy w h)
+                                 (led env mode b cx cy w h)))
+                           ((eq? x #\L)
+                              (led env mode (buffer-selection-delta b +1) cx cy w h))
+                           ((eq? x #\H)
+                              (led env mode (buffer-selection-delta b -1) cx cy w h))
+                           ((eq? x #\0)
                               (led env mode
-                                 (buffer-selection-delta (buffer-unselect b) delta)
-                                 cx cy w h)
-                              (led env mode b cx cy w h))))
-                     ((eq? x #\e) ;; parent expression
-                        (lets ((back len (parent-expression b))
-                               (old-line (buffer-line b)))
-                           (if back
-                              (lets
-                                 ((b (seek-delta b back))
-                                  (new-line (buffer-line b)))
-                                 (led env mode
-                                    (buffer-selection-delta (buffer-unselect b) len)
+                                 (seek-start-of-line b)
+                                 1 cy w h))
+                           ((eq? x #\d)
+                              (ui-put-yank (get-selection b))
+                              (lets ((buff env (led-eval b env (tuple 'delete))))
+                                 (led env mode buff cx cy w h)))
+                           ((eq? x #\p)
+                              (let ((data (ui-get-yank)))
+                                 (if data
+                                    (lets ((buff env (led-eval b env (tuple 'replace data))))
+                                       (led env mode buff cx cy w h))
+                                    (led
+                                       (put env 'status-message "nothing yanked")
+                                       mode b cx cy w h))))
+                           ((eq? x #\u)
+                              (lets ((b env (led-eval b env (tuple 'undo))))
+                                 (led env mode b
                                     (nice-cx b w)
-                                    (bound 1 (- cy (- old-line new-line)) h)
-                                    w h))
-                              (led env mode b cx cy w h))))
-                     ((eq? x #\N) ;; numbers
-                        (led (put env 'line-numbers (not (get env 'line-numbers #false)))
-                           mode b cx cy w h))
-                     ((eq? x #\Q)
-                        (lets ((bp ep (led-eval b env (tuple 'quit #f))))
-                           ;; only exits on failure
-                           (led
-                              (set-status-text env "Buffer has unsaved content.")
-                              mode b cx cy w h)))
-                     ((eq? x #\W)
-                        (lets ((b (buffer-select-current-word b))
-                               (seln (get-selection b))
-                               (lp (buffer-line-pos b)))
-                           (led env mode b
-                              (min w (max 1 (+ 1 lp))) cy w h)))
-                     ((or (eq? x #\:) (eq? x #\/) (eq? x #\?) (eq? x #\|))
-                        (mail (get env 'status-thread-id) (tuple 'start-command x))
-                        (led (clear-status-text env) 'enter-command b cx cy w h))
-                     (else
-                        (led env mode b cx cy w h))))
+                                    1
+                                    w h)))
+                           ((eq? x #\r)
+                              (lets ((b env (led-eval b env (tuple 'redo))))
+                                 (led env mode b
+                                    (nice-cx b w)
+                                    1
+                                    w h)))
+                           ((eq? x #\>) ;; indent, move to led-eval
+                              (lets ((buff env (led-eval b env (tuple 'replace ((indent-selection env) (get-selection b))))))
+                                 (led env mode buff cx cy w h)))
+                           ((eq? x #\<) ;; unindent
+                              (lets ((buff env (led-eval b env (tuple 'replace ((unindent-selection env) (get-selection b))))))
+                                 (led env mode buff cx cy w h)))
+                           ((eq? x #\J) ;; select down
+                              (lets
+                                 ((pos (buffer-pos b))
+                                  (len (buffer-selection-length b))
+                                  (bx  (seek b (+ pos len)))
+                                  (delta nleft (next-line-same-pos bx)))
+                                 (if delta
+                                    (led env mode (buffer-selection-delta b delta) cx cy w h)
+                                    (led env mode b cx cy w h))))
+                           ((eq? x #\%)
+                              (lets ((delta (paren-hunter b)))
+                                 (if (and delta (> delta 0))
+                                    (led env mode
+                                       (buffer-selection-delta (buffer-unselect b) delta)
+                                       cx cy w h)
+                                    (led env mode b cx cy w h))))
+                           ((eq? x #\e) ;; parent expression
+                              (lets ((back len (parent-expression b))
+                                     (old-line (buffer-line b)))
+                                 (if back
+                                    (lets
+                                       ((b (seek-delta b back))
+                                        (new-line (buffer-line b)))
+                                       (led env mode
+                                          (buffer-selection-delta (buffer-unselect b) len)
+                                          (nice-cx b w)
+                                          (bound 1 (- cy (- old-line new-line)) h)
+                                          w h))
+                                    (led env mode b cx cy w h))))
+                           ((eq? x #\N) ;; numbers
+                              (led (put env 'line-numbers (not (get env 'line-numbers #false)))
+                                 mode b cx cy w h))
+                           ((eq? x #\Q)
+                              (lets ((bp ep (led-eval b env (tuple 'quit #f))))
+                                 ;; only exits on failure
+                                 (led
+                                    (set-status-text env "Buffer has unsaved content.")
+                                    mode b cx cy w h)))
+                           ((eq? x #\W)
+                              (lets ((b (buffer-select-current-word b))
+                                     (seln (get-selection b))
+                                     (lp (buffer-line-pos b)))
+                                 (led env mode b
+                                    (min w (max 1 (+ 1 lp))) cy w h)))
+                           ((or (eq? x #\:) (eq? x #\/) (eq? x #\?) (eq? x #\|))
+                              (mail (get env 'status-thread-id) (tuple 'start-command x))
+                              (led (clear-status-text env) 'enter-command b cx cy w h))
+                           (else
+                              (led env mode b cx cy w h))))))
                ((esc)
                   (led env mode (buffer-unselect b) cx cy w h))
                (else
@@ -669,6 +704,7 @@
          (else
             (led env 'command b cx cy w h)))))
 
+
 (define (maybe-put ff k v)
    (if v (put ff k v) ff))
 
@@ -685,14 +721,14 @@
          #f)))
 
 (define default-led-opener
-   (lambda (path)
+   (lambda (path env)
       (log "UI: opening buffer " path)
       (lets
          ((id (or path (list '*scratch*)))
           (status-thread-id (cons id 'status-line)))
          (thread id
             (led
-               (put (empty-led-env id (if (string? path) path #f))
+               (put (empty-led-env env id (if (string? path) path #f))
                   'status-thread-id status-thread-id)
                'command
                (cond
@@ -729,6 +765,9 @@
       )))
 
 
+(define *default-environment*
+   (pipe empty-env
+      (put 'command-mode-key-bindings *default-command-mode-key-bindings*)))
 
 (define (start-led-threads dict args)
    (cond
@@ -757,7 +796,7 @@
             (mail 'ui (tuple 'terminal-size x y))
             (for-each
                (lambda (path)
-                  (mail 'ui (tuple 'open path)))
+                  (mail 'ui (tuple 'open path *default-environment*)))
                (if (null? args)
                   (list #false)
                   args))

@@ -17,14 +17,14 @@
 
    (export
       start-ui
-      ui-yank
+      ui-put-yank
       ui-get-yank)
 
    (begin
 
       ;; protocol helpers
 
-      (define (ui-yank text)
+      (define (ui-put-yank text)
          (mail 'ui (tuple 'yank text)))
 
       (define (ui-get-yank)
@@ -94,14 +94,14 @@
                      (else
                         (mail (car l) msg)
                         (ui l r i))))
-               ((eq? (ref msg 1) 'open)
+               ((eq? (ref msg 1) 'open) ;; #(open <source> <env>)
                   (lets ((lp rp (find-buffer (append (reverse r) l) null (ref msg 2))))
                      (if lp
                         (begin
                            (refresh (car lp))
                            (ui lp rp  i))
                         (lets ((openers (get i 'openers null))
-                               (id (fold (lambda (out fn) (or out (fn (ref msg 2)))) #f openers)))
+                               (id (fold (lambda (out fn) (or out (fn (ref msg 2) (ref msg 3)))) #f openers)))
                            (if id
                               (begin
                                  (mail id (tuple 'terminal-size (get i 'width 80) (get i 'height 30)))

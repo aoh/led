@@ -75,6 +75,11 @@
       (define (led-eval buff env exp)
          (log "led-eval " exp)
          (tuple-case exp
+            ((left) ;; usually keyboard h, move left by one character on current line
+               (lets ((bp (seek-delta buff -1)))
+                  (if (and bp (not (eq? #\newline (buffer-char bp))))
+                     (values bp env)
+                     (values buff env))))
             ((write-buffer target)
                (lets ((path (or target (get env 'path)))
                       (fd (and path (open-output-file path))))

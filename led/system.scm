@@ -22,7 +22,7 @@
                (or
                   (utf8-decode data)
                   data))))
-            
+
       (define (sort-paths paths)
          (sort string<?
             (remove leading-dot? paths)))

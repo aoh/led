@@ -1,4 +1,5 @@
 (define-library (led env)
+
    (import
       (owl toplevel))
 
@@ -6,8 +7,7 @@
       empty-env
       empty-led-env
       set-status-text
-      clear-status-text
-      )
+      clear-status-text)
 
    (begin
 
@@ -17,17 +17,13 @@
             (put 'undo null)
             (put 'redo null)))
 
-      (define (empty-led-env id path)
+      (define (empty-led-env base-env id path)
          (if path
-            (put empty-env 'path path)
+            (put base-env 'path path)
             empty-env))
 
       (define (set-status-text env string)
          (put env 'status-message (string->runes string)))
 
       (define (clear-status-text env)
-         (del env 'status-message))
-
-))
-
-                              
+         (del env 'status-message))))
