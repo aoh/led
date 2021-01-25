@@ -8,7 +8,7 @@
 
    (begin
 
-      (define tz-offset (* 60 60 2))
+      (define tz-offset (* 60 60 2)) ;; via env later
 
       (define (pad-time x)
          (if (< x 10) (str "0" x) x))

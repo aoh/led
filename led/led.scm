@@ -343,13 +343,144 @@
          cx cy w h)))
 
 (define (ui-add-mark env mode b cx cy w h led)
+   (log "adding mark")
    (lets ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key)))))
+      (log "marking to " (ref envelope 2))
       (led
          (add-mark env (ref (ref envelope 2) 2) (buffer-pos b) (buffer-selection-length b))
          mode b cx cy w h)))
 
+(define (ui-go-to-mark env mode b cx cy w h led)
+   (lets
+      ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
+       (from msg envelope)
+       (_ key msg)
+       (location (find-mark env key)))
+      (if location
+         (lets
+            ((bp (seek-select b (car location) (cdr location))))
+            (if bp
+               (led env mode bp
+                  (nice-cx bp w)
+                  1 w h)
+               (led env mode b cx cy w h)))
+         (led env mode b cx cy w h))))
+
+(define (ui-select-current-line env mode b cx cy w h led)
+   (if (= 0 (buffer-selection-length b))
+      (led env mode (select-line b (buffer-line b)) 1 cy w h)
+      (led env mode b cx cy w h)))
+
+(define (ui-select-next-char env mode b cx cy w h led)
+   (led env mode (buffer-selection-delta b +1) cx cy w h))
+
+(define (ui-unselect-last-char env mode b cx cy w h led)
+   (led env mode (buffer-selection-delta b -1) cx cy w h))
+
+
+;; as with end of line, maybe instead select?
+(define (ui-go-to-start-of-line env mode b cx cy w h led)
+   (led env mode
+      (seek-start-of-line b)
+      1 cy w h))
+
+(define (ui-delete env mode b cx cy w h led)
+   (ui-put-yank (get-selection b))
+   (lets ((buff env (led-eval b env (tuple 'delete))))
+      (led env mode buff cx cy w h)))
+
+(define (ui-paste env mode b cx cy w h led)
+   (let ((data (ui-get-yank)))
+      (if data
+         (lets ((buff env (led-eval b env (tuple 'replace data))))
+            (led env mode buff cx cy w h))
+         (led
+            (put env 'status-message "nothing yanked")
+            mode b cx cy w h))))
+
+;; y at middle of screen would be more readable
+(define (ui-undo env mode b cx cy w h led)
+   (lets ((b env (led-eval b env (tuple 'undo))))
+      (led env mode b
+         (nice-cx b w)
+         1 w h)))
+
+(define (ui-redo env mode b cx cy w h led)
+   (lets ((b env (led-eval b env (tuple 'redo))))
+      (led env mode b
+         (nice-cx b w)
+         1 w h)))
+
+(define (ui-indent env mode b cx cy w h led)
+   (lets ((buff env (led-eval b env (tuple 'replace ((indent-selection env) (get-selection b))))))
+      (led env mode buff cx cy w h)))
+
+(define (ui-unindent env mode b cx cy w h led)
+   (lets ((buff env (led-eval b env (tuple 'replace ((unindent-selection env) (get-selection b))))))
+      (led env mode buff cx cy w h)))
+
+(define (ui-select-down env mode b cx cy w h led)
+   (lets
+      ((pos (buffer-pos b))
+       (len (buffer-selection-length b))
+       (bx  (seek b (+ pos len)))
+       (delta nleft (next-line-same-pos bx)))
+      (if delta
+         (led env mode (buffer-selection-delta b delta) cx cy w h)
+         (led env mode b cx cy w h))))
+
+(define (ui-find-matching-paren env mode b cx cy w h led)
+   (lets ((delta (paren-hunter b)))
+      (if (and delta (> delta 0))
+         (led env mode
+            (buffer-selection-delta (buffer-unselect b) delta)
+            cx cy w h)
+         (led env mode b cx cy w h))))
+
+(define (ui-select-parent-expression env mode b cx cy w h led)
+   (lets ((back len (parent-expression b))
+          (old-line (buffer-line b)))
+      (if back
+         (lets
+            ((b (seek-delta b back))
+             (new-line (buffer-line b)))
+            (led env mode
+               (buffer-selection-delta (buffer-unselect b) len)
+               (nice-cx b w)
+               (bound 1 (- cy (- old-line new-line)) h)
+               w h))
+         (led env mode b cx cy w h))))
+
+(define (ui-toggle-line-numbers env mode b cx cy w h led)
+   (led (put env 'line-numbers (not (get env 'line-numbers #false)))
+      mode b cx cy w h))
+
+(define (ui-close-buffer-if-saved env mode b cx cy w h led)
+   (lets ((bp ep (led-eval b env (tuple 'quit #f))))
+      ;; only exits on failure
+      (led
+         (set-status-text env "Buffer has unsaved content.")
+         mode b cx cy w h)))
+
+(define (ui-write-buffer env mode b cx cy w h led)
+   (lets ((b (buffer-select-current-word b))
+          (seln (get-selection b))
+          (lp (buffer-line-pos b)))
+      (led env mode b
+         (min w (max 1 (+ 1 lp))) cy w h)))
+
+(define (ui-start-lex-command env mode b cx cy w h led)
+   (mail (get env 'status-thread-id) (tuple 'start-command #\:))
+   (led (clear-status-text env) 'enter-command b cx cy w h))
+
+(define (ui-start-search env mode b cx cy w h led)
+   (mail (get env 'status-thread-id) (tuple 'start-command #\/))
+   (led (clear-status-text env) 'enter-command b cx cy w h))
+
 (define *default-command-mode-key-bindings*
    (ff
+      #\N ui-toggle-line-numbers
+      #\Q ui-close-buffer-if-saved
       #\h ui-left
       #\l ui-right
       #\j ui-down
@@ -360,6 +491,22 @@
       #\$ ui-line-end
       #\w ui-select-word
       #\m ui-add-mark
+      #\' ui-go-to-mark
+      #\. ui-select-current-line
+      #\L ui-select-next-char
+      #\H ui-unselect-last-char
+      #\0 ui-go-to-start-of-line
+      #\d ui-delete
+      #\p ui-paste
+      #\u ui-undo
+      #\r ui-redo
+      #\J ui-select-down
+      #\> ui-indent
+      #\< ui-unindent
+      #\% ui-find-matching-paren
+      #\e ui-select-parent-expression
+      #\: ui-start-lex-command
+      #\/ ui-start-search
       ))
 
 ;; convert all actions to (led eval)ed commands later
@@ -505,112 +652,6 @@
                      (if handler
                         (handler env mode b cx cy w h led)
                         (cond
-
-
-                           ((eq? x #\')
-                              (lets
-                                 ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
-                                  (from msg envelope)
-                                  (_ key msg)
-                                  (location (find-mark env key)))
-                                 (if location
-                                    (lets
-                                       ((bp (seek-select b (car location) (cdr location))))
-                                       (if bp
-                                          (led env mode bp
-                                             (nice-cx bp w)
-                                             1 w h)
-                                          (led env mode b cx cy w h)))
-                                    (led env mode b cx cy w h))))
-                           ((eq? x #\.)
-                              (if (= 0 (buffer-selection-length b))
-                                 (led env mode (select-line b (buffer-line b)) 1 cy w h)
-                                 (led env mode b cx cy w h)))
-                           ((eq? x #\L)
-                              (led env mode (buffer-selection-delta b +1) cx cy w h))
-                           ((eq? x #\H)
-                              (led env mode (buffer-selection-delta b -1) cx cy w h))
-                           ((eq? x #\0)
-                              (led env mode
-                                 (seek-start-of-line b)
-                                 1 cy w h))
-                           ((eq? x #\d)
-                              (ui-put-yank (get-selection b))
-                              (lets ((buff env (led-eval b env (tuple 'delete))))
-                                 (led env mode buff cx cy w h)))
-                           ((eq? x #\p)
-                              (let ((data (ui-get-yank)))
-                                 (if data
-                                    (lets ((buff env (led-eval b env (tuple 'replace data))))
-                                       (led env mode buff cx cy w h))
-                                    (led
-                                       (put env 'status-message "nothing yanked")
-                                       mode b cx cy w h))))
-                           ((eq? x #\u)
-                              (lets ((b env (led-eval b env (tuple 'undo))))
-                                 (led env mode b
-                                    (nice-cx b w)
-                                    1
-                                    w h)))
-                           ((eq? x #\r)
-                              (lets ((b env (led-eval b env (tuple 'redo))))
-                                 (led env mode b
-                                    (nice-cx b w)
-                                    1
-                                    w h)))
-                           ((eq? x #\>) ;; indent, move to led-eval
-                              (lets ((buff env (led-eval b env (tuple 'replace ((indent-selection env) (get-selection b))))))
-                                 (led env mode buff cx cy w h)))
-                           ((eq? x #\<) ;; unindent
-                              (lets ((buff env (led-eval b env (tuple 'replace ((unindent-selection env) (get-selection b))))))
-                                 (led env mode buff cx cy w h)))
-                           ((eq? x #\J) ;; select down
-                              (lets
-                                 ((pos (buffer-pos b))
-                                  (len (buffer-selection-length b))
-                                  (bx  (seek b (+ pos len)))
-                                  (delta nleft (next-line-same-pos bx)))
-                                 (if delta
-                                    (led env mode (buffer-selection-delta b delta) cx cy w h)
-                                    (led env mode b cx cy w h))))
-                           ((eq? x #\%)
-                              (lets ((delta (paren-hunter b)))
-                                 (if (and delta (> delta 0))
-                                    (led env mode
-                                       (buffer-selection-delta (buffer-unselect b) delta)
-                                       cx cy w h)
-                                    (led env mode b cx cy w h))))
-                           ((eq? x #\e) ;; parent expression
-                              (lets ((back len (parent-expression b))
-                                     (old-line (buffer-line b)))
-                                 (if back
-                                    (lets
-                                       ((b (seek-delta b back))
-                                        (new-line (buffer-line b)))
-                                       (led env mode
-                                          (buffer-selection-delta (buffer-unselect b) len)
-                                          (nice-cx b w)
-                                          (bound 1 (- cy (- old-line new-line)) h)
-                                          w h))
-                                    (led env mode b cx cy w h))))
-                           ((eq? x #\N) ;; numbers
-                              (led (put env 'line-numbers (not (get env 'line-numbers #false)))
-                                 mode b cx cy w h))
-                           ((eq? x #\Q)
-                              (lets ((bp ep (led-eval b env (tuple 'quit #f))))
-                                 ;; only exits on failure
-                                 (led
-                                    (set-status-text env "Buffer has unsaved content.")
-                                    mode b cx cy w h)))
-                           ((eq? x #\W)
-                              (lets ((b (buffer-select-current-word b))
-                                     (seln (get-selection b))
-                                     (lp (buffer-line-pos b)))
-                                 (led env mode b
-                                    (min w (max 1 (+ 1 lp))) cy w h)))
-                           ((or (eq? x #\:) (eq? x #\/) (eq? x #\?) (eq? x #\|))
-                              (mail (get env 'status-thread-id) (tuple 'start-command x))
-                              (led (clear-status-text env) 'enter-command b cx cy w h))
                            (else
                               (led env mode b cx cy w h))))))
                ((esc)
