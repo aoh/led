@@ -40,8 +40,8 @@ COMMAND MODE ------------------------------------------------------------------
    m<char> - save a mark named by char to current selection (offset and length)
    '<char> - go to selection named by char
 
-   $ - select empty string at end of current line
-   0 - move to beginning of current line
+   $ - select rest of line
+   0 - select beginning of line
    . - select current line
 
    u - undo last command
