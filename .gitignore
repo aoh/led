@@ -5,3 +5,4 @@ led.log
 bin
 tmp
 test/config
+test/*.out
