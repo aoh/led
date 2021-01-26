@@ -31,6 +31,7 @@
       get-selection           ;; b -> (rune ...)
       buffer-pos              ;; b -> n
       buffer-selection-length ;; b -> n
+      set-selection-length    ;; b n -> b'
       buffer-unselect         ;; b -> b' (select null string at same pos)
       buffer-line             ;; b -> n (current line number)
       buffer-left             ;; b -> (rune ...), reverse
@@ -162,10 +163,13 @@
       (define (buffer-line b)
          (b (λ (pos l r len line) line)))
 
-
-
       (define (buffer-selection-length b)
          (b (λ (pos l r len line) len)))
+
+      (define (set-selection-length b n)
+         (b (λ (pos l r len line)
+            (buffer pos l r n line))))
+
 
       (define (buffer-unselect b)
          (b (λ (pos l r len line) (buffer pos l r 0 line))))

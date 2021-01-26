@@ -330,6 +330,11 @@
                (led env mode b cx cy w h)))
          (led env mode b cx cy w h))))
 
+(define (ui-select-rest-of-line env mode b cx cy w h led)
+   (led env mode
+      (select-rest-of-line b)
+      cx cy w h))
+
 ;; as in vi, but a more led-ish interpretation would be to select up to end of line,
 ;; so that the vi-command C would become $i, and and change up to beginning of line
 ;; could be 0i
@@ -387,6 +392,14 @@
    (led env mode
       (seek-start-of-line b)
       1 cy w h))
+
+(define (ui-select-start-of-line env mode b cx cy w h led)
+   (lets ((pos (buffer-pos b))
+          (b (seek-start-of-line b))
+          (len (- pos (buffer-pos b))))
+      (led env mode
+         (set-selection-length b len)
+         1 cy w h)))
 
 (define (ui-delete env mode b cx cy w h led)
    (ui-put-yank (get-selection b))
@@ -492,14 +505,14 @@
       #\i ui-enter-insert-mode
       #\y ui-yank
       #\n ui-next-match
-      #\$ ui-line-end
+      #\$ ui-select-rest-of-line
       #\w ui-select-word
       #\m ui-add-mark
       #\' ui-go-to-mark
       #\. ui-select-current-line
       #\L ui-select-next-char
       #\H ui-unselect-last-char
-      #\0 ui-go-to-start-of-line
+      #\0 ui-select-start-of-line
       #\d ui-delete
       #\p ui-paste
       #\u ui-undo
@@ -730,6 +743,13 @@
                ((tab) ;; remove after owl 0.2.1
                   (lets ((b (buffer-append-noselect b (list #\space #\space #\space))))
                      (led env mode b (min w (+ cx 3)) cy w h)))
+               ((enter) ;; remove after owl 0.2.1
+                  (lets
+                     ((i (if (get env 'autoindent) (buffer-line-indent b) null))
+                      (b (buffer-append-noselect b (cons #\newline i))))
+                     (led env 'insert b
+                        (bound 1 (+ (length i) 1) w)
+                        (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                ((arrow dir)
                   (cond
                      ((eq? dir 'up)
