@@ -262,6 +262,10 @@
 ;; UI actions, to be bound to key bindings in env
 
 
+(define (ui-unbound-key env mode b cx cy w h led)
+   (led (set-status-text env "unbound key")
+      mode b cx cy w h))
+
 (define (ui-left env mode b cx cy w h led)
    (lets ((bp env (led-eval b env (tuple 'left))))
       (if (or (not bp) (eq? (buffer-char bp) #\newline))
@@ -462,12 +466,12 @@
          (set-status-text env "Buffer has unsaved content.")
          mode b cx cy w h)))
 
-(define (ui-write-buffer env mode b cx cy w h led)
-   (lets ((b (buffer-select-current-word b))
-          (seln (get-selection b))
-          (lp (buffer-line-pos b)))
-      (led env mode b
-         (min w (max 1 (+ 1 lp))) cy w h)))
+;(define (ui-write-buffer env mode b cx cy w h led)
+;   (lets ((b (buffer-select-current-word b))
+;          (seln (get-selection b))
+;          (lp (buffer-line-pos b)))
+;      (led env mode b
+;         (min w (max 1 (+ 1 lp))) cy w h)))
 
 (define (ui-start-lex-command env mode b cx cy w h led)
    (mail (get env 'status-thread-id) (tuple 'start-command #\:))
@@ -508,6 +512,102 @@
       #\: ui-start-lex-command
       #\/ ui-start-search
       ))
+
+(define (ui-page-down env mode b cx cy w h led)
+   (led env mode
+      (seek-delta b (lines-down-offset b (max 1 (- h 2))))
+      1 cy w h))
+
+(define (ui-page-up env mode b cx cy w h led)
+   (let ((b (seek-delta b (lines-up-offset b (max 1 (- h 1))))))
+      (led env mode b 1 (min cy (buffer-line b)) w h)))
+
+(define (ui-repaint env mode b cx cy w h led)
+   (mail 'ui (tuple 'clear)) ;; clear screen
+   (led
+      (del env 'status-message)
+      mode b cx cy w h))
+
+(define (ui-clean-buffer env mode b cx cy w h led)
+   (lets ((exp
+            (tuple 'seq
+               (tuple 'select 'everything)
+               (tuple 'call "clean")))
+          (bp ep (led-eval b env exp)))
+      (if bp
+         (led ep mode bp 1 1 w h)
+         (led (set-status-text env "Nothing to clean") mode b cx cy w h))))
+
+(define (ui-format-paragraphs env mode b cx cy w h led)
+   (lets ((exp (tuple 'call "fmt"))
+          (bp ep (led-eval b env exp)))
+      (if bp
+         (led ep mode bp cx cy w h)
+         (led (set-status-text env "nothing happened") mode b cx cy w h))))
+
+(define (ui-save-buffer env mode b cx cy w h led)
+   (let ((pathp (get env 'path)))
+      (if pathp
+         (lets ((buffp envp (led-eval b env (tuple 'write-buffer pathp))))
+            (if buffp
+               (led envp mode buffp cx cy w h)
+               (led env mode b cx cy w h)))
+         (led
+            (set-status-text env
+               "No path yet.")
+            mode b cx cy w h))))
+
+(define (ui-send-to-subprocess env mode b cx cy w h led)
+   (let ((proc (get env 'subprocess)))
+      (log " => sending to " proc)
+      (if proc
+         (lets ((resp (communicate proc (get-selection b)))
+                (b (buffer-after-dot b))
+                (data (or (utf8-decode (or resp null)) null))
+                (delta (tuple (buffer-pos b) null data)))
+            (log " => " data)
+            (led
+               (if (null? data)
+                  (set-status-text env "No data received from subprocess.")
+                  (push-undo env delta))
+               mode
+               (buffer-append b data)
+               cx cy w h))
+         (begin
+            (log " => no subprocess")
+            (led env mode b cx cy w h)))))
+
+(define (ui-do env mode b cx cy w h led)
+   (lets
+      ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)) ;; fixme - cursor move
+       (cx (nice-cx bp w))
+       (s (list->string (get-selection bp))))
+      (cond
+         ((file? s)
+            (mail 'ui (tuple 'open s env)) ;; <- actually we want a subset, but whole env for now
+            (led env mode bp cx cy w h))
+         ((directory? s)
+            (lets
+               ((fs (or (led-dir->list s) null))
+                (contents
+                   (foldr
+                       (lambda (path tail) (render path (if (null? tail) tail (cons 10 tail))))
+                       null fs))
+                (buff env (led-eval bp env (tuple 'replace contents))))
+               (led env mode buff cx cy w h)))
+         (else
+            (led env mode bp cx cy w h)))))
+
+(define *default-command-mode-control-key-bindings*
+   (ff
+      'f ui-page-down
+      'b ui-page-up
+      'l ui-repaint
+      'e ui-clean-buffer
+      'j ui-format-paragraphs
+      'w ui-save-buffer
+      'x ui-send-to-subprocess
+      'm ui-do))
 
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
@@ -565,108 +665,19 @@
          ((eq? mode 'command)
             (tuple-case msg
                ((ctrl k)
-                  (cond
-                     ((eq? k 'f)
-                        (led env mode
-                           (seek-delta b (lines-down-offset b (max 1 (- h 2))))
-                           1 cy w h))
-                     ((eq? k 'b)
-                        (let ((b (seek-delta b (lines-up-offset b (max 1 (- h 1))))))
-                           (led env mode b 1 (min cy (buffer-line b)) w h)))
-                     ((eq? k 'l)
-                        (mail 'ui (tuple 'clear)) ;; clear screen
-                        (led
-                           (del env 'status-message)
-                           mode b cx cy w h))
-                     ((eq? k 'e)
-                        (log "cleanup!")
-                        (lets ((exp
-                                 (tuple 'seq
-                                    (tuple 'select 'everything)
-                                    (tuple 'call "clean")))
-                               (bp ep (led-eval b env exp)))
-                           (if bp
-                              (led ep mode bp 1 1 w h)
-                              (led (set-status-text env "Nothing to clean") mode b cx cy w h))))
-                     ((eq? k 'j)
-                        (log "formatting")
-                        (lets ((exp (tuple 'call "fmt"))
-                               (bp ep (led-eval b env exp)))
-                           (if bp
-                              (led ep mode bp cx cy w h)
-                              (led (set-status-text env "nothing happened") mode b cx cy w h))))
-                     ((eq? k 'w)
-                        (let ((pathp (get env 'path)))
-                           (if pathp
-                              (lets ((buffp envp (led-eval b env (tuple 'write-buffer pathp))))
-                                 (if buffp
-                                    (led envp mode buffp cx cy w h)
-                                    (led env mode b cx cy w h)))
-                              (led
-                                 (set-status-text env
-                                    "No path yet.")
-                                 mode b cx cy w h))))
-                     ((eq? k 'x)
-                        (let ((proc (get env 'subprocess)))
-                           (log " => sending to " proc)
-                           (if proc
-                              (lets ((resp (communicate proc (get-selection b)))
-                                     (b (buffer-after-dot b))
-                                     (data (or (utf8-decode (or resp null)) null))
-                                     (delta (tuple (buffer-pos b) null data)))
-                                 (log " => " data)
-                                 (led
-                                    (if (null? data)
-                                       (set-status-text env "No data received from subprocess.")
-                                       (push-undo env delta))
-                                    mode
-                                    (buffer-append b data)
-                                    cx cy w h))
-                              (begin
-                                 (log " => no subprocess")
-                                 (led env mode b cx cy w h)))))
-                     (else
-                        (led env mode b cx cy w h))))
-               ((enter) ;; would treating this as C-m be more or less intuitive?
-                  (lets
-                     ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)) ;; fixme - cursor move
-                      (cx (nice-cx bp w))
-                      (s (list->string (get-selection bp))))
-                     (cond
-                        ((file? s)
-                           (mail 'ui (tuple 'open s env)) ;; <- actually we want a subset, but whole env for now
-                           (led env mode bp cx cy w h))
-                        ((directory? s)
-                           (lets
-                              ((fs (or (led-dir->list s) null))
-                               (contents
-                                  (foldr
-                                      (lambda (path tail) (render path (if (null? tail) tail (cons 10 tail))))
-                                      null fs))
-                               (buff env (led-eval bp env (tuple 'replace contents))))
-                              (led env mode buff cx cy w h)))
-                        (else
-                           (led env mode bp cx cy w h)))))
+                  (let ((handler (get (get env 'command-mode-control-key-bindings empty) k ui-unbound-key)))
+                     (handler env mode b cx cy w h led)))
                ((key x)
-                  (let ((handler (get (get env 'command-mode-key-bindings empty) x)))
-                     (if handler
-                        (handler env mode b cx cy w h led)
-                        (cond
-                           (else
-                              (led env mode b cx cy w h))))))
+                  ((get (get env 'command-mode-key-bindings empty) x ui-unbound-key)
+                     env mode b cx cy w h led))
                ((esc)
                   (led env mode (buffer-unselect b) cx cy w h))
+               ((enter) ;; remove after owl 0.2.1
+                  (ui-do env mode b cx cy w h led))
                (else
                   (led env mode b cx cy w h))))
          ((eq? mode 'insert)
             (tuple-case msg
-               ((enter)
-                  (lets
-                     ((i (if (get env 'autoindent) (buffer-line-indent b) null))
-                      (b (buffer-append-noselect b (cons #\newline i))))
-                     (led env 'insert b
-                        (bound 1 (+ (length i) 1) w)
-                        (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                ((key x)
                   (lets
                      ((b (buffer-append-noselect b (list x))))
@@ -689,13 +700,20 @@
                   (led
                      (push-undo env delta)
                      'command b cx cy w h)))
-               ((tab)
-                  (lets ((b (buffer-append-noselect b (list #\space #\space #\space))))
-                     (led env mode b (min w (+ cx 3)) cy w h)))
                ((ctrl k)
                   (cond
                      ;((eq? k 'c)
                      ;   (led env 'command b cx cy w h))
+                     ((eq? k 'm) ;; enter
+                        (lets
+                           ((i (if (get env 'autoindent) (buffer-line-indent b) null))
+                            (b (buffer-append-noselect b (cons #\newline i))))
+                           (led env 'insert b
+                              (bound 1 (+ (length i) 1) w)
+                              (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
+                     ((eq? k 'i) ;; tab
+                        (lets ((b (buffer-append-noselect b (list #\space #\space #\space))))
+                           (led env mode b (min w (+ cx 3)) cy w h)))
                      ((eq? k 'w)
                         (let ((pathp (get env 'path)))
                            (if pathp
@@ -709,6 +727,9 @@
                                  mode b cx cy w h))))
                      (else
                         (led env mode b cx cy w h))))
+               ((tab) ;; remove after owl 0.2.1
+                  (lets ((b (buffer-append-noselect b (list #\space #\space #\space))))
+                     (led env mode b (min w (+ cx 3)) cy w h)))
                ((arrow dir)
                   (cond
                      ((eq? dir 'up)
@@ -808,7 +829,10 @@
 
 (define *default-environment*
    (pipe empty-env
-      (put 'command-mode-key-bindings *default-command-mode-key-bindings*)))
+      (put 'command-mode-key-bindings *default-command-mode-key-bindings*)
+      (put 'command-mode-control-key-bindings
+         *default-command-mode-control-key-bindings*)
+      ))
 
 (define (start-led-threads dict args)
    (cond
