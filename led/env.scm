@@ -18,9 +18,10 @@
             (put 'redo null)))
 
       (define (empty-led-env base-env id path)
-         (if path
-            (put base-env 'path path)
-            base-env))
+         (let ((env (ff-union empty-env base-env (lambda (a b) a))))
+            (if path
+               (put env 'path path)
+               env)))
 
       (define (set-status-text env string)
          (put env 'status-message (string->runes string)))
