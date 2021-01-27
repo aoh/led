@@ -4,7 +4,6 @@
       (owl toplevel))
 
    (export
-      empty-env
       empty-led-env
       set-status-text
       clear-status-text)

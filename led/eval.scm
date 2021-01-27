@@ -76,6 +76,7 @@
          (log "led-eval " exp)
          (tuple-case exp
             ((left) ;; usually keyboard h, move left by one character on current line
+               ;; convert to match ui-left
                (lets ((bp (seek-delta buff -1)))
                   (if (and bp (not (eq? #\newline (buffer-char bp))))
                      (values bp env)
@@ -104,7 +105,7 @@
                         #f
                         (set-status-text env (str "Cannot read '" path "'"))))))
             ((new-buffer path)
-               (mail 'ui (tuple 'open path))
+               (mail 'ui (tuple 'open path env))
                (values buff env))
             ((append text)
                (lets

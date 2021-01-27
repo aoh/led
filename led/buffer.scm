@@ -14,7 +14,6 @@
       (only (owl sys) file? directory?)
       (only (led system) led-dir->list)
       (owl proof)
-      (only (led env) empty-env)
       (led log)
       )
 
@@ -625,7 +624,7 @@
       (define (start-status-line id w)
          (mail id (tuple 'keep-me-posted))
          (mail 'clock 'subscribe)
-         (status-line empty-env empty-buffer id 0 w null null))
+         (status-line empty empty-buffer id 0 w null null))
 
 
 ))

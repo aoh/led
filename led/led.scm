@@ -870,7 +870,7 @@
 
 
 (define *default-environment*
-   (pipe empty-env
+   (pipe empty
       (put 'command-mode-key-bindings *default-command-mode-key-bindings*)
       (put 'command-mode-control-key-bindings
          *default-command-mode-control-key-bindings*)
@@ -887,7 +887,8 @@
          0)
       ((get dict 'repl)
          (link (start-logger (get dict 'log)))
-         (led-repl (string-buffer "") empty-env))
+         (led-repl (string-buffer "")
+            (empty-led-env *default-environment* #f  #f)))
       (else
          (lets ((input (terminal-input (put empty 'eof-exit? #f)))
                 (x y ll (get-terminal-size input)))
