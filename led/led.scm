@@ -281,15 +281,19 @@
 (define (ui-down env mode b cx cy w h led)
    (lets ((delta nleft (next-line-same-pos b)))
       (if delta
-         (led env mode (seek-delta b delta)
-            (max 1 (- cx nleft))
-            (min (- h 1) (+ cy 1)) w h)
+         (let ((b (seek-delta b delta)))
+            (led env mode b
+               (nice-cx b w)
+               (min (- h 1) (+ cy 1)) w h))
          (led env mode b cx cy w h))))
 
 (define (ui-up env mode b cx cy w h led)
    (lets ((delta nleft (prev-line-same-pos b)))
       (if delta
-         (led env mode (seek-delta b delta) (- cx nleft) (max 1 (- cy 1)) w h)
+         (let ((b (seek-delta b delta)))
+            (led env mode b
+               (nice-cx b w)
+               (max 1 (- cy 1)) w h))
          (led env mode b cx cy w h))))
 
 (define (ui-right-one-char env mode b cx cy w h led)
@@ -353,7 +357,7 @@
 
 (define (ui-select-rest-of-line env mode b cx cy w h led)
    (led env mode
-      (select-rest-of-line b)
+      (select-rest-of-line b #f)
       cx cy w h))
 
 (define (ui-line-end env mode b cx cy w h led)

@@ -402,12 +402,12 @@
 
 
       ;; select rest of line including newline, if there
-      (define (select-rest-of-line b)
+      (define (select-rest-of-line b newline?)
          (b
             (λ (pos l r len line)
                (let ((end (nth-offset r 1 #\newline)))
                   (if end
-                     (buffer pos l r (+ end 1) line)
+                     (buffer pos l r (+ end (if newline? 1 0)) line)
                      (buffer pos l r (length r) line)))))) ;; partial line
 
       ;; select empty string at beginning of current line
@@ -436,22 +436,25 @@
                (cond
                   ((eq? n 1) ;; select first line (which has no preceding #\newline to look for)
                      (select-rest-of-line
-                        (buffer 0 null (append (reverse l) r) 0 1)))
+                        (buffer 0 null (append (reverse l) r) 0 1)
+                        #true))
                   ((< n line) ;; select a complete preceding or current line
                      (let ((start (nth-offset l (- line (- n 1)) #\newline)))
                         (if start
                            (select-rest-of-line
-                              (seek b (- pos start)))
-                           #false)))
+                              (seek b (- pos start))
+                              #true)
+                           )))
                   ((= n line)
                      (select-rest-of-line
-                        (seek-start-of-line b)))
+                        (seek-start-of-line b)
+                        #true))
                   (else
                      (let ((start (nth-offset r (- n line) #\newline)))
                         (if start
                            (select-rest-of-line
-                              (seek b (+ pos (+ start 1)))) ;; after newline
-                           #false)))))))
+                              (seek b (+ pos (+ start 1)))
+                              #true))))))))
 
       (define (select-everything b)
          (b
