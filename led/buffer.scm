@@ -621,8 +621,8 @@
 
       (define (start-status-line id w)
          (mail id (tuple 'keep-me-posted))
-            (mail 'clock 'subscribe)
-               (status-line empty-env empty-buffer id 0 w null null))
+         (mail 'clock 'subscribe)
+         (status-line empty-env empty-buffer id 0 w null null))
 
 
 ))

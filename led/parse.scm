@@ -59,6 +59,7 @@
             (list->string path)))
 
       ;; up to dot, replace selection
+      ;; alternatively i/foo/
       (define get-insert
          (get-parses
             ((skip (get-word "i\n" 'insert))
@@ -75,9 +76,9 @@
          (get-parses
             ((op
                (get-one-of
-                  (get-word "w" 'write-buffer)     ;; the whole buffer + mark saved, not just selection
                   (get-word "write" 'write-buffer)
-                  (get-word "r" 'read)
+                  (get-word "w" 'write-buffer)     ;; the whole buffer + mark saved, not just selection
+                  ;(get-word "r" 'read)
                   (get-word "read" 'read)
                   (get-word "n" 'new-buffer)
                   (get-word "new" 'new-buffer)
@@ -127,7 +128,7 @@
                   (get-word "paste" (tuple 'paste 'yank)) ;; no buffer naming yet
                   (get-word "p" (tuple 'print))
                   (get-word "redo" (tuple 'redo))
-                  (get-word "r" (tuple 'redo))
+                  ;(get-word "r" (tuple 'redo)) ;; is parsed as read #f
                   (get-word "q!" (tuple 'quit #t))
                   (get-word "q" (tuple 'quit #f))
                   get-insert

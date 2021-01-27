@@ -1,1 +1,0 @@
-[10;10R[10;10R:w hello.io.out:q

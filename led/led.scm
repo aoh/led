@@ -267,10 +267,16 @@
       mode b cx cy w h))
 
 (define (ui-left env mode b cx cy w h led)
-   (lets ((bp env (led-eval b env (tuple 'left))))
-      (if (or (not bp) (eq? (buffer-char bp) #\newline))
-         (led env mode b cx cy w h)
-         (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h))))
+   (if (eq? (buffer-selection-length b) 0)
+      ;; move forward regardless off selection
+      (lets ((bp env (led-eval b env (tuple 'left))))
+         (if (or (not bp) (eq? (buffer-char bp) #\newline))
+            (led env mode b cx cy w h)
+            (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h)))
+      (led env mode
+         (buffer-unselect b)
+         cx cy w h)
+            ))
 
 (define (ui-down env mode b cx cy w h led)
    (lets ((delta nleft (next-line-same-pos b)))
@@ -286,23 +292,39 @@
          (led env mode (seek-delta b delta) (- cx nleft) (max 1 (- cy 1)) w h)
          (led env mode b cx cy w h))))
 
-(define (ui-right env mode b cx cy w h led)
-   (lets
-      ((delta (max 1 (buffer-selection-length b)))
-       (delta-cx
-         (max (selection-printable-length b)
-            (let ((next (buffer-char b)))
-               (if next (char-width next) 0))))
-       (bp (seek-delta b delta)))
+(define (ui-right-one-char env mode b cx cy w h led)
+   (lets ((delta-cx (or (maybe char-width (buffer-char b)) 0))
+          (bp (seek-delta b 1)))
       (if (or (not bp)
-              (eq? (buffer-char b)  #\newline))
+            (eq? (buffer-char b) #\newline))
+         ;; no-op if out of line or data
          (led env mode b cx cy w h)
          (led env mode bp
             (if (< (+ cx delta-cx) w)
                (+ cx delta-cx)
                (nice-cx bp w))
-            ;; could also move cy when jumping over selection
             cy w h))))
+
+(define (count-newlines lst)
+   (fold
+      (lambda (n x)
+         (if (eq? x #\newline)
+            (+ n 1)
+            n))
+      0 lst))
+
+;; move by one char if nothing selected, otherwise to end of selection
+(define (ui-right env mode b cx cy w h led)
+   (let ((n (buffer-selection-length b)))
+      (if (eq? n 0)
+         ;; move forward regardless off selection
+         (ui-right-one-char env mode b cx cy w h led)
+         (lets
+            ((seln (get-selection b))
+             (b (seek-delta b n))
+             (cx (nice-cx b w))
+             (cy (min (- h 1) (+ cy (count-newlines seln)))))
+            (led env mode b cx cy w h)))))
 
 (define (ui-enter-insert-mode env mode b cx cy w h led)
    (lets
@@ -311,7 +333,6 @@
        (env (put env 'insert-original old))
        (b (buffer-delete b))) ;; remove old selection
       (led env 'insert b cx cy w h)))
-
 
 (define (ui-yank env mode b cx cy w h led)
    (lets ((seln (get-selection b)))
@@ -335,9 +356,6 @@
       (select-rest-of-line b)
       cx cy w h))
 
-;; as in vi, but a more led-ish interpretation would be to select up to end of line,
-;; so that the vi-command C would become $i, and and change up to beginning of line
-;; could be 0i
 (define (ui-line-end env mode b cx cy w h led)
    (lets ((nforw (buffer-line-end-pos b))
           (b (seek-delta b nforw)))

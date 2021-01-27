@@ -1,1 +1,0 @@
-[2;1R[23;86Rilintukalabanaaninorsu:2:.,$w range-write.io.out:$:r range-write.io.out:%w! range-write.io.out:q

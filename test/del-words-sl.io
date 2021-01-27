@@ -1,1 +1,0 @@
-[10;10R[10;10Rifoo bar bazquux/bar2dw0p:w del-words-sl.io.out:q

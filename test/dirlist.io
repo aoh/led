@@ -1,1 +1,0 @@
-[10;10R[10;10R:n ../test/dirlist.io.ok:w dirlist.io.outQQQQ
