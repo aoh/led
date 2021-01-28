@@ -381,6 +381,16 @@
          (add-mark env (ref (ref envelope 2) 2) (buffer-pos b) (buffer-selection-length b))
          mode b cx cy w h)))
 
+'(import (only (owl fasl) memory-taken))
+'(define (ui-memory-info env mode b cx cy w h led)
+   (log "MEMORY INFO")
+   (log "env size " (memory-taken env))
+   (log "b   size " (memory-taken b))
+   (mail (get env 'status-thread-id)
+      (tuple 'memory))
+   (led env mode b cx cy w h))
+
+
 (define (ui-go-to-mark env mode b cx cy w h led)
    (lets
       ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
@@ -518,6 +528,7 @@
 
 (define *default-command-mode-key-bindings*
    (ff
+      ;#\q ui-memory-info
       #\N ui-toggle-line-numbers
       #\Q ui-close-buffer-if-saved
       #\h ui-left
@@ -709,7 +720,16 @@
                   (led env mode (buffer-unselect b) cx cy w h))
                ((enter) ;; remove after owl 0.2.1
                   (ui-do env mode b cx cy w h led))
+               ((arrow dir)
+                  (case dir
+                     ((left) (ui-left env mode b cx cy w h led))
+                     ((right) (ui-right env mode b cx cy w h led))
+                     ((up) (ui-up env mode b cx cy w h led))
+                     ((down) (ui-down env mode b cx cy w h led))
+                     (else
+                        (ui-unbound-key env mode b cx cy w h led))))
                (else
+                  (log "Command unhandled key " msg)
                   (led env mode b cx cy w h))))
          ((eq? mode 'insert)
             (tuple-case msg
