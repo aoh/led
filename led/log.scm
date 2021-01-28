@@ -1,4 +1,5 @@
 (define-library (led log)
+
    (import (owl toplevel))
 
    (export
@@ -7,7 +8,6 @@
    (begin
 
       (define (log . x)
-         ;; just dropped if logger is not running
          (mail 'log x))
 
       (define (logger port)
@@ -16,12 +16,19 @@
             (print-to port from ": " msg)
             (logger port)))
 
+      (define (unlogger)
+         (thread 'log
+            (let loop ()
+               (wait-mail)
+               (loop))))
+
       (define (start-logger path)
+         (print-to stderr "GC: " path)
          (if path
             (let ((port (open-output-file path)))
                (if port
                   (begin
                      (thread 'log (logger port))
                      log)
-                  (error "Cannot open log file " path)))))
-                  ))
+                  (error "Cannot open log file " path)))
+            (unlogger)))))
