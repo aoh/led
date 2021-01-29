@@ -80,8 +80,9 @@
                   (get-word "w" 'write-buffer)     ;; the whole buffer + mark saved, not just selection
                   ;(get-word "r" 'read)
                   (get-word "read" 'read)
-                  (get-word "n" 'new-buffer)
+                  ;(get-word "n" 'new-buffer)
                   (get-word "new" 'new-buffer)
+                  (get-word "search-buffer" 'search-buffer)
                   ))
              (path
                 (get-either
@@ -131,6 +132,7 @@
                   ;(get-word "r" (tuple 'redo)) ;; is parsed as read #f
                   (get-word "q!" (tuple 'quit #t))
                   (get-word "q" (tuple 'quit #f))
+                  (get-word "next-match" (tuple 'next-match #f))
                   get-insert
                   (get-parses
                      ((val get-replace-regex))

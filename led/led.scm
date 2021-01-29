@@ -346,21 +346,16 @@
       (ui-put-yank seln)
       (led env mode  b cx cy w h)))
 
-;; move to led-eval, add (buffer-search which puts 'last-search in place)
-;; and calls (next-match) last-search should also save start
-;; and end positions.
-
 (define (ui-next-match env mode b cx cy w h led)
-   (let ((s (get env 'last-search)))
-      (if s
-         (lets ((p len (next-match b s)))
-            (log "next search match is " p)
-            (if p
-               (lets ((b (seek-select b p len))
-                      (lp (buffer-line-pos b)))
-                  (led env mode b (if (>= lp w) 1 (+ lp 1)) 1 w h))
-               (led env mode b cx cy w h)))
-         (led env mode b cx cy w h))))
+   (lets ((bp env (led-eval b env (tuple 'next-match #f))))
+      (if bp
+         (lets ((lp (buffer-line-pos bp)))
+            (led env mode bp 
+               (if (>= lp w) 1 (+ lp 1))
+               1 w h))
+          (led env mode b cx cy w h))))
+             
+   
 
 (define (ui-select-rest-of-line env mode b cx cy w h led)
    (led env mode
@@ -736,8 +731,7 @@
                            (min cy (buffer-line buff)) ;; ditto
                            w h)))
                   ((eq? (maybe-car runes) #\/)
-                     (log "saving last search " (cdr runes))
-                     (let ((env (put env 'last-search (cdr runes))))
+                     (lets ((buff env (led-eval b env (tuple 'search-buffer (cdr runes))))) ;; <- no range yet
                         (led env 'command b cx cy w h)))
                   (else
                      (log "wat command " (runes->string runes))

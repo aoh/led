@@ -344,9 +344,10 @@
             (cdr x)
             x))
 
-      (define (next-match b runes)
+      (define (next-match b runes start?)
          (b (λ (pos l r len line)
-            (let loop ((data (maybe-cdr r)) (pos (+ pos 1)))
+            (let loop ((data (if start? r (maybe-cdr r)))
+                       (pos (+ pos (if start? 0 1))))
                (cond
                   ((null? data) (values #false #false))
                   ((match-prefix? data runes)

@@ -203,6 +203,23 @@
                      (led-eval buff env (tuple 'apply func))
                      (values #f
                         (set-status-text env "no such extension")))))
+            ((search-buffer str) ;; str or char list
+               (lets
+                  ((cs (if (string? str) (string->list str) str))
+                   (env (put env 'last-search cs)))
+                  (if (equal? (get-selection buff) cs)
+                     (values buff env)
+                     (led-eval buff env (tuple 'next-match #t)))))
+            ((next-match match-start?)
+               (let ((s (get env 'last-search)))
+                  (if s
+                     (lets ((p len (next-match buff s match-start?)))
+                        (if p
+                           (values (seek-select buff p len) env)
+                           (values #f
+                              (set-status-text env "no more matches"))))
+                     (values #f
+                        (set-status-text env "no search")))))
             ((help subject)
                (mail 'ui (tuple 'open (list 'help subject)))
                (values buff env))
