@@ -87,6 +87,10 @@
                   (write-bytes stdout
                      (clear-line-right null))
                   (screen w h null))
+               ((ping)
+                  ;; used for synchronization
+                  (mail from (tuple 'pong))
+                  (screen w h null))
                (else
                   (print "screen: wat " msg " from " from)
                   (screen w h old)))))

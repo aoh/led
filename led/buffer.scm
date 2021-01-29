@@ -577,7 +577,7 @@
       (define (status-line env buff id info w keys c)
          (lets ((envelope (wait-mail))
                 (from msg envelope))
-            (log "status-line got " msg " from " from ", keys " keys)
+            ;(log "status-line got " msg " from " from ", keys " keys)
             (tuple-case msg
                ((update env buff)
                   (if (null? keys)

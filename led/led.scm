@@ -230,6 +230,9 @@
       (+ 1 (buffer-line-offset b))
       w))
 
+(define (nice-cy b cy h)
+   (min cy (buffer-line b)))
+
 (define (first-line lst)
    (foldr
       (lambda (x tl)
@@ -342,6 +345,10 @@
    (lets ((seln (get-selection b)))
       (ui-put-yank seln)
       (led env mode  b cx cy w h)))
+
+;; move to led-eval, add (buffer-search which puts 'last-search in place)
+;; and calls (next-match) last-search should also save start
+;; and end positions.
 
 (define (ui-next-match env mode b cx cy w h led)
    (let ((s (get env 'last-search)))
@@ -623,14 +630,42 @@
             (log " => no subprocess")
             (led env mode b cx cy w h)))))
 
+(define (part->command cs)
+   (cond
+      ((null? cs)
+         'no-op)
+      ((string->number (list->string cs)) =>
+         (lambda (n)
+            (if (integer? n)
+               (tuple 'select-line n)
+               #f)))
+      (else #f)))
+
+(define (parts->commands lst)
+   (foldr
+      (lambda (x tl)
+         (and tl
+            (if (eq? x 'no-op)
+               tl
+               (cons x tl))))
+      null
+      (map part->command lst)))
+
 (define (ui-do env mode b cx cy w h led)
    (lets
       ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b)) ;; fixme - cursor move
        (cx (nice-cx bp w))
-       (s (list->string (get-selection bp))))
+       (parts (split (partial eq? #\:) (get-selection bp)))
+       (s (list->string (car parts)))
+       (cmds (parts->commands (cdr parts)))
+       )
       (cond
+         ((not cmds)
+            (led
+               (set-status-text env "invalid suffix")
+               mode bp cx cy w h))
          ((file? s)
-            (mail 'ui (tuple 'open s env)) ;; <- actually we want a subset, but whole env for now
+            (mail 'ui (tuple 'open s env cmds))
             (led env mode bp cx cy w h))
          ((directory? s)
             (lets
@@ -643,6 +678,7 @@
                (led env mode buff cx cy w h)))
          (else
             (led env mode bp cx cy w h)))))
+
 
 (define *default-command-mode-control-key-bindings*
    (ff
@@ -677,6 +713,17 @@
          ((eq? op 'keep-me-posted)
             (led (put env 'clients (cons from (get env 'clients null)))
                mode b cx cy w h))
+         ((eq? op 'eval)
+            (lets ((bp envp (led-eval b env (ref msg 2))))
+               (if bp
+                  (led envp mode bp
+                     (nice-cx bp w)
+                     (nice-cy bp cy h)
+                     w h)
+                  (led
+                     ;(set-status-text env "eval failed")
+                     env
+                     mode b cx cy w h))))
          ((eq? op 'command-entered)
             (lets
                ((runes (ref msg 2)))
@@ -924,7 +971,10 @@
             (mail 'ui (tuple 'terminal-size x y))
             (for-each
                (lambda (path)
-                  (mail 'ui (tuple 'open path *default-environment*)))
+                  (mail 'ui
+                     (tuple 'open path
+                        *default-environment*
+                        null)))
                (if (null? args)
                   (list #false)
                   args))

@@ -105,7 +105,7 @@
                         #f
                         (set-status-text env (str "Cannot read '" path "'"))))))
             ((new-buffer path)
-               (mail 'ui (tuple 'open path env))
+               (mail 'ui (tuple 'open path env null))
                (values buff env))
             ((append text)
                (lets

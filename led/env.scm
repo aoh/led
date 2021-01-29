@@ -14,7 +14,9 @@
          (pipe empty
             (put 'autoindent #true) ;; for now
             (put 'undo null)
-            (put 'redo null)))
+            (put 'redo null)
+            (put 'subprocess #false) ;; each buffer can have own (ones)
+            ))
 
       (define (empty-led-env base-env id path)
          (let ((env (ff-union empty-env base-env (lambda (a b) a))))

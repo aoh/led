@@ -1,7 +1,7 @@
 
 ;; UI protocol
 ; input-terminal + _ => depends
-; _ + #(open X)      => attempt to open a new buffer, or switch to it
+; _ + #(open X env commands) => attempt to open a new buffer, or switch to it
 ; _ + #(add-opener X) => add a new function to perform an open action
 ; _ + #(buffer-closed)    => drop sending buffer from list
 ; _ + #(terminal-size w h) => notify sub-buffers
@@ -51,6 +51,13 @@
             ((equal? (car l) p) (values l r))
             (else (find-buffer (cdr l) (cons (car l) r) p))))
 
+      (define (send-commands buffer-id cmds)
+         (log "Sending opening commands " cmds " to " buffer-id)
+         (fold
+            (lambda (id command)
+               (mail id (tuple 'eval command)))
+            buffer-id cmds))
+
       ;; buffers are corresponding thread ids
       ;; l[eft], buffers, car is the active one
       ;; r[ight], buffers
@@ -94,17 +101,22 @@
                      (else
                         (mail (car l) msg)
                         (ui l r i))))
-               ((eq? (ref msg 1) 'open) ;; #(open <source> <env>)
+               ((eq? (ref msg 1) 'open) ;; #(open <source> <env> <commands>)
+                  (log "OPEN " msg)
                   (lets ((lp rp (find-buffer (append (reverse r) l) null (ref msg 2))))
                      (if lp
                         (begin
+                           ;; buffer already open: focus and run commands
                            (refresh (car lp))
+                           (send-commands (car lp) (ref msg 4))
                            (ui lp rp  i))
                         (lets ((openers (get i 'openers null))
                                (id (fold (lambda (out fn) (or out (fn (ref msg 2) (ref msg 3)))) #f openers)))
                            (if id
                               (begin
+                                 ;; buffer opened, send commands
                                  (mail id (tuple 'terminal-size (get i 'width 80) (get i 'height 30)))
+                                 (send-commands id (ref msg 4))
                                  (ui (cons id l) r i))
                               (ui l r i))))))
 
@@ -128,8 +140,11 @@
                      (if (null? l)
                         (if (null? r)
                            (begin
-                              ;(print-to 1 (get i 'height 1) "all buffers closed")
-                              ;(sleep 100)
+                              ;; exiting program. leave data on screen.
+                              (mail 'screen (tuple 'set-cursor 1 (get i 'height 1)))
+                              (mail 'screen (tuple 'clear-line-right))
+                              (interact 'screen (tuple 'ping))
+
                               (halt 0))
                            (begin
                               (refresh (car r))
