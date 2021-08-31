@@ -88,12 +88,14 @@
                   (if fd
                      (let ((data (buffer->bytes buff)))
                         (if (write-bytes fd data)
-                           (values buff
-                              (set-status-text
-                                 (pipe env
-                                    (mark-saved)
-                                    (put 'path path))
-                                 (str "Wrote " (length data) "b to " path ".")))
+                           (begin
+                              (close-port fd)
+                              (values buff
+                                 (set-status-text
+                                    (pipe env
+                                       (mark-saved)
+                                       (put 'path path))
+                                    (str "Wrote " (length data) "b to " path "."))))
                            (values #f
                               (set-status-text env (str "Failed to write to " path ".")))))
                      (values #f (set-status-text env "Failed to open file for writing")))))
