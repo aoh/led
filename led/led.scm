@@ -350,12 +350,12 @@
    (lets ((bp env (led-eval b env (tuple 'next-match #f))))
       (if bp
          (lets ((lp (buffer-line-pos bp)))
-            (led env mode bp 
+            (led env mode bp
                (if (>= lp w) 1 (+ lp 1))
                1 w h))
           (led env mode b cx cy w h))))
-             
-   
+
+
 
 (define (ui-select-rest-of-line env mode b cx cy w h led)
    (led env mode
@@ -901,10 +901,9 @@
                      (or
                         (file-buffer path) ;; <- grab encoding to env later
                         (dir-buffer path)
-                        (string-buffer "Tabula rasa")))
+                        (string-buffer "")))
                   ((pair? path)
-                     (list-buffer path)
-                     )
+                     (list-buffer path))
                   (else
                      (string-buffer "")))
                1 1 10 10)) ;; <- ui sends terminal size as first message
