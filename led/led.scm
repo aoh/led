@@ -446,7 +446,7 @@
          (lets ((buff env (led-eval b env (tuple 'replace data))))
             (led env mode buff cx cy w h))
          (led
-            (put env 'status-message "nothing yanked")
+            (set-status-text env "nothing yanked")
             mode b cx cy w h))))
 
 ;; y at middle of screen would be more readable
@@ -572,8 +572,9 @@
 
 (define (ui-repaint env mode b cx cy w h led)
    (mail 'ui (tuple 'clear)) ;; clear screen
+   ;(mail 'ui (tuple 'terminal-size 64 12)) ;; <- temporary
    (led
-      (del env 'status-message)
+      (clear-status-text env)
       mode b cx cy w h))
 
 (define (ui-clean-buffer env mode b cx cy w h led)
