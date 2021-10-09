@@ -153,6 +153,9 @@
                   (values
                      (apply-delta buff delta)
                      (push-undo env delta))))
+            ((resize w h)
+               (mail 'ui (tuple 'terminal-size w h))
+               (values buff env))
             ((delete)
                (led-eval buff env (tuple 'replace null)))
             ((undo)

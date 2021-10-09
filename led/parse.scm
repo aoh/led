@@ -58,6 +58,16 @@
               (path (get-plus (get-rune-if (lambda (x) (not (eq? x #\space)))))))
             (list->string path)))
 
+      (define get-digit
+         (get-rune-if
+            (lambda (x) (and (<= #\0 x) (<= x #\9)))))
+
+      (define get-spaced-number
+         (get-parses
+             ((skip (get-plus get-whitespace))
+              (digits (get-plus get-digit)))
+            (string->number (list->string digits))))
+
       ;; up to dot, replace selection
       ;; alternatively i/foo/
       (define get-insert
@@ -108,6 +118,16 @@
              (cmd  (get-plus get-spaced-word)))
             (tuple 'subprocess cmd)))
 
+      (define get-resize
+         (get-parses
+            ((skip (get-word "resize" 'foo))
+             (w get-spaced-number)
+             (h get-spaced-number))
+            (tuple 'resize w h)))
+
+
+
+
       (define get-command
          (get-parses
             ((skip (get-star! get-whitespace))
@@ -132,6 +152,7 @@
                   ;(get-word "r" (tuple 'redo)) ;; is parsed as read #f
                   (get-word "q!" (tuple 'quit #t))
                   (get-word "q" (tuple 'quit #f))
+                  get-resize
                   (get-word "next-match" (tuple 'next-match #f))
                   get-insert
                   (get-parses
