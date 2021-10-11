@@ -152,6 +152,8 @@
                   ;(get-word "r" (tuple 'redo)) ;; is parsed as read #f
                   (get-word "q!" (tuple 'quit #t))
                   (get-word "q" (tuple 'quit #f))
+                  (get-word "quit!" (tuple 'quit #t))
+                  (get-word "quit" (tuple 'quit #f))
                   get-resize
                   (get-word "next-match" (tuple 'next-match #f))
                   get-insert
