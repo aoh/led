@@ -56,7 +56,6 @@
       select-rest-of-line
       select-lines           ;; b from to
       select-end-of-file
-      select-subsection      ;; b from len, select part of current selection
       select-everything
       seek-start-of-line
       merge-selections
