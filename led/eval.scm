@@ -1,5 +1,9 @@
+;;;
+;;; EVAL env buffer expression -> env' buffer'
+;;;
 
 (define-library (led eval)
+
    (import
       (owl toplevel)
       (owl parse)
@@ -28,7 +32,7 @@
    (begin
 
       ;; env name -> (data -> data)
-      (define (led-eval-call env name)
+      (define (led-eval-rator env name)
          (find-extra name))
 
       (define (led-eval-position buff env exp)
@@ -184,6 +188,16 @@
                      (values (select-end-of-file buff) env))
                   (else
                      (values #f #f))))
+            ((subsection from len)
+               (if (and (>= from 0)
+                        (>= len 0)
+                        (<= (+ from len)
+                            (buffer-selection-length buff)))
+                  (let ((pos (buffer-pos buff)))
+                     (values
+                        (select buff (+ pos from) (+ pos (+ from len)))
+                        env))
+                  (values buff env)))
             ((seq a b)
                (lets ((bp ep (led-eval buff env a)))
                   (if bp
@@ -199,11 +213,15 @@
             ((apply func)
                (lets ((old (get-selection buff))
                       (new (func env old)))
+                  (log "apply returned " new)
                   (if (equal? old new)
                      (values #f #f) ;; nothing to do
-                     (led-eval buff env (tuple 'replace new)))))
+                     (if (tuple? new)
+                        ;; it's an action already
+                        (led-eval buff env new)
+                        (led-eval buff env (tuple 'replace new))))))
             ((call name)
-               (let ((func (led-eval-call env name)))
+               (let ((func (led-eval-rator env name)))
                   (if func
                      (led-eval buff env (tuple 'apply func))
                      (values #f
@@ -232,7 +250,7 @@
                (log (list 'wat-eval exp))
                (values #f #f))))
 
-      ;;; Line-based operation
+      ;;; Line-based operation, move elsewhere later
 
       (define (led-eval-runes buff env s)
          (log "eval: parse " s)

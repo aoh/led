@@ -200,6 +200,34 @@
             (map reverse
                (split-lines data))))
 
+
+      ;;;
+      ;;; Spelling and error checking
+      ;;;
+
+      (define spell-regexen
+         (list
+            (string->regex "g/^[A-Z][A-Z][a-z]/")    ;; double capital
+            (string->regex "g/^([aeiouyAEIOUY])\\1\\1/") ;; triple vowel
+            (string->regex "g/^[aeiouyAEIOUY]{4,}/") ;; quad vowel
+            (string->regex "g/^[qwrtpsdfghjklzxcvbnmQWRTPSDFGHJKLZXCVBNM]{5,}/") ;; five consonants
+            (string->regex "g/^[^a-zA-Z]([a-zA-Z]+)[ \\n]+\\1[^a-zA-Z]/") ;; double word
+            (string->regex "g/^[.,][^0-9 \\n]/") ;; no space after dot or comma
+            (string->regex "g/^\\.[ \\n]+[a-z]/") ;; lower case sentence start
+            (string->regex "g/^[A-Z][^.]{200,}\\./")
+            ))
+
+      (define (spell settings data)
+         (let loop ((data data) (pos 0))
+            (if (null? data)
+               ;; all good
+               (tuple 'subsection 0 0)
+               (let ((match (fold (lambda (found rex) (or found (rex data))) #f spell-regexen)))
+                  (if match
+                     (tuple 'subsection pos (length match))
+                     (loop (cdr data) (+ pos 1)))))))
+
+
       (define remove-trailing-spaces
          (string->regex "s/  *\\n/\\n/g"))
 
@@ -215,7 +243,8 @@
             (cons "fmt"     format-merged)
             (cons "crash"   (λ args (car 42)))
             (cons "clean"   cleanup)
-            (cons "del" (lambda (env x) null))
+            (cons "del"     (lambda (env x) null))
+            (cons "spell"   spell)
             ))
 
       (define (find-extra name)

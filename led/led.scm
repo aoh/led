@@ -420,6 +420,10 @@
 (define (ui-unselect-last-char env mode b cx cy w h led)
    (led env mode (buffer-selection-delta b -1) cx cy w h))
 
+(define (ui-select-everything env mode b cx cy w h led)
+   (log "selecting everything")
+   (led env mode (select-everything b) 1 1 w h))
+
 
 ;; as with end of line, maybe instead select?
 (define (ui-go-to-start-of-line env mode b cx cy w h led)
@@ -528,6 +532,19 @@
    (mail (get env 'status-thread-id) (tuple 'start-command #\/))
    (led (clear-status-text env) 'enter-command b cx cy w h))
 
+(define (ui-spell env mode b cx cy w h led)
+   ;; select rest of buffer if nothing is selected
+   (let ((b (if (= (buffer-selection-length b) 0)
+                (set-selection-length b (length (buffer-right b)))
+                b)))
+      (lets ((exp (tuple 'call "spell"))
+             (bp ep (led-eval b env exp)))
+         (if bp
+            (led ep mode bp
+               (nice-cx bp w)
+               cy w h)
+            (led (set-status-text env "nothing happened") mode b cx cy w h)))))
+
 (define *default-command-mode-key-bindings*
    (ff
       ;#\q ui-memory-info
@@ -555,10 +572,12 @@
       #\J ui-select-down
       #\> ui-indent
       #\< ui-unindent
-      #\% ui-find-matching-paren
+      #\P ui-find-matching-paren
       #\e ui-select-parent-expression
       #\: ui-start-lex-command
       #\/ ui-start-search
+      #\% ui-select-everything
+      #\? ui-spell
       ))
 
 (define (ui-page-down env mode b cx cy w h led)
@@ -593,6 +612,8 @@
       (if bp
          (led ep mode bp cx cy w h)
          (led (set-status-text env "nothing happened") mode b cx cy w h))))
+
+
 
 (define (ui-save-buffer env mode b cx cy w h led)
    (let ((pathp (get env 'path)))

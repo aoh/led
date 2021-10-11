@@ -56,6 +56,7 @@
       select-rest-of-line
       select-lines           ;; b from to
       select-end-of-file
+      select-subsection      ;; b from len, select part of current selection
       select-everything
       seek-start-of-line
       merge-selections
@@ -168,7 +169,6 @@
       (define (set-selection-length b n)
          (b (λ (pos l r len line)
             (buffer pos l r n line))))
-
 
       (define (buffer-unselect b)
          (b (λ (pos l r len line) (buffer pos l r 0 line))))
