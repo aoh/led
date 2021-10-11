@@ -226,7 +226,7 @@
                      (values #f
                         (set-status-text env "no search")))))
             ((help subject)
-               (mail 'ui (tuple 'open (list 'help subject)))
+               (mail 'ui (tuple 'open (list 'help subject) env null))
                (values buff env))
             (else
                (log (list 'wat-eval exp))

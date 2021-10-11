@@ -23,7 +23,7 @@
                (loop))))
 
       (define (start-logger path)
-         (print-to stderr "GC: " path)
+         ;(print-to stderr "GC: " path)
          (if path
             (let ((port (open-output-file path)))
                (if port

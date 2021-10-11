@@ -81,22 +81,22 @@ INSERT MODE -------------------------------------------------------------------
 
 LEX COMMANDS ------------------------------------------------------------------
 
- :w [path]  - write content of current buffer to path, or the last one if
-              path was not given
- :d[elete]  - delete current selection
- :u[ndo]    - undo last command
- :r[edo]    - redo last undone command
- :q         - quit if buffer has been saved
- :q!        - quit regardless of whether the buffer has been saved
-
- :%s/PATA/PATB/[g] - replace matches of PATA with PATB in the current selection
-                     leaving the area selected
+ :w [path]   - write content of current buffer to path, or the last one if
+               path was not given
+ :d[elete]   - delete current selection
+ :u[ndo]     - undo last command
+ :redo       - redo last undone command
+ :q[uit]     - quit if buffer has been saved
+ :q[uit]!    - quit whether or not buffer is saved
+ :new [path] - open a new empty buffer or the given file
+ :next-match - find next search match forwards
 
  :subprocess [binary] [arg] ...
-            - start a persistent subprocess for use with Ctrl-x
+             - start a persistent subprocess for use with Ctrl-x
 
  :call <function> - replace selection with result of calling a plugin function
 
+ :<regex>    - apply regular expression on selection
 
 
 PLUGIN FUNCTIONS --------------------------------------------------------------
@@ -108,7 +108,6 @@ PLUGIN FUNCTIONS --------------------------------------------------------------
   clean       - remove trailing whitespaces from lines in selection
   del         - delete selection
   crash       - crash the buffer thread (don't do this)
-
 
 ")
 
