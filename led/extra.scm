@@ -212,9 +212,9 @@
             (string->regex "g/^[aeiouyAEIOUY]{4,}/") ;; quad vowel
             (string->regex "g/^[qwrtpsdfghjklzxcvbnmQWRTPSDFGHJKLZXCVBNM]{5,}/") ;; five consonants
             (string->regex "g/^[^a-zA-Z]([a-zA-Z]+)[ \\n]+\\1[^a-zA-Z]/") ;; double word
-            (string->regex "g/^[.,][^0-9 \\n]/") ;; no space after dot or comma
-            (string->regex "g/^\\.[ \\n]+[a-z]/") ;; lower case sentence start
-            (string->regex "g/^[A-Z][^.]{200,}\\./")
+            (string->regex "g/^[.,?!][a-zA-Z]/") ;; no space after dot or comma
+            (string->regex "g/^[.!?][ \\n]+[a-z]/") ;; lower case sentence start
+            (string->regex "g/^[A-Z][^.!?]{200,}[.!?]/")
             ))
 
       (define (spell settings data)
@@ -234,6 +234,64 @@
       (define (cleanup settings data)
          (remove-trailing-spaces data))
 
+
+      ;;;
+      ;;; Words
+      ;;;
+
+      (define split-words (string->regex "c/[ \n\t\r]+/"))
+      (define words-cleanup (string->regex "s/[.,\"“”(){}[\\]?!-_]/ /g"))
+
+
+      (define (lex-less? a b)
+         (cond
+            ((null? a) #t)
+            ((null? b) #f)
+            ((lesser? (car a) (car b))
+               #t)
+            ((eq? (car a) (car b))
+               (lex-less? (cdr a) (cdr b)))
+            (else #f)))
+
+      (define (enlist x)
+         (if (list? x)
+            x
+            (string->list x)))
+
+      (define (counter lst)
+         (let loop ((lst lst) (out null) (n 0) (x #f))
+            (cond
+               ((null? lst)
+                  (if x
+                     (cons (cons n x) out)
+                     out))
+               ((equal? (car lst) x)
+                  (loop (cdr lst) out (+ n 1) x))
+               (x
+                  (loop (cdr lst) (cons (cons n x) out) 1 (car lst)))
+               (else
+                  (loop (cdr lst) out 1 (car lst))))))
+
+      (define (car> a b) (> (car a) (car b)))
+
+      (define (words settings data)
+         (lets ((ws (split-words (words-cleanup data)))
+                (ws (map enlist ws))
+                (ws (sort lex-less? ws))
+                (ws (counter ws))          ;; ((count rune ...) ...)
+                (ws (sort car> ws)))
+            (foldr
+               (lambda (x tail)
+                  (render
+                     ;(number->string (car x) 4) ;; yields interesting results
+                     (car x)
+                     (cons 32
+                        (append (cdr x)
+                           (cons #\newline tail)))))
+               '() ws)))
+
+
+
       (define extra-functions
          (list
             (cons "sort"    lex-sort)
@@ -245,6 +303,7 @@
             (cons "clean"   cleanup)
             (cons "del"     (lambda (env x) null))
             (cons "spell"   spell)
+            (cons "words"   words)
             ))
 
       (define (find-extra name)

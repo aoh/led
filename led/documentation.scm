@@ -82,7 +82,9 @@ INSERT MODE -------------------------------------------------------------------
 LEX COMMANDS ------------------------------------------------------------------
 
  :w [path]   - write content of current buffer to path, or the last one if
-               path was not given
+               path was not given.
+ :read path  - replace current selection with the contents of the given file,
+               and select the new contents
  :d[elete]   - delete current selection
  :u[ndo]     - undo last command
  :redo       - redo last undone command

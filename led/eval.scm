@@ -77,7 +77,7 @@
                   (car stack)))))
 
       (define (led-eval buff env exp)
-         (log "led-eval " exp)
+         ;(log "led-eval " exp) ;; can be large
          (tuple-case exp
             ((left) ;; usually keyboard h, move left by one character on current line
                ;; convert to match ui-left
@@ -86,23 +86,40 @@
                      (values bp env)
                      (values buff env))))
             ((write-buffer target)
-               (lets ((path (or target (get env 'path)))
-                      (fd (and path (open-output-file path))))
-                  (log "Writing buffer to " path)
-                  (if fd
-                     (let ((data (buffer->bytes buff)))
-                        (if (write-bytes fd data)
-                           (begin
-                              (close-port fd)
-                              (values buff
-                                 (set-status-text
-                                    (pipe env
-                                       (mark-saved)
-                                       (put 'path path))
-                                    (str "Wrote " (length data) "b to " path "."))))
-                           (values #f
-                              (set-status-text env (str "Failed to write to " path ".")))))
-                     (values #f (set-status-text env "Failed to open file for writing")))))
+               (cond
+                  ((and (not target) (not (get env 'path)))
+                     (values buff
+                        (set-status-text env
+                           "No path associated with buffer yet. use :w <path>")))
+                  ((and (not target)
+                        (> (file-modification-time (get env 'path))
+                           (disk-modification-time env)))
+                     (values buff
+                        (set-status-text env
+                           (str
+                              "File on disk is newer. Overwrite with :w " (get env 'path)))))
+                  (else
+                     (lets ((path (or target (get env 'path)))
+                            (fd (and path (open-output-file path))))
+                        (log "Writing buffer to " path)
+                        (cond
+                           (fd
+                              (let ((data (buffer->bytes buff)))
+                                 (if (write-bytes fd data)
+                                    (begin
+                                       (close-port fd)
+                                       (values buff
+                                          (set-status-text
+                                             (pipe env
+                                                (mark-saved)
+                                                (put 'path path)
+                                                (update-disk-modification-time)
+                                                )
+                                             (str "Wrote " (length data) "b to " path "."))))
+                                    (values #f
+                                       (set-status-text env (str "Failed to write to " path "."))))))
+                        (else
+                           (values #f (set-status-text env "Failed to open file for writing"))))))))
             ((read path)
                (let ((data (led-path->runes path)))
                   (if data
@@ -213,7 +230,7 @@
             ((apply func)
                (lets ((old (get-selection buff))
                       (new (func env old)))
-                  (log "apply returned " new)
+                  ;(log "apply returned " new) ;; can be large
                   (if (equal? old new)
                      (values #f #f) ;; nothing to do
                      (if (tuple? new)

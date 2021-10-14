@@ -616,16 +616,10 @@
 
 
 (define (ui-save-buffer env mode b cx cy w h led)
-   (let ((pathp (get env 'path)))
-      (if pathp
-         (lets ((buffp envp (led-eval b env (tuple 'write-buffer pathp))))
-            (if buffp
-               (led envp mode buffp cx cy w h)
-               (led env mode b cx cy w h)))
-         (led
-            (set-status-text env
-               "No path yet.")
-            mode b cx cy w h))))
+   (lets ((buffp envp (led-eval b env (tuple 'write-buffer #f))))
+      (if buffp
+         (led envp mode buffp cx cy w h)
+         (led env mode b cx cy w h))))
 
 (define (ui-send-to-subprocess env mode b cx cy w h led)
    (let ((proc (get env 'subprocess)))
@@ -915,8 +909,9 @@
           (status-thread-id (cons id 'status-line)))
          (thread id
             (led
-               (put (empty-led-env env id (if (string? path) path #f))
-                  'status-thread-id status-thread-id)
+               (pipe env
+                  (empty-led-env id (if (string? path) path #f))
+                  (put 'status-thread-id status-thread-id))
                'command
                (cond
                   ((string? path)
