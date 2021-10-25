@@ -14,7 +14,6 @@
 
    (begin
 
-
       (define (compare new old p)
          (cond
             ((null? old)
@@ -32,13 +31,9 @@
                (values p new))))
 
       (define (screen w h old)
-         ;; optimized update belongs here later
-         ;(print (list 'screen w h))
          (lets
             ((msg (wait-mail))
              (from msg msg))
-            ;(print "screen -> " msg)
-            ;(log "screen: op " (ref msg 1) " from " from)
             (tuple-case msg
                ((update-screen new-rows)
                   (let loop ((row 1) (rows new-rows) (old old) (out (cursor-show null)) (shared 0))
@@ -96,20 +91,20 @@
                   (screen w h old)))))
 
       (define (start-screen w h)
-         ;(print "starting screen")
          (let ((name 'screen))
             (thread name (screen w h null))
             (link name)
-            ;(clear-screen)
             name))
 
+      ;;
+      ;; Functions for talkin to the screen from buffers, via UI
+      ;;
 
       (define (clear-screen)
-         (mail 'screen (tuple 'clear))
-         )
+         (mail 'ui (tuple 'clear)))
 
       (define (print-to x y . stuff)
-         (mail 'screen (tuple 'print-to x y (apply str stuff))))
+         (mail 'ui (tuple 'print-to x y (apply str stuff))))
 
       ))
 
