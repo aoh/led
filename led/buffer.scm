@@ -614,10 +614,17 @@
                ((esc)
                   (mail id (tuple 'command-aborted))
                   (status-line env buff id info w null c))
-               ((enter)
+               ((enter) ;; remove afted owl 0.2.1
                   (mail id (tuple 'command-entered (reverse keys)))
                   (mail id (tuple 'status-line null 1))
                   (status-line env buff id info w null c))
+               ((ctrl key)
+                  (if (eq? key 'm)
+                     (begin
+                        (mail id (tuple 'command-entered (reverse keys)))
+                        (mail id (tuple 'status-line null 1))
+                        (status-line env buff id info w null c))
+                     (status-line env buff id info w keys c)))
                (else
                   (status-line env buff id info w keys c)))))
 
