@@ -14,7 +14,8 @@
 
    (begin
 
-      ;; flip sign in leading n values
+      ;; flip sign in leading n values, hack since 0 cannot be selected.
+      ;; fix hack would be to (n+1)*-1
       (define (mark-selected lst n)
          (if (eq? n 0)
             lst
@@ -76,7 +77,7 @@
                      bs)))
             null cs))
 
-      ;; go to beginning, or after next newline, count down steps from i
+      ;; go to beginning, or after next newline, count down visible steps from i
       (define (find-line-start l r i)
          (cond
             ((null? l)
@@ -133,8 +134,6 @@
             (else (drop-upto-newline (cdr lst)))))
 
 
-
-
       ;; take at most max-len values from lst, possibly drop the rest, cut at newline (removing it) if any
       (define (take-line lst max-len)
          ;(print "Taking line from " lst)
@@ -161,8 +160,11 @@
                lst)
             ((eq? (car lst) -11)
                lst)
+            ;((eq? (car lst) #\tab)
+            ;   (handle-padding (ilist #\_ #\_ #\_ (cdr lst)) pad))
             ((< pad 0)
-               (handle-padding (cdr lst) (+ pad 1)))
+               (lets ((lst width (represent (car lst) (cdr lst))))
+                  (handle-padding (cdr lst) (+ pad 1))))
             (else
                (cons #\~ (handle-padding lst (- pad 1))))))
 
@@ -195,10 +197,7 @@
          (if (eq? h 0)
             null
             (lets ((l r (render-line r n w)))
-               ;(print h " line is " l " = " (list->string l))
-               (cons
-                  ;(append (string->list (str ln ": ")) l)
-                  l
+               (cons l
                   (render-lines r (- h 1) n w (+ ln 1))))))
 
       (define (pad-to-length n lst)
@@ -211,8 +210,8 @@
             (λ (pos l r len line)
                (lets
                   ((rows (max 1 (- h 1)))
-                   (line-col-width (+ 3 (string-length (str (+ (- (+ line 0) cy) rows)))))
-                   (cols
+                   (line-col-width (+ 3 (string-length (str (+ (- line cy) rows)))))
+                   (cols ;; character width on screen
                       (if (get env 'line-numbers)
                          (max 1 (- w line-col-width))
                          w))
@@ -221,7 +220,6 @@
                    (r (lines-back l r (- cy 1)))
                    (lines
                      (render-lines r rows n cols (- line (- cy 1)))))
-                  ;(print "Rendering lines starting from " r)
                   (if (get env 'line-numbers)
                      (lets
                         ((line-numbers (iota (- (+ line 1) cy) 1 (+ line rows)))
@@ -237,12 +235,11 @@
                         (values lines line-col-width))
                      (values lines 0))))))
 
+      ;; overwrite values of b with list a
       (define (overlay a b)
          (cond
-            ((null? a)
-               b)
-            ((null? b)
-               a)
+            ((null? a) b)
+            ((null? b) a)
             (else
                (cons (car a)
                   (overlay (cdr a) (cdr b))))))
