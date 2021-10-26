@@ -1,6 +1,8 @@
 #!/usr/bin/ol --run
 
-;; led-eval : buff env exp -> buff' env'
+(define version-str "led v0.2a")
+
+(define usage-text "led [args] [file-or-directory] ...")
 
 (define *expected-owl-version* "0.2")
 
@@ -33,6 +35,7 @@
    (only (owl syscall) link kill)
    (only (led ui) start-ui ui-put-yank ui-get-yank)
    (led render)
+   (led status-line)
 )
 
 (define (bound lo x hi)
@@ -41,27 +44,30 @@
     ((< hi x) hi)
     (else x)))
 
-;; discard sender
-(define (wait-message)
-   (let ((envelope (wait-mail)))
-      (ref envelope 2)))
 
-;;; Visual operation
+;;;
+;;; Visual mode actions and utilities
+;;;
 
-(define (next env b w h cx cy)
-   (let ((m (check-mail)))
-      (if m
-         (begin
-            ;(update-buffer-view b w h cx cy)
-            (values (ref m 1) (ref m 2)))
-         (let ((clients (get env 'clients null))
-               (update (tuple 'update env b)))
-            ;; send buffer and environment update to threads who requested for them
-            (fold (λ (_ id) (mail id update)) 0 clients)
-            (update-buffer-view env b w h cx cy)
-            (let ((m (wait-mail)))
-               (values
-                  (ref m 1) (ref m 2)))))))
+(define (nice-cx b w)
+   (bound 1
+      (+ 1 (buffer-line-offset b))
+      w))
+
+(define (nice-cy b cy h)
+   (min cy (buffer-line b)))
+
+(define (eval-op command)
+   (lambda (env mode b cx cy w h led)
+      (lets ((buff env (led-eval b env command)))
+         (led env mode (or buff b) cx cy w h))))
+
+(define (moving-eval-op command)
+   (lambda (env mode b cx cy w h led)
+      (lets ((bp env (led-eval b env command)))
+         (if bp
+            (led env mode bp (nice-cx bp w) 1 w h)
+            (led env mode b cx cy w h)))))
 
 (define (lines-down-offset buff n)
    (let loop ((r (buffer-right buff)) (n n) (steps 0))
@@ -207,13 +213,6 @@
                (values #f #f))))))
 
 ;; choose a nice vertical position for cursor given buffer
-(define (nice-cx b w)
-   (bound 1
-      (+ 1 (buffer-line-offset b))
-      w))
-
-(define (nice-cy b cy h)
-   (min cy (buffer-line b)))
 
 (define (first-line lst)
    (foldr
@@ -253,15 +252,13 @@
 
 (define (ui-left env mode b cx cy w h led)
    (if (eq? (buffer-selection-length b) 0)
-      ;; move forward regardless off selection
+      ;; nothing selected, move
       (lets ((bp env (led-eval b env (tuple 'left))))
          (if (or (not bp) (eq? (buffer-char bp) #\newline))
             (led env mode b cx cy w h)
             (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h)))
-      (led env mode
-         (buffer-unselect b)
-         cx cy w h)
-            ))
+      ;; something selected - unselect
+      (led env mode (buffer-unselect b) cx cy w h)))
 
 (define (ui-down env mode b cx cy w h led)
    (lets ((delta nleft (next-line-same-pos b)))
@@ -284,7 +281,6 @@
 (define (ui-right-one-char env mode b cx cy w h led)
    (lets ((delta-cx (or (maybe char-width (buffer-char b)) 0))
           (bp (seek-delta b 1)))
-      (log "char widht right " delta-cx)
       (if (or (not bp)
             (eq? (buffer-char b) #\newline))
          ;; no-op if out of line or data
@@ -324,21 +320,9 @@
        (b (buffer-delete b))) ;; remove old selection
       (led env 'insert b cx cy w h)))
 
-(define (ui-yank env mode b cx cy w h led)
-   (lets ((seln (get-selection b)))
-      (ui-put-yank seln)
-      (led env mode  b cx cy w h)))
+(define ui-yank (eval-op (tuple 'copy)))
 
-(define (ui-next-match env mode b cx cy w h led)
-   (lets ((bp env (led-eval b env (tuple 'next-match #f))))
-      (if bp
-         (lets ((lp (buffer-line-pos bp)))
-            (led env mode bp
-               (if (>= lp w) 1 (+ lp 1))
-               1 w h))
-          (led env mode b cx cy w h))))
-
-
+(define ui-next-match (moving-eval-op (tuple 'next-match #f)))
 
 (define (ui-select-rest-of-line env mode b cx cy w h led)
    (led env mode
@@ -395,7 +379,6 @@
    (log "selecting everything")
    (led env mode (select-everything b) 1 1 w h))
 
-
 ;; as with end of line, maybe instead select?
 (define (ui-go-to-start-of-line env mode b cx cy w h led)
    (led env mode
@@ -411,31 +394,12 @@
          1 cy w h)))
 
 (define (ui-delete env mode b cx cy w h led)
-   (ui-put-yank (get-selection b))
    (lets ((buff env (led-eval b env (tuple 'delete))))
       (led env mode buff cx cy w h)))
 
-(define (ui-paste env mode b cx cy w h led)
-   (let ((data (ui-get-yank)))
-      (if data
-         (lets ((buff env (led-eval b env (tuple 'replace data))))
-            (led env mode buff cx cy w h))
-         (led
-            (set-status-text env "nothing yanked")
-            mode b cx cy w h))))
-
-;; y at middle of screen would be more readable
-(define (ui-undo env mode b cx cy w h led)
-   (lets ((b env (led-eval b env (tuple 'undo))))
-      (led env mode b
-         (nice-cx b w)
-         1 w h)))
-
-(define (ui-redo env mode b cx cy w h led)
-   (lets ((b env (led-eval b env (tuple 'redo))))
-      (led env mode b
-         (nice-cx b w)
-         1 w h)))
+(define ui-paste (eval-op (tuple 'paste)))
+(define ui-undo  (moving-eval-op (tuple 'undo)))
+(define ui-redo  (moving-eval-op (tuple 'redo)))
 
 (define (ui-indent env mode b cx cy w h led)
    (lets ((buff env (led-eval b env (tuple 'replace ((indent-selection env) (get-selection b))))))
@@ -663,12 +627,26 @@
       'x ui-send-to-subprocess
       'm ui-do))
 
+(define (next env b w h cx cy)
+   (let ((m (check-mail)))
+      (if m
+         (begin
+            ;(update-buffer-view b w h cx cy)
+            (values (ref m 1) (ref m 2)))
+         (let ((clients (get env 'clients null))
+               (update (tuple 'update env b)))
+            ;; send buffer and environment update to threads who requested for them
+            (fold (λ (_ id) (mail id update)) 0 clients)
+            (update-buffer-view env b w h cx cy)
+            (let ((m (wait-mail)))
+               (values
+                  (ref m 1) (ref m 2)))))))
+
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
-   ;(print (list 'buffer-window b cx cy w h))
    (lets ((from msg (next env b w h cx cy))
           (op (ref msg 1)))
-      (log "led: " mode " <- " msg " from " from)
+      ;(log "led: " mode " <- " msg " from " from)
       (cond
          ((eq? op 'terminal-size)
             (lets ((_ w h msg))
@@ -708,7 +686,7 @@
                            (min cy (buffer-line buff)) ;; ditto
                            w h)))
                   ((eq? (maybe-car runes) #\/)
-                     (lets ((buff env (led-eval b env (tuple 'search-buffer (cdr runes))))) ;; <- no range yet
+                     (lets ((buff env (led-eval b env (tuple 'search-buffer (cdr runes)))))
                         (led env 'command b cx cy w h)))
                   (else
                      (log "wat command " (runes->string runes))
@@ -839,9 +817,8 @@
                      (tuple 'print-to 1 (+ h 1) (str "watx " foo)))
                   (led env 'insert b cx cy w h))))
          ((eq? mode 'enter-command)
-            ; colon prefixed command
-            ; send keys to the status bar
-            (log "Forwarding command " msg " to status thread " (get env 'status-thread-id))
+            ;; third mode: command is being typed and handled by the status bar thread
+            ;(log "Forwarding command " msg " to status thread " (get env 'status-thread-id))
             (mail (get env 'status-thread-id) msg)
             (led env mode b cx cy w h))
          (else
@@ -889,14 +866,11 @@
          (link id)
          (link
             (thread status-thread-id
-               (start-status-line id 80)))
+               (start-status-line id 8)))
          id)))
 
 
 
-(define version-str "led v0.2a")
-
-(define usage-text "led [args] [file-or-directory] ...")
 
 (define command-line-rules
   (cl-rules

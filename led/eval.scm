@@ -16,7 +16,8 @@
       (led env)
       (only (led system) led-path->runes)
       (only (led subprocess) start-repl)
-      (only (led render) render-content))
+      (only (led render) render-content)
+      (only (led ui) ui-get-yank ui-put-yank))
 
    (export
       led-eval   ;; buff env exp -> buff' env' | #f env' (with error message)
@@ -75,6 +76,7 @@
                      (put 'redo (cdr stack))
                      (put 'undo (cons (car stack) (get env 'undo null))))
                   (car stack)))))
+
 
       (define (led-eval buff env exp)
          (log "led-eval " exp) ;; can be large
@@ -140,6 +142,15 @@
                (values
                   (select-line buff n)
                   env))
+            ((paste)
+               (let ((data (ui-get-yank)))
+                  (if data
+                     (led-eval buff env (tuple 'replace data))
+                     (values #f
+                        (set-status-text env "Nothing copied")))))
+            ((copy)
+               (ui-put-yank (get-selection buff))
+               (values buff env))
             ((print)
                (print (list->string (render-content (get-selection buff))))
                (values buff env))
@@ -179,6 +190,7 @@
                (mail 'ui (tuple 'terminal-size w h))
                (values buff env))
             ((delete)
+               (ui-put-yank (get-selection buff))
                (led-eval buff env (tuple 'replace null)))
             ((undo)
                (lets ((env delta (pop-undo env)))

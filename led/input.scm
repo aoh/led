@@ -9,10 +9,11 @@
       start-input-terminal)
 
    (begin
+
       (define (input-terminal input target)
          (lfold
             (λ (_ thing)
-               (log "input terminal: sending " thing " to " target)
+               ;(log "input terminal: sending " thing " to " target)
                (mail target thing))
             'unused
             input))

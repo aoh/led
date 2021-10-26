@@ -153,7 +153,8 @@
                   (get-word "d" (tuple 'delete))
                   (get-word "undo" (tuple 'undo))
                   (get-word "u" (tuple 'undo))
-                  (get-word "paste" (tuple 'paste 'yank)) ;; no buffer naming yet
+                  (get-word "paste" (tuple 'paste)) ;; no buffer naming yet
+                  (get-word "copy" (tuple 'copy)) ;; no buffer naming yet
                   (get-word "p" (tuple 'print))
                   (get-word "redo" (tuple 'redo))
                   ;(get-word "r" (tuple 'redo)) ;; is parsed as read #f
