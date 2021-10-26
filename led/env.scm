@@ -2,8 +2,7 @@
 
    (import
       (owl toplevel)
-      (only (owl alist) alget)
-      (only (owl sys) stat))
+      (led system))
 
    (export
       empty-led-env
@@ -31,9 +30,6 @@
       (define (disk-modification-time env)
          (get env 'disk-modification-time 0))
 
-      ;; move elsewhere
-      (define (file-modification-time path)
-         (alget (stat path #t) 'mtim #f))
 
       (define (update-disk-modification-time env)
          (let ((p (get env 'path #f)))

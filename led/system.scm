@@ -4,14 +4,21 @@
       directory? ;; temporary
       led-dir->list
       led-path->runes
-      led-dir-recursive->list)
+      led-dir-recursive->list
+      file-modification-time)
 
    (import
       (owl toplevel)
       (owl unicode)
-      (owl sys))
+      (owl sys)
+      (owl alist))
 
    (begin
+
+      ;; path -> seconds | #f
+      (define (file-modification-time path)
+         (if-lets ((us (alget (stat path #t) 'mtim #f)))
+            (quotient us 1000000000)))
 
       (define leading-dot?
          (string->regex "m/^\\./"))
