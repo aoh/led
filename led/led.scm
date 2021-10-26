@@ -87,15 +87,6 @@
          (else
             (loop (cdr r) n (+ steps 1))))))
 
-(define (write-buffer! env b)
-   (let ((bs (buffer->bytes b))
-         (p  (get env 'path)))
-      (if p
-         (if (vector->file (list->vector bs) p)
-            (put env 'message "written")
-            (put env 'message "write failed"))
-         (put env 'message "no path"))))
-
 (define (closing-paren c)
    (cond
       ((eq? c #\() #\))
@@ -171,15 +162,6 @@
 (define (unindent-selection env)
    (lambda (data)
       (unindent-start (unindent-after-newlines data))))
-
-(define (add-mark env key pos len)
-   (log "marking " (list->string (list key)) " as " pos " + " len)
-   (let ((marks (get env 'marks)))
-      (put env 'marks
-         (put marks key (cons pos len)))))
-
-(define (find-mark env key)
-   (get (get env 'marks empty) key))
 
 (define (maybe-car x)
    (if (pair? x)
@@ -302,6 +284,7 @@
 (define (ui-right-one-char env mode b cx cy w h led)
    (lets ((delta-cx (or (maybe char-width (buffer-char b)) 0))
           (bp (seek-delta b 1)))
+      (log "char widht right " delta-cx)
       (if (or (not bp)
             (eq? (buffer-char b) #\newline))
          ;; no-op if out of line or data
@@ -324,7 +307,7 @@
 (define (ui-right env mode b cx cy w h led)
    (let ((n (buffer-selection-length b)))
       (if (eq? n 0)
-         ;; move forward regardless off selection
+         ;; move forward regardless of selection
          (ui-right-one-char env mode b cx cy w h led)
          (lets
             ((seln (get-selection b))
@@ -379,35 +362,23 @@
    (log "adding mark")
    (lets ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key)))))
       (log "marking to " (ref envelope 2))
-      (led
-         (add-mark env (ref (ref envelope 2) 2) (buffer-pos b) (buffer-selection-length b))
-         mode b cx cy w h)))
-
-'(import (only (owl fasl) memory-taken))
-'(define (ui-memory-info env mode b cx cy w h led)
-   (log "MEMORY INFO")
-   (log "env size " (memory-taken env))
-   (log "b   size " (memory-taken b))
-   (mail (get env 'status-thread-id)
-      (tuple 'memory))
-   (led env mode b cx cy w h))
-
+      (lets
+         ((char (ref (ref envelope 2) 2))
+          (bp env (led-eval b env (tuple 'add-mark char))))
+         (led
+            (set-status-text env "marked")
+            mode bp cx cy w h))))
 
 (define (ui-go-to-mark env mode b cx cy w h led)
+   (log "waiting for mark key")
    (lets
       ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
        (from msg envelope)
        (_ key msg)
-       (location (find-mark env key)))
-      (if location
-         (lets
-            ((bp (seek-select b (car location) (cdr location))))
-            (if bp
-               (led env mode bp
-                  (nice-cx bp w)
-                  1 w h)
-               (led env mode b cx cy w h)))
-         (led env mode b cx cy w h))))
+       (bp env (led-eval b env (tuple 'select-mark key))))
+      (if bp
+         (led env mode bp (nice-cx bp w) 1 w h)
+         (led env mode b       cx       cy w h))))
 
 (define (ui-select-current-line env mode b cx cy w h led)
    (if (= 0 (buffer-selection-length b))
@@ -517,13 +488,6 @@
          (set-status-text env "Buffer has unsaved content.")
          mode b cx cy w h)))
 
-;(define (ui-write-buffer env mode b cx cy w h led)
-;   (lets ((b (buffer-select-current-word b))
-;          (seln (get-selection b))
-;          (lp (buffer-line-pos b)))
-;      (led env mode b
-;         (min w (max 1 (+ 1 lp))) cy w h)))
-
 (define (ui-start-lex-command env mode b cx cy w h led)
    (mail (get env 'status-thread-id) (tuple 'start-command #\:))
    (led (clear-status-text env) 'enter-command b cx cy w h))
@@ -613,8 +577,6 @@
          (led ep mode bp cx cy w h)
          (led (set-status-text env "nothing happened") mode b cx cy w h))))
 
-
-
 (define (ui-save-buffer env mode b cx cy w h led)
    (lets ((buffp envp (led-eval b env (tuple 'write-buffer #f))))
       (if buffp
@@ -689,7 +651,6 @@
                (led env mode buff cx cy w h)))
          (else
             (led env mode bp cx cy w h)))))
-
 
 (define *default-command-mode-control-key-bindings*
    (ff
@@ -817,6 +778,7 @@
                      ;((eq? k 'c)
                      ;   (led env 'command b cx cy w h))
                      ((eq? k 'm) ;; enter
+                        (log "enter")
                         (lets
                            ((i (if (get env 'autoindent) (buffer-line-indent b) null))
                             (b (buffer-append-noselect b (cons #\newline i))))

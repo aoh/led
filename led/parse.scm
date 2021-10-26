@@ -103,6 +103,16 @@
                    (get-epsilon #false))))
             (tuple op path)))
 
+      (define get-mark-command
+         (get-parses
+            ((op
+               (get-one-of
+                  (get-word "add-mark" 'add-mark)
+                  (get-word "select-mark" 'select-mark)))
+             (skip get-whitespace)
+             (key get-rune))
+            (tuple op key)))
+
       (define get-call
          (get-parses
             ((skip
@@ -124,9 +134,6 @@
              (w get-spaced-number)
              (h get-spaced-number))
             (tuple 'resize w h)))
-
-
-
 
       (define get-command
          (get-parses
@@ -157,6 +164,7 @@
                   get-resize
                   (get-word "next-match" (tuple 'next-match #f))
                   get-insert
+                  get-mark-command
                   (get-parses
                      ((val get-replace-regex))
                      (begin

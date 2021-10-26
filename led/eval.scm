@@ -77,7 +77,7 @@
                   (car stack)))))
 
       (define (led-eval buff env exp)
-         ;(log "led-eval " exp) ;; can be large
+         (log "led-eval " exp) ;; can be large
          (tuple-case exp
             ((left) ;; usually keyboard h, move left by one character on current line
                ;; convert to match ui-left
@@ -94,6 +94,8 @@
                   ((and (not target)
                         (> (file-modification-time (get env 'path))
                            (disk-modification-time env)))
+                     (log "buffer modification " (file-modification-time (get env 'path)))
+                     (log "disk modification   " (disk-modification-time env))
                      (values buff
                         (set-status-text env
                            (str
@@ -113,13 +115,12 @@
                                              (pipe env
                                                 (mark-saved)
                                                 (put 'path path)
-                                                (update-disk-modification-time)
-                                                )
+                                                (update-disk-modification-time))
                                              (str "Wrote " (length data) "b to " path "."))))
                                     (values #f
                                        (set-status-text env (str "Failed to write to " path "."))))))
-                        (else
-                           (values #f (set-status-text env "Failed to open file for writing"))))))))
+                           (else
+                              (values #f (set-status-text env "Failed to open file for writing"))))))))
             ((read path)
                (let ((data (led-path->runes path)))
                   (if data
@@ -263,9 +264,22 @@
             ((help subject)
                (mail 'ui (tuple 'open (list 'help subject) env null))
                (values buff env))
+            ((add-mark key)
+               (let ((pos (buffer-pos buff))
+                     (len (buffer-selection-length buff))
+                     (marks (get env 'marks)))
+                  (values buff
+                     (put env 'marks
+                        (put marks key (cons pos len))))))
+            ((select-mark key)
+               (lets ((poss (get (get env 'marks empty) key '(-1 . 0))))
+                  (log "poss is " poss)
+                  (values
+                     (seek-select buff (car poss) (cdr poss))
+                     env)))
             (else
                (log (list 'wat-eval exp))
-               (values #f #f))))
+               (values #f env))))
 
       ;;; Line-based operation, move elsewhere later
 
