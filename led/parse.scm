@@ -157,11 +157,14 @@
                   (get-word "copy" (tuple 'copy)) ;; no buffer naming yet
                   (get-word "p" (tuple 'print))
                   (get-word "redo" (tuple 'redo))
+                  (get-word "select-parent" (tuple 'select-parent))
                   ;(get-word "r" (tuple 'redo)) ;; is parsed as read #f
                   (get-word "q!" (tuple 'quit #t))
                   (get-word "q" (tuple 'quit #f))
                   (get-word "quit!" (tuple 'quit #t))
                   (get-word "quit" (tuple 'quit #f))
+                  (get-word "indent" (tuple 'indent))
+                  (get-word "unindent" (tuple 'unindent))
                   get-resize
                   (get-word "next-match" (tuple 'next-match #f))
                   get-insert

@@ -57,6 +57,7 @@
       select-lines           ;; b from to
       select-end-of-file
       select-everything
+      select-parent-expression
       seek-start-of-line
       merge-selections
       select-line
@@ -549,4 +550,65 @@
       (define (buffer-apply b func)
          (buffer-replace b (func (get-selection b))))
 
+      (define (closing-paren c)
+         (cond
+            ((eq? c #\() #\))
+            ((eq? c #\[) #\])
+            ((eq? c #\{) #\})
+            (else #f)))
+
+      (define (opening-paren c)
+         (cond
+            ((eq? c #\)) #\()
+            ((eq? c #\]) #\[)
+            ((eq? c #\}) #\{)
+            (else #f)))
+
+      (define (paren-hunt l closes len inc dec)
+         (cond
+            ((null? closes)
+               len)
+            ((null? l)
+               #false)
+            ((eq? (car l) (car closes))
+               (paren-hunt (cdr l) (cdr closes) (+ len 1) inc dec))
+            ((closing-paren (car l)) =>
+               (lambda (cp)
+                  (paren-hunt (cdr l) (cons cp closes) (+ len 1) inc dec)))
+            ((opening-paren (car l))
+               #false)
+            (else
+               (paren-hunt (cdr l) closes (+ len 1) inc dec))))
+
+      (define (paren-hunter b)
+         (b (λ (pos l r len line)
+            (if (pair? r)
+               (let ((cp (closing-paren (car r))))
+                  (if cp
+                     (paren-hunt (cdr r) (list cp) 1 40 41)
+                     #false))
+               #false))))
+
+      (define (parent-expression-area b)
+         (b (lambda (pos l r len line)
+            (if (null? l)
+               (values #false #false)
+               (let loop ((l (cdr l)) (r (cons (car l) r)) (d 1))
+                  (cond
+                     ((null? r) (values #f #f))
+                     ((closing-paren (car r)) =>
+                        (lambda (cp)
+                           (let ((len (paren-hunt (cdr r) (list cp) 1 40 41)))
+                              (if (and len (> len d))
+                                 (values (* -1 d) len)
+                                 (if (null? l)
+                                    (values #f #f)
+                                    (loop (cdr l) (cons (car l) r) (+ d 1)))))))
+                     ((null? l) (values #false #false))
+                     (else (loop (cdr l) (cons (car l) r) (+ d 1)))))))))
+
+      (define (select-parent-expression b)
+         (lets ((back len (parent-expression-area b)))
+            (and back
+               (buffer-selection-delta (buffer-unselect (seek-delta b back)) len))))
 ))

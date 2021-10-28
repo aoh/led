@@ -143,6 +143,7 @@
                   (select-line buff n)
                   env))
             ((paste)
+               ;; note: does not currently work in lex mode, since there is nowhere to yank
                (let ((data (ui-get-yank)))
                   (if data
                      (led-eval buff env (tuple 'replace data))
@@ -245,7 +246,7 @@
                       (new (func env old)))
                   ;(log "apply returned " new) ;; can be large
                   (if (equal? old new)
-                     (values #f #f) ;; nothing to do
+                     (values #f env) ;; nothing to do
                      (if (tuple? new)
                         ;; it's an action already
                         (led-eval buff env new)
@@ -289,6 +290,10 @@
                   (values
                      (seek-select buff (car poss) (cdr poss))
                      env)))
+            ((select-parent)
+               (values
+                  (select-parent-expression buff)
+                  env))
             (else
                (log (list 'wat-eval exp))
                (values #f env))))

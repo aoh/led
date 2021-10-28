@@ -291,6 +291,28 @@
                '() ws)))
 
 
+      ;;;
+      ;;; Indentation
+      ;;;
+
+      ; these could be 'indent-regex later in env
+      (define indent-after-newlines
+         (string->regex "s/\\n/\\n   /g"))
+
+      (define (indent-selection env data)
+         (ilist #\space #\space #\space
+            (indent-after-newlines data)))
+
+      (define unindent-after-newlines
+         (string->regex "s/\\n   /\n/g"))
+
+      (define unindent-start
+         (string->regex "s/^   //"))
+
+      (define (unindent-selection env data)
+         (log "unindent makes " (unindent-start (unindent-after-newlines data)))
+         (unindent-start (unindent-after-newlines data)))
+
 
       (define extra-functions
          (list
@@ -304,6 +326,8 @@
             (cons "del"     (lambda (env x) null))
             (cons "spell"   spell)
             (cons "words"   words)
+            (cons "indent"  indent-selection)
+            (cons "unindent"  unindent-selection)
             ))
 
       (define (find-extra name)

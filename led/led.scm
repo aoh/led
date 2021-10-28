@@ -44,10 +44,11 @@
     ((< hi x) hi)
     (else x)))
 
-
 ;;;
 ;;; Visual mode actions and utilities
 ;;;
+
+; movement are to be converted to take old position into account
 
 (define (nice-cx b w)
    (bound 1
@@ -57,17 +58,28 @@
 (define (nice-cy b cy h)
    (min cy (buffer-line b)))
 
+;; visual mode operations that are just wrappers to commands run via led-eval
+
+; just eval and resume with current position
 (define (eval-op command)
    (lambda (env mode b cx cy w h led)
       (lets ((buff env (led-eval b env command)))
          (led env mode (or buff b) cx cy w h))))
 
+; eval and likely move cursor, y to top row
 (define (moving-eval-op command)
    (lambda (env mode b cx cy w h led)
       (lets ((bp env (led-eval b env command)))
          (if bp
             (led env mode bp (nice-cx bp w) 1 w h)
             (led env mode b cx cy w h)))))
+
+;; ui ops directly corresponding to evaluatable commands
+
+(define ui-indent  (eval-op (tuple 'call "indent")))
+(define ui-unindent (eval-op (tuple 'call "unindent")))
+
+;; movement based on screen size, so it's not a led-eval op
 
 (define (lines-down-offset buff n)
    (let loop ((r (buffer-right buff)) (n n) (steps 0))
@@ -93,81 +105,14 @@
          (else
             (loop (cdr r) n (+ steps 1))))))
 
-(define (closing-paren c)
-   (cond
-      ((eq? c #\() #\))
-      ((eq? c #\[) #\])
-      ((eq? c #\{) #\})
-      (else #f)))
+(define (ui-page-up env mode b cx cy w h led)
+   (let ((b (seek-delta b (lines-up-offset b (max 1 (- h 1))))))
+      (led env mode b 1 (min cy (buffer-line b)) w h)))
 
-(define (opening-paren c)
-   (cond
-      ((eq? c #\)) #\()
-      ((eq? c #\]) #\[)
-      ((eq? c #\}) #\{)
-      (else #f)))
-
-(define (paren-hunt l closes len inc dec)
-   (cond
-      ((null? closes)
-         len)
-      ((null? l)
-         #false)
-      ((eq? (car l) (car closes))
-         (paren-hunt (cdr l) (cdr closes) (+ len 1) inc dec))
-      ((closing-paren (car l)) =>
-         (lambda (cp)
-            (paren-hunt (cdr l) (cons cp closes) (+ len 1) inc dec)))
-      ((opening-paren (car l))
-         #false)
-      (else
-         (paren-hunt (cdr l) closes (+ len 1) inc dec))))
-
-(define (paren-hunter b)
-   (b (λ (pos l r len line)
-      (if (pair? r)
-         (let ((cp (closing-paren (car r))))
-            (if cp
-               (paren-hunt (cdr r) (list cp) 1 40 41)
-               #false))
-         #false))))
-
-(define (parent-expression b)
-   (b (lambda (pos l r len line)
-      (if (null? l)
-         (values #false #false)
-         (let loop ((l (cdr l)) (r (cons (car l) r)) (d 1))
-            (cond
-               ((null? r) (values #f #f))
-               ((closing-paren (car r)) =>
-                  (lambda (cp)
-                     (let ((len (paren-hunt (cdr r) (list cp) 1 40 41)))
-                        (if (and len (> len d))
-                           (values (* -1 d) len)
-                           (if (null? l)
-                              (values #f #f)
-                              (loop (cdr l) (cons (car l) r) (+ d 1)))))))
-               ((null? l) (values #false #false))
-               (else (loop (cdr l) (cons (car l) r) (+ d 1)))))))))
-
-;; might make sense to require \n.
-(define indent-after-newlines
-   (string->regex "s/\\n/\\n   /g"))
-
-(define (indent-selection env)
-   (lambda (data)
-      (ilist #\space #\space #\space
-         (indent-after-newlines data))))
-
-(define unindent-after-newlines
-   (string->regex "s/\\n   /\n/g"))
-
-(define unindent-start
-   (string->regex "s/^   //"))
-
-(define (unindent-selection env)
-   (lambda (data)
-      (unindent-start (unindent-after-newlines data))))
+(define (ui-page-down env mode b cx cy w h led)
+   (led env mode
+      (seek-delta b (lines-down-offset b (max 1 (- h 2))))
+      1 cy w h))
 
 (define (maybe-car x)
    (if (pair? x)
@@ -226,7 +171,7 @@
 (define (show-matching-paren env b)
    (lets
       ((b (seek-delta b -1)) ;; move back inside expression
-       (back len (parent-expression b)))
+       (back len (select-parent-expression b)))
       (if back
          (lets
             ((b (seek-delta b back))
@@ -401,13 +346,6 @@
 (define ui-undo  (moving-eval-op (tuple 'undo)))
 (define ui-redo  (moving-eval-op (tuple 'redo)))
 
-(define (ui-indent env mode b cx cy w h led)
-   (lets ((buff env (led-eval b env (tuple 'replace ((indent-selection env) (get-selection b))))))
-      (led env mode buff cx cy w h)))
-
-(define (ui-unindent env mode b cx cy w h led)
-   (lets ((buff env (led-eval b env (tuple 'replace ((unindent-selection env) (get-selection b))))))
-      (led env mode buff cx cy w h)))
 
 (define (ui-select-down env mode b cx cy w h led)
    (lets
@@ -419,7 +357,7 @@
          (led env mode (buffer-selection-delta b delta) cx cy w h)
          (led env mode b cx cy w h))))
 
-(define (ui-find-matching-paren env mode b cx cy w h led)
+'(define (ui-find-matching-paren env mode b cx cy w h led)
    (lets ((delta (paren-hunter b)))
       (if (and delta (> delta 0))
          (led env mode
@@ -428,18 +366,17 @@
          (led env mode b cx cy w h))))
 
 (define (ui-select-parent-expression env mode b cx cy w h led)
-   (lets ((back len (parent-expression b))
-          (old-line (buffer-line b)))
-      (if back
-         (lets
-            ((b (seek-delta b back))
-             (new-line (buffer-line b)))
-            (led env mode
-               (buffer-selection-delta (buffer-unselect b) len)
-               (nice-cx b w)
+   (lets ((old-line (buffer-line b))
+          (bp (select-parent-expression b)))
+      (if bp
+         (let ((new-line (buffer-line bp)))
+            (led env mode bp
+               (nice-cx bp w)
                (bound 1 (- cy (- old-line new-line)) h)
                w h))
-         (led env mode b cx cy w h))))
+         (led
+            (set-status-text env "cannot select parent")
+            mode b cx cy w h))))
 
 (define (ui-toggle-line-numbers env mode b cx cy w h led)
    (led (put env 'line-numbers (not (get env 'line-numbers #false)))
@@ -500,22 +437,13 @@
       #\J ui-select-down
       #\> ui-indent
       #\< ui-unindent
-      #\P ui-find-matching-paren
+      ;#\P ui-find-matching-paren
       #\e ui-select-parent-expression
       #\: ui-start-lex-command
       #\/ ui-start-search
       #\% ui-select-everything
       #\? ui-spell
       ))
-
-(define (ui-page-down env mode b cx cy w h led)
-   (led env mode
-      (seek-delta b (lines-down-offset b (max 1 (- h 2))))
-      1 cy w h))
-
-(define (ui-page-up env mode b cx cy w h led)
-   (let ((b (seek-delta b (lines-up-offset b (max 1 (- h 1))))))
-      (led env mode b 1 (min cy (buffer-line b)) w h)))
 
 (define (ui-repaint env mode b cx cy w h led)
    (mail 'ui (tuple 'clear)) ;; clear screen
