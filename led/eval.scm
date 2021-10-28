@@ -294,6 +294,10 @@
                (values
                   (select-parent-expression buff)
                   env))
+            ((indent)
+               (led-eval buff env (tuple 'call "indent")))
+            ((unindent)
+               (led-eval buff env (tuple 'call "unindent")))
             (else
                (log (list 'wat-eval exp))
                (values #f env))))

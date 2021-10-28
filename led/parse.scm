@@ -152,7 +152,7 @@
                   (get-word "delete" (tuple 'delete))
                   (get-word "d" (tuple 'delete))
                   (get-word "undo" (tuple 'undo))
-                  (get-word "u" (tuple 'undo))
+                  ;(get-word "u" (tuple 'undo))
                   (get-word "paste" (tuple 'paste)) ;; no buffer naming yet
                   (get-word "copy" (tuple 'copy)) ;; no buffer naming yet
                   (get-word "p" (tuple 'print))
