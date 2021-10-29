@@ -78,6 +78,17 @@
 
 (define ui-indent  (eval-op (tuple 'call "indent")))
 (define ui-unindent (eval-op (tuple 'call "unindent")))
+(define ui-yank (eval-op (tuple 'copy)))
+(define ui-next-match (moving-eval-op (tuple 'next-match #f)))
+(define ui-paste (eval-op (tuple 'paste)))
+(define ui-undo  (moving-eval-op (tuple 'undo)))
+(define ui-redo  (moving-eval-op (tuple 'redo)))
+
+(define ui-clean-buffer
+   (moving-eval-op
+      (tuple 'seq
+         (tuple 'select 'everything)
+         (tuple 'call "clean"))))
 
 ;; movement based on screen size, so it's not a led-eval op
 
@@ -113,49 +124,6 @@
    (led env mode
       (seek-delta b (lines-down-offset b (max 1 (- h 2))))
       1 cy w h))
-
-(define (maybe-car x)
-   (if (pair? x)
-      (car x)
-      #f))
-
-(define (next-line-same-pos b)
-   (b
-      (λ (pos l r len line)
-         (lets ((lpos (or (distance-to l #\newline) (length l))) ;; maybe first line
-                (rlen (distance-to r #\newline)))
-            (if rlen ;; lines ahead
-               (lets ((r (drop r (+ rlen 1))) ;; also newline
-                      (rlen-next (or (distance-to r #\newline) (length r)))) ;; maybe last line
-                  (cond
-                     ((eq? rlen-next 0)
-                        ;; next line is empty
-                        (values (+ rlen 1) lpos))
-                     ((<= rlen-next lpos)
-                        ;; next line is short, need to move left
-                        (values (+ rlen rlen-next)
-                           (- lpos rlen-next -1)))
-                     (else
-                        (values (+ rlen 1 lpos) 0))))
-               (values #f #f))))))
-
-(define (prev-line-same-pos b)
-   (b
-      (λ (pos l r len line)
-         (lets ((lpos (distance-to l #\newline)))
-            (if lpos
-               (lets
-                  ((l (drop l (+ lpos 1)))
-                   (next-len (or (distance-to l #\newline) (length l))))
-                  (cond
-                     ((eq? next-len 0)
-                        ;; prev line is empty
-                        (values (* -1 (+ lpos 1)) lpos))
-                     ((<= next-len lpos)
-                        (values (* -1 (+ lpos 2)) (- lpos next-len -1)))
-                     (else
-                        (values (* -1 (+ lpos 1 (- next-len lpos))) 0))))
-               (values #f #f))))))
 
 ;; choose a nice vertical position for cursor given buffer
 
@@ -265,9 +233,6 @@
        (b (buffer-delete b))) ;; remove old selection
       (led env 'insert b cx cy w h)))
 
-(define ui-yank (eval-op (tuple 'copy)))
-
-(define ui-next-match (moving-eval-op (tuple 'next-match #f)))
 
 (define (ui-select-rest-of-line env mode b cx cy w h led)
    (led env mode
@@ -288,9 +253,7 @@
          cx cy w h)))
 
 (define (ui-add-mark env mode b cx cy w h led)
-   (log "adding mark")
    (lets ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key)))))
-      (log "marking to " (ref envelope 2))
       (lets
          ((char (ref (ref envelope 2) 2))
           (bp env (led-eval b env (tuple 'add-mark char))))
@@ -299,7 +262,6 @@
             mode bp cx cy w h))))
 
 (define (ui-go-to-mark env mode b cx cy w h led)
-   (log "waiting for mark key")
    (lets
       ((envelope (accept-mail (lambda (x) (eq? (ref (ref x 2) 1) 'key))))
        (from msg envelope)
@@ -342,9 +304,6 @@
    (lets ((buff env (led-eval b env (tuple 'delete))))
       (led env mode buff cx cy w h)))
 
-(define ui-paste (eval-op (tuple 'paste)))
-(define ui-undo  (moving-eval-op (tuple 'undo)))
-(define ui-redo  (moving-eval-op (tuple 'redo)))
 
 
 (define (ui-select-down env mode b cx cy w h led)
@@ -452,15 +411,6 @@
       (clear-status-text env)
       mode b cx cy w h))
 
-(define (ui-clean-buffer env mode b cx cy w h led)
-   (lets ((exp
-            (tuple 'seq
-               (tuple 'select 'everything)
-               (tuple 'call "clean")))
-          (bp ep (led-eval b env exp)))
-      (if bp
-         (led ep mode bp 1 1 w h)
-         (led (set-status-text env "Nothing to clean") mode b cx cy w h))))
 
 (define (ui-format-paragraphs env mode b cx cy w h led)
    (lets ((exp (tuple 'call "fmt"))
@@ -522,8 +472,7 @@
        (cx (nice-cx bp w))
        (parts (split (partial eq? #\:) (get-selection bp)))
        (s (list->string (car parts)))
-       (cmds (parts->commands (cdr parts)))
-       )
+       (cmds (parts->commands (cdr parts))))
       (cond
          ((not cmds)
             (led
@@ -555,7 +504,7 @@
       'x ui-send-to-subprocess
       'm ui-do))
 
-(define (next env b w h cx cy)
+(define (next-event env b w h cx cy)
    (let ((m (check-mail)))
       (if m
          (begin
@@ -572,7 +521,7 @@
 
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
-   (lets ((from msg (next env b w h cx cy))
+   (lets ((from msg (next-event env b w h cx cy))
           (op (ref msg 1)))
       ;(log "led: " mode " <- " msg " from " from)
       (cond
@@ -603,17 +552,16 @@
                      env
                      mode b cx cy w h))))
          ((eq? op 'command-entered)
-            (lets
-               ((runes (ref msg 2)))
+            (let ((runes (or (ref msg 2) '(#\?))))
                (cond
-                  ((eq? (maybe-car runes) #\:)
+                  ((eq? (car runes) #\:)
                      (lets ((buff env (led-eval-runes b env (cdr runes))))
                         (led env 'command   ;; env always there, may have error message
                            (or buff b)      ;; in case command fails
                            (nice-cx buff w) ;; buffer may change from underneath
                            (min cy (buffer-line buff)) ;; ditto
                            w h)))
-                  ((eq? (maybe-car runes) #\/)
+                  ((eq? (car runes) #\/)
                      (lets ((buff env (led-eval b env (tuple 'search-buffer (cdr runes)))))
                         (led env 'command b cx cy w h)))
                   (else
@@ -751,11 +699,6 @@
             (led env mode b cx cy w h))
          (else
             (led env 'command b cx cy w h)))))
-
-
-(define (maybe-put ff k v)
-   (if v (put ff k v) ff))
-
 
 ;; (help), etc
 (define (list-buffer x)
