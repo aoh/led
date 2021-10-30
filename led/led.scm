@@ -316,13 +316,15 @@
          (led env mode (buffer-selection-delta b delta) cx cy w h)
          (led env mode b cx cy w h))))
 
-'(define (ui-find-matching-paren env mode b cx cy w h led)
-   (lets ((delta (paren-hunter b)))
-      (if (and delta (> delta 0))
-         (led env mode
-            (buffer-selection-delta (buffer-unselect b) delta)
-            cx cy w h)
-         (led env mode b cx cy w h))))
+(define (ui-select-up env mode b cx cy w h led)
+   (lets
+      ((len (buffer-selection-length b))
+       (delta nleft (prev-line-same-pos (seek-delta b len))))
+      (led env mode
+         (if delta
+            (buffer-selection-delta b delta)
+            b)
+         cx cy w h)))
 
 (define (ui-select-parent-expression env mode b cx cy w h led)
    (lets ((old-line (buffer-line b))
@@ -394,6 +396,7 @@
       #\u ui-undo
       #\r ui-redo
       #\J ui-select-down
+      #\K ui-select-up
       #\> ui-indent
       #\< ui-unindent
       ;#\P ui-find-matching-paren
