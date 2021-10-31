@@ -3,11 +3,12 @@
    (import
       (owl toplevel)
       (only (owl terminal) font-normal font-reverse)
+      (only (led env) env-char-width)
       (led log))
 
    (export
       update-buffer-view
-      char-width          ;; rune -> n
+      ;char-width          ;; rune -> n
       distance-to         ;; lst x -> offset | #f, a shared utility function
       render-content      ;; runes -> printable-char-list
       )
@@ -21,22 +22,6 @@
             lst
             (cons (* -1 (+ 1 (car lst)))
                (mark-selected (cdr lst) (- n 1)))))
-
-      (define (char-width n)
-         (cond
-            ((lesser? n 32)
-               ;; an ASCII control character, temporarily dot
-               (cond
-                  ((eq? (type n) type-fix-)
-                     (char-width (- (* n -1) 1)))
-                  (else
-                     (if (eq? n #\tab)
-                        3
-                        4))))
-            ((eq? n 127)
-               4)
-            (else
-               1)))
 
       (define hex
          (let ((cs (vector #\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9
@@ -54,41 +39,49 @@
                #\0
                tail)))
 
+      (define (repeat x n tl)
+         (if (eq? n 0)
+            tl
+            (repeat x (- n 1) (cons x tl))))
+
       ;; char tail -> tail' len
-      (define (represent char tail)
+      (define (represent env char tail)
          (cond
             ((lesser? char 32)
                (if (eq? char #\tab)
-                  (values (ilist #\_ #\_ #\_ tail) 3)
+                  (let ((n (get env 'tabstop 3)))
+                     (values
+                        (repeat #\_ n tail)
+                        n))
                   (values (render-hex char tail) 4)))
             ((eq? char 127)
                (values (render-hex char tail) 4))
             (else
                (values (cons char tail) 1))))
 
-      (define (render-content cs)
+      (define (render-content env cs)
          (foldr
             (lambda (char tail)
                (if (eq? char #\newline)
                   ;; for repl use
                   (cons char tail)
                   (lets ((bs len
-                           (represent char tail)))
+                           (represent env char tail)))
                      bs)))
             null cs))
 
       ;; go to beginning, or after next newline, count down visible steps from i
-      (define (find-line-start l r i)
+      (define (find-line-start env l r i)
          (cond
             ((null? l)
                (values l r i))
             ((eq? (car l) #\newline)
                (values l r i))
             (else
-               (find-line-start (cdr l)
+               (find-line-start env (cdr l)
                   (cons (car l) r)
                   (- i
-                     (char-width (car l)))))))
+                     (env-char-width env (car l)))))))
 
       ;; number of things up to next newline or end
 
@@ -116,15 +109,15 @@
                ((eq? (car l) x) n)
                (else (loop (cdr l) (+ n 1))))))
 
-      (define (lines-back l r n)
+      (define (lines-back env l r n)
          (cond
             ((null? l)
                r)
             ((eq? n 0)
                r)
             (else
-               (lets ((l r _ (find-line-start (cdr l) (cons (car l) r) 0)))
-                  (lines-back l r (- n 1))))))
+               (lets ((l r _ (find-line-start env (cdr l) (cons (car l) r) 0)))
+                  (lines-back env l r (- n 1))))))
 
       (define (drop-upto-newline lst)
          (cond
@@ -135,7 +128,7 @@
 
 
       ;; take at most max-len values from lst, possibly drop the rest, cut at newline (removing it) if any
-      (define (take-line lst max-len)
+      (define (take-line env lst max-len)
          ;(print "Taking line from " lst)
          (let loop ((lst lst) (taken null) (n max-len))
             (cond
@@ -147,10 +140,10 @@
                   ;(print "Took line " (reverse taken))
                   (values (reverse taken) (cdr lst)))
                (else
-                  (lets ((taken width (represent (car lst) taken)))
+                  (lets ((taken width (represent env (car lst) taken)))
                      (loop (cdr lst) taken (max 0 (- n width))))))))
 
-      (define (handle-padding lst pad)
+      (define (handle-padding env lst pad)
          (cond
             ((eq? pad 0)
                lst)
@@ -163,10 +156,10 @@
             ;((eq? (car lst) #\tab)
             ;   (handle-padding (ilist #\_ #\_ #\_ (cdr lst)) pad))
             ((< pad 0)
-               (lets ((lst width (represent (car lst) (cdr lst))))
-                  (handle-padding (cdr lst) (+ pad 1))))
+               (lets ((lst width (represent env (car lst) (cdr lst))))
+                  (handle-padding env (cdr lst) (+ pad 1))))
             (else
-               (cons #\~ (handle-padding lst (- pad 1))))))
+               (cons #\~ (handle-padding env lst (- pad 1))))))
 
       (define (ansi-unselection lst)
          (cond
@@ -187,18 +180,18 @@
                (cons (car lst)
                   (ansi-selection (cdr lst))))))
 
-      (define (render-line lst pad width)
-         (lets ((lst (handle-padding lst pad))
-                (row lst (take-line lst width)))
+      (define (render-line env lst pad width)
+         (lets ((lst (handle-padding env lst pad))
+                (row lst (take-line env lst width)))
             ;(print "Selected line " row)
             (values (ansi-selection row) lst)))
 
-      (define (render-lines r h n w ln)
+      (define (render-lines env r h n w ln)
          (if (eq? h 0)
             null
-            (lets ((l r (render-line r n w)))
+            (lets ((l r (render-line env r n w)))
                (cons l
-                  (render-lines r (- h 1) n w (+ ln 1))))))
+                  (render-lines env r (- h 1) n w (+ ln 1))))))
 
       (define (pad-to-length n lst)
          (if (< (length lst) n)
@@ -216,10 +209,10 @@
                          (max 1 (- w line-col-width))
                          w))
                    (r (mark-selected r len))
-                   (l r n (find-line-start l r (- cx 1)))
-                   (r (lines-back l r (- cy 1)))
+                   (l r n (find-line-start env l r (- cx 1)))
+                   (r (lines-back env l r (- cy 1)))
                    (lines
-                     (render-lines r rows n cols (- line (- cy 1)))))
+                     (render-lines env r rows n cols (- line (- cy 1)))))
                   (if (get env 'line-numbers)
                      (lets
                         ((line-numbers (iota (- (+ line 1) cy) 1 (+ line rows)))

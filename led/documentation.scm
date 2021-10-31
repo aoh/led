@@ -31,6 +31,7 @@ COMMAND MODE ------------------------------------------------------------------
    H - shrink the current selection by 1 character
    J - select the rest of the current line and next line up to current position
    L - grow the current selection by 1 character
+   K - shrink the selection to previous line up to current position
 
    d - delete the current selection and copy it
    p - paste last copied content over the current selection
@@ -50,17 +51,14 @@ COMMAND MODE ------------------------------------------------------------------
    > - indent selection
    < - undent selection
 
-   % - select matching parenthesis forward
-
    Q - close current buffer
 
-   : - start typing a LEX command
+   : - start typing a command
    / - start typing a search
-   ? - start typing a reverse search (missing)
-   | - start typing a pipe command (missing)
 
    w - select next word and subsequent whitespace
    e - select the parent LISP expression
+   % - select everything (equals 1,$)
 
    N - toggle line numbers
 
@@ -70,7 +68,7 @@ COMMAND MODE ------------------------------------------------------------------
    Ctrl-j - justify selected content keeping paragraphs separate
    Ctrl-e - remove trailing whitespaces from entire buffer
    Ctrl-l - repaint screen
-   Ctrl-w - write buffer to file, if path is known
+   Ctrl-w - write buffer to file, if path is known (same as :w)
    Ctrl-x - send selection to subprocess (see SUBPROCESSES)
 
 
@@ -82,7 +80,7 @@ INSERT MODE -------------------------------------------------------------------
 LEX COMMANDS ------------------------------------------------------------------
 
  :w [path]   - write content of current buffer to path, or the last one if
-               path was not given.
+               path was not given (same as Ctrl-w)
  :read path  - replace current selection with the contents of the given file,
                and select the new contents
  :d[elete]   - delete current selection
@@ -99,6 +97,12 @@ LEX COMMANDS ------------------------------------------------------------------
  :call <function> - replace selection with result of calling a plugin function
 
  :<regex>    - apply regular expression on selection
+ :set <variable> <value> - set and editor setting. see VARIABLES below.
+
+
+EDITOR VARIABLES --------------------------------------------------------------
+
+ :set tabstop <number> - change tab width
 
 
 PLUGIN FUNCTIONS --------------------------------------------------------------
@@ -106,8 +110,8 @@ PLUGIN FUNCTIONS --------------------------------------------------------------
   sort        - sort lines lexicographically
   rev         - reverse contents of lines
   date        - insert current date (UTC)
-  fmt         - format paragraphs in selection
-  clean       - remove trailing whitespaces from lines in selection
+  fmt         - format paragraphs in selection (also Ctrl-j)
+  clean       - remove trailing whitespaces from lines in selection (% + Ctrl-e)
   del         - delete selection
   crash       - crash the buffer thread (don't do this)
 

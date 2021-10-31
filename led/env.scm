@@ -10,6 +10,7 @@
       clear-status-text
       disk-modification-time     ;; what was file modification time when opened / last saved
       update-disk-modification-time
+      env-char-width  ;; env rune -> n
 
       ;; move later
       file-modification-time)
@@ -18,7 +19,14 @@
 
       (define empty-env
          (pipe empty
-            (put 'autoindent #true) ;; for now
+
+            ; settable
+            (put 'tabstop 3)         ;; :set tabstop <n>
+
+            ; soon settable
+            (put 'autoindent #true)  ;; will be :set autoindent <strategy>
+
+            ; not settable
             (put 'undo null)
             (put 'redo null)
             (put 'subprocess #false) ;; each buffer can have own (ones)
@@ -52,6 +60,21 @@
 
       (define (clear-status-text env)
          (del env 'status-message))
+
+      (define (env-char-width env n)
+         (cond
+            ((lesser? n 32)
+               (cond
+                  ((eq? (type n) type-fix-)
+                     (env-char-width env (- (* n -1) 1)))
+                  (else
+                     (if (eq? n #\tab)
+                        (get env 'tabstop 3)
+                        4)))) ; 0x__
+            ((eq? n 127)
+               4)
+            (else
+               1)))
 
 
       ))

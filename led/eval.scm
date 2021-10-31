@@ -79,7 +79,7 @@
 
 
       (define (led-eval buff env exp)
-         (log "led-eval " exp) ;; can be large
+         ;(log "led-eval " exp) ;; can be large
          (tuple-case exp
             ((left) ;; usually keyboard h, move left by one character on current line
                ;; convert to match ui-left
@@ -153,7 +153,7 @@
                (ui-put-yank (get-selection buff))
                (values buff env))
             ((print)
-               (print (list->string (render-content (get-selection buff))))
+               (print (list->string (render-content env (get-selection buff))))
                (values buff env))
             ((subprocess call)
                (cond
@@ -298,6 +298,18 @@
                (led-eval buff env (tuple 'call "indent")))
             ((unindent)
                (led-eval buff env (tuple 'call "unindent")))
+            ((set str-var str-val)
+               (cond
+                  ((equal? str-var "tabstop")
+                     (let ((n (string->number str-val)))
+                        (if (and n (> n 0) (integer? n))
+                           (values buff
+                              (put env 'tabstop n))
+                           (values #f
+                              (set-status-text env "invalid tabstop")))))
+                  (else
+                     (values #f
+                        (set-status-text "Unknown variable. See :help")))))
             (else
                (log (list 'wat-eval exp))
                (values #f env))))
@@ -305,9 +317,9 @@
       ;;; Line-based operation, move elsewhere later
 
       (define (led-eval-runes buff env s)
-         (log "eval: parse " s)
+         ;(log "eval: parse " s)
          (let ((exp (parse-runes s)))
-            (log "eval " s " -> " exp)
+            ;(log "eval " s " -> " exp)
             (if exp
                (lets ((buffp envp (led-eval buff env exp)))
                   (if buffp

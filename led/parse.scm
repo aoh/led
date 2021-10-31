@@ -52,6 +52,18 @@
          (get-byte-if
             (λ (x) (or (eq? x #\newline) (eq? x #\space)))))
 
+      (define get-whitespaces
+         (get-plus get-whitespace))
+
+      (define get-assignment
+         (get-parses
+            ((skip (get-word "set" 'set))
+             (skip get-whitespace)
+             (var  (get-plus (get-rune-if (lambda (x) (not (eq? x #\space))))))
+             (skip get-whitespaces)
+             (val  (get-plus (get-rune-if (lambda (x) (not (eq? x #\space)))))))
+            (tuple 'set (list->string var) (list->string val))))
+
       (define get-spaced-word
          (get-parses
              ((skip (get-plus get-whitespace))
@@ -143,7 +155,8 @@
                   get-movement
                   get-file-command
                   get-subprocess
-                  get-call                            ;; extension
+                  get-call
+                  get-assignment
                   (get-parses
                      ((op (get-imm #\,))
                       (next get-movement))

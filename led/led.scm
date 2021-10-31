@@ -150,11 +150,7 @@
                   (take (first-line seln) 20))))
          (set-status-text env "?"))))
 
-(define (selection-printable-length b)
-      (fold
-         (lambda (s c) (+ s (char-width c)))
-         0
-         (get-selection b)))
+
 
 ;; UI actions, to be bound to key bindings in env
 
@@ -169,7 +165,7 @@
       (lets ((bp env (led-eval b env (tuple 'left))))
          (if (or (not bp) (eq? (buffer-char bp) #\newline))
             (led env mode b cx cy w h)
-            (led env mode bp (max 1 (- cx (char-width (buffer-char bp)))) cy w h)))
+            (led env mode bp (max 1 (- cx (env-char-width env (buffer-char bp)))) cy w h)))
       ;; something selected - unselect
       (led env mode (buffer-unselect b) cx cy w h)))
 
@@ -192,7 +188,7 @@
          (led env mode b cx cy w h))))
 
 (define (ui-right-one-char env mode b cx cy w h led)
-   (lets ((delta-cx (or (maybe char-width (buffer-char b)) 0))
+   (lets ((delta-cx (or (maybe (lambda (x) (env-char-width env x))  (buffer-char b)) 0))
           (bp (seek-delta b 1)))
       (if (or (not bp)
             (eq? (buffer-char b) #\newline))
@@ -609,15 +605,12 @@
          ((eq? mode 'insert)
             (tuple-case msg
                ((key x)
-                  (lets
-                     ((b (buffer-append-noselect b (list x))))
-                     (if (eq? x 41) ;; closing paren
-                        (show-matching-paren env b))
+                  (lets ((b (buffer-append-noselect b (list x))))
                      (led
                         (if (eq? x 41)
                            (show-matching-paren env b)
                            env)
-                        'insert b (min w (+ cx (char-width x))) cy w h)))
+                        'insert b (min w (+ cx (env-char-width env x))) cy w h)))
                ((refresh)
                   (led env 'insert b cx cy w h))
                ((esc)
