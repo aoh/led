@@ -139,7 +139,7 @@
 (define (show-matching-paren env b)
    (lets
       ((b (seek-delta b -1)) ;; move back inside expression
-       (back len (select-parent-expression b)))
+       (back len (parent-expression-area b)))
       (if back
          (lets
             ((b (seek-delta b back))

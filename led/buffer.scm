@@ -61,6 +61,7 @@
       select-end-of-file
       select-everything
       select-parent-expression
+      parent-expression-area
       seek-start-of-line
       merge-selections
       select-line
