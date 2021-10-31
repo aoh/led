@@ -11,6 +11,7 @@
       disk-modification-time     ;; what was file modification time when opened / last saved
       update-disk-modification-time
       env-char-width  ;; env rune -> n
+      tab-width
 
       ;; move later
       file-modification-time)
@@ -21,7 +22,8 @@
          (pipe empty
 
             ; settable
-            (put 'tabstop 3)         ;; :set tabstop <n>
+            (put 'tab-width 3)         ;; :set tab-width <n>
+            (put 'expand-tabs? #true)   ;; :set expand-tabs? true
 
             ; soon settable
             (put 'autoindent #true)  ;; will be :set autoindent <strategy>
@@ -61,6 +63,9 @@
       (define (clear-status-text env)
          (del env 'status-message))
 
+      (define (tab-width env)
+         (get env 'tab-width 3))
+
       (define (env-char-width env n)
          (cond
             ((lesser? n 32)
@@ -69,7 +74,7 @@
                      (env-char-width env (- (* n -1) 1)))
                   (else
                      (if (eq? n #\tab)
-                        (get env 'tabstop 3)
+                        (tab-width env)
                         4)))) ; 0x__
             ((eq? n 127)
                4)

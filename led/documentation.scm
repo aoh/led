@@ -102,7 +102,8 @@ LEX COMMANDS ------------------------------------------------------------------
 
 EDITOR VARIABLES --------------------------------------------------------------
 
- :set tabstop <number> - change tab width
+ :set tab-width <number>          - change tab width
+ :set expand-tabs? <true|false>   - convert tabs to spaces?
 
 
 PLUGIN FUNCTIONS --------------------------------------------------------------

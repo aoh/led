@@ -11,6 +11,7 @@
       ;char-width          ;; rune -> n
       distance-to         ;; lst x -> offset | #f, a shared utility function
       render-content      ;; runes -> printable-char-list
+      repeat-char
       )
 
    (begin
@@ -39,19 +40,19 @@
                #\0
                tail)))
 
-      (define (repeat x n tl)
+      (define (repeat-char x n tl)
          (if (eq? n 0)
             tl
-            (repeat x (- n 1) (cons x tl))))
+            (repeat-char x (- n 1) (cons x tl))))
 
       ;; char tail -> tail' len
       (define (represent env char tail)
          (cond
             ((lesser? char 32)
                (if (eq? char #\tab)
-                  (let ((n (get env 'tabstop 3)))
+                  (let ((n (get env 'tab-width 3)))
                      (values
-                        (repeat #\_ n tail)
+                        (repeat-char #\_ n tail)
                         n))
                   (values (render-hex char tail) 4)))
             ((eq? char 127)
