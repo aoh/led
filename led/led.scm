@@ -429,17 +429,19 @@
       (log " => sending to " proc)
       (if proc
          (lets ((resp (communicate proc (get-selection b)))
-                (b (buffer-after-dot b))
-                (data (or (utf8-decode (or resp null)) null))
-                (delta (tuple (buffer-pos b) null data)))
-            (log " => " data)
+                ;(b (buffer-after-dot b))
+                ;(data (or (utf8-decode (or resp null)) null))
+                ;(delta (tuple (buffer-pos b) null data))
+                )
+            ;(log " => " data)
             (led
-               (if (null? data)
-                  (set-status-text env "No data received from subprocess.")
-                  (push-undo env delta))
+               ;(if (null? data)
+               ;   (set-status-text env "No data received from subprocess.")
+               ;   (push-undo env delta))
+               env
                mode
-               (buffer-append b data)
-               cx cy w h))
+               ;(buffer-append b data)
+               b cx cy w h))
          (begin
             (log " => no subprocess")
             (led env mode b cx cy w h)))))
@@ -539,6 +541,10 @@
          ((eq? op 'keep-me-posted)
             (led (put env 'clients (cons from (get env 'clients null)))
                mode b cx cy w h))
+         ((eq? op 'push)
+            (log "led got push of " (ref msg 2))
+            (lets ((b env (led-eval b env msg)))
+               (led env mode b cx cy w h)))
          ((eq? op 'eval)
             (lets ((bp envp (led-eval b env (ref msg 2))))
                (if bp

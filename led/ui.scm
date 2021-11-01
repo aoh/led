@@ -119,7 +119,9 @@
                                  (send-commands id (ref msg 4))
                                  (ui (cons id l) r i))
                               (ui l r i))))))
-
+               ((eq? (ref msg 1) 'whoami)
+                  (mail from from)
+                  (ui l r i))
                ;; yanking
                ((eq? (ref msg 1) 'yank)
                    ;; replace replace yanks with something like (store/load [key] [value])

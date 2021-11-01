@@ -83,6 +83,13 @@
             ((equal? s "false") #f)
             (else 'no)))
 
+      (define (any->list x)
+         (cond
+            ((string? x) (string->list x))
+            ((list? x) x)
+            (else
+               (any->list (str x)))))
+
       (define (led-eval buff env exp)
          (log "led-eval " exp) ;; can be large
          (tuple-case exp
@@ -177,7 +184,7 @@
                            (values buff
                               (set-status-text
                                  (put env 'subprocess info)
-                                 (str "Started " info)))
+                                 (str "Started " (ref info 2) " with PID " (ref info 1) ".")))
                            (values buff
                               (set-status-text env "no")))))))
             ((extend-selection movement)
@@ -322,6 +329,17 @@
                   (else
                      (values #f
                         (set-status-text env "Unknown variable. See :help")))))
+            ((push data)
+               (lets
+                  ((p (buffer-pos buff))
+                   (slen (buffer-selection-length buff))
+                   (move (length (buffer-right buff)))
+                   (buff (buffer-unselect buff))
+                   (buff (seek-delta buff move))
+                   (buff env (led-eval buff env (tuple 'replace (any->list data))))
+                   (buff (seek-delta buff (- 0 move)))
+                   (buff (set-selection-length buff slen)))
+                  (values buff env)))
             (else
                (log (list 'wat-eval exp))
                (values #f env))))
