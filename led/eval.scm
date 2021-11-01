@@ -143,7 +143,7 @@
                         #f
                         (set-status-text env (str "Cannot read '" path "'"))))))
             ((new-buffer path)
-               (mail 'ui (tuple 'open path env null))
+               (mail 'ui (tuple 'open path (del env 'path) null))
                (values buff env))
             ((append text)
                (lets
@@ -287,7 +287,7 @@
                      (values #f
                         (set-status-text env "no search")))))
             ((help subject)
-               (mail 'ui (tuple 'open (list 'help subject) env null))
+               (mail 'ui (tuple 'open (list 'help subject) (del env 'path) null))
                (values buff env))
             ((add-mark key)
                (let ((pos (buffer-pos buff))
