@@ -425,6 +425,7 @@
          (led env mode b cx cy w h))))
 
 (define (ui-send-to-subprocess env mode b cx cy w h led)
+   (log "UI send to subprocess")
    (let ((proc (get env 'subprocess)))
       (log " => sending to " proc)
       (if proc
@@ -433,14 +434,10 @@
                 ;(data (or (utf8-decode (or resp null)) null))
                 ;(delta (tuple (buffer-pos b) null data))
                 )
-            ;(log " => " data)
+            (log " => " resp)
             (led
-               ;(if (null? data)
-               ;   (set-status-text env "No data received from subprocess.")
-               ;   (push-undo env delta))
                env
                mode
-               ;(buffer-append b data)
                b cx cy w h))
          (begin
             (log " => no subprocess")
@@ -810,7 +807,10 @@
                   ;(loop)
                   ))))))
 
+(import (only (owl sys) catch-signals sigpipe))
+
 (define (main args)
+   (catch-signals (list sigpipe)) ;; don't fail via a signal if subprocess is gone
    (process-arguments (cdr args)
       command-line-rules
       usage-text

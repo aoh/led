@@ -2,7 +2,7 @@
 
    (import
       (owl toplevel)
-      (only (owl sys) exec fork sigkill kill)
+      (only (owl sys) exec fork sigkill kill waitpid)
       (led log))
 
    (export
@@ -32,14 +32,26 @@
                   resp)
                (wait-data fd))))
 
-      (define (fd-pusher fd)
+      (define (verbose-exit rval)
+         (cond
+            ((equal? rval '(1 . 0))
+               ;; regular exit, success due to 0
+               (str ";; subprocess exited successfully\n"))
+            ((eq? (car rval) 1)
+               (str ";; subprocess failed, exit value " (cdr rval) "\n"))
+            (else
+               (str ";; abnormal subprocess termination: " rval "\n"))))
+
+      (define (fd-pusher fd pid)
          (let ((my-id (interact 'ui (tuple 'whoami))))
             (log "starting fd pusher from fd " fd " to thread " my-id)
             (thread
                (let loop ()
                   (let ((data (wait-data fd)))
                      (if (or (not data) (eof-object? data))
-                        (mail my-id (tuple 'push "<eof>"))
+                        (let ((rval (waitpid pid)))
+                           (mail my-id
+                              (tuple 'push (verbose-exit rval))))
                         (begin
                            (mail my-id (tuple 'push (vector->list data))) ;; todo, utf8
                            (loop))))))))
@@ -60,7 +72,7 @@
                   ;; leave information on how to talk to the process
                   (close-port stdin-read)
                   (close-port stdout-write)
-                  (fd-pusher stdout-read) ;; for use in append mode
+                  (fd-pusher stdout-read pid) ;; for use in append mode
                   (tuple pid call stdin-write stdout-read)
                   )
                (else #false))))
@@ -78,7 +90,7 @@
                      (vector->list resp)))
                #false)))
 
-      ;; pipe = (send-fd . read-fd)
+      ;; pipe = #[pid (cmd ..) to-fd from-fd]
       (define (communicate pipe data)
          (log "sending " data)
          (cond
@@ -86,7 +98,7 @@
                (communicate pipe (string->bytes data)))
             ((write-bytes (ref pipe 3) data)
                ;(wait-response (ref pipe 4) 2000)
-               data ;; leave as is, append result
+               #t
                )
             (else
                #false)))
