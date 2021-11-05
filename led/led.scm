@@ -808,9 +808,13 @@
                   ))))))
 
 (import (only (owl sys) catch-signals sigpipe))
+(import (only (owl thread) set-signal-action signal-handler/ignore))
 
 (define (main args)
+   ;; catch SIGPIPE from writing to closed/crashed subprocesses
    (catch-signals (list sigpipe)) ;; don't fail via a signal if subprocess is gone
+   ;; ignore it
+   (set-signal-action signal-handler/ignore)
    (process-arguments (cdr args)
       command-line-rules
       usage-text
