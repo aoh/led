@@ -1,13 +1,4 @@
 
-;; UI protocol
-; input-terminal + _ => depends
-; _ + #(open X env commands) => attempt to open a new buffer, or switch to it
-; _ + #(add-opener X) => add a new function to perform an open action
-; _ + #(buffer-closed)    => drop sending buffer from list
-; _ + #(terminal-size w h) => notify sub-buffers
-; current + _        => send to screen
-; _ + #(yank _)      => notify all buffers that something was copied to yank buffer
-
 (define-library (led ui)
 
    (import
