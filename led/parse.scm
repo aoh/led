@@ -61,7 +61,9 @@
              (skip get-whitespace)
              (var  (get-plus (get-rune-if (lambda (x) (not (eq? x #\space))))))
              (skip get-whitespaces)
-             (val  (get-plus (get-rune-if (lambda (x) (not (eq? x #\space)))))))
+             ;; this can also be a string
+             (val  (get-plus (get-rune-if (lambda (x) (not (eq? x #\space))))))
+             )
             (tuple 'set (list->string var) (list->string val))))
 
       (define get-spaced-word

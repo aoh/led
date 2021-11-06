@@ -44,19 +44,21 @@ See `:help`.
 
 ## Internals
 
-Led is defined in led/led.scm. Running `make` compiles it to a standalone binary,
-but during development you can interpret it directly with `bin/ol --run led/led.scm [led args]`.
+Led is defined in led/led.scm. Running `make` compiles it to a standalone
+binary, but during development you can interpret it directly with 
+`bin/ol --run led/led.scm [led args]`.
 
-If there is an odd issue, you can save debug log with `-L <logfile>` command line
-flag. Data can be written there by importing `(led log)` and then running `(log <anything>)`.
+If there is an odd issue, you can save debug log with `-L <logfile>` command
+line flag. Data can be written there by importing `(led log)` and then running
+`(log <anything>)`.
 
 ### Overview
 
-Led is written in a purely functional lisp dialect. The lisp supports runnign multiple
-continuation based threads within a single process. Most logically separate pieces of
-code running in separate threads, which makes it possible to encapsulate state and get
-them running asynchronously. As usual, state is encapsulated by having recursive functions
-that carry state in their arguments.
+Led is written in a purely functional lisp dialect. The lisp supports runnign
+multiple continuation based threads within a single process. Most logically
+separate pieces of code running in separate threads, which makes it possible to
+encapsulate state and get them running asynchronously. As usual, state is
+encapsulated by having recursive functions that carry state in their arguments.
 
 
 ### Static Threads
@@ -96,11 +98,11 @@ line of a buffer.
 
 ## Protocol
 
-Threads pass massages to each other. Messages are arbitrary values, which are wrapped
-to a tuple containing also the sending thread id by the thread scheduler. Messages are
-as follows.
+Threads pass massages to each other. Messages are arbitrary values, which are
+wrapped to a tuple containing also the sending thread id by the thread
+scheduler. Messages are as follows.
 
-`#(yank <text)` is sent by an edit buffer to ui. It is used to set contents of the shared
+`#(yank <text>)` is sent by an edit buffer to ui. It is used to set contents of the shared
 copy buffer.
 
 `#(ctrl key)` and `#(key n)` are input events sent from terminal to ui, which may forward it to the active
@@ -119,15 +121,6 @@ what its thread id is.
 
 `#(terminal-size w h)` is a notification of current terminal dimensions. Typically sent to
 ui and from there to all buffers.
-
-;; UI protocol
-; input-terminal + _ => depends
-; _ + #(open X env commands) => attempt to open a new buffer, or switch to it
-; _ + #(add-opener X) => add a new function to perform an open action
-; _ + #(buffer-closed)    => drop sending buffer from list
-; _ + #(terminal-size w h) => notify sub-buffers
-; current + _        => send to screen
-; _ + #(yank _)      => notify all buffers that something was copied to yank buffer
 
 
 

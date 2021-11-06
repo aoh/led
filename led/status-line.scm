@@ -8,10 +8,12 @@
    (import
       (owl toplevel)
       (led log)
+      (owl date)
       (led buffer))
 
    (export
-      start-status-line)
+      start-status-line
+      now)
 
    (begin
 
@@ -21,21 +23,76 @@
                (loop (cons #\space lst) (+ n 1))
                lst)))
 
+      (define (repeat elem n tl)
+         (if (eq? n 0)
+            tl
+            (repeat elem (- n 1) (cons elem tl))))
+
+      (define (pad-time x)
+         (if (< x 10) (str "0" x) x))
+
+      (define (now env)
+         (lets
+            ((tz-offset (or (string->number (get env 'timezone-offset "+2.0")) 0))
+             (d m y H M S (date (+ (* tz-offset 3600) (time)))))
+            (str d "." m "." y " " (pad-time H) ":" (pad-time M))))
+
+      ; %l[ine in buffer]
+      ; %s[election length]
+      ; %f[ile path]
+      ; %b[inary name of subprocess]
+      ; %P[adding between left and right]
+      ; %D[ate and time]
+      ; %(D) == show in parenthesis with space if value is and is > 0
+
+      (define (format-status env buff template width)
+         (lets
+            ((data
+               (str-foldr
+                  (lambda (c tl)
+                     (if (eq? c #\%)
+                        (cond
+                           ((null? tl)
+                              (cons c tl))
+                           ((eq? (car tl) #\l)
+                              (render (buffer-line buff) (cdr tl)))
+                           ((eq? (car tl) #\s)
+                              (render (buffer-selection-length buff) (cdr tl)))
+                           ((eq? (car tl) #\f)
+                              (render (get env 'path "*scratch*") (cdr tl)))
+                           ((eq? (car tl) #\b) ;; subprocess-binary
+                              (lets
+                                 ((subprocess (get env 'subprocess #f))
+                                  (subprocess-name (if subprocess (car (ref subprocess 2)) "")))
+                                 (render subprocess-name (cdr tl))))
+                           ((eq? (car tl) #\P)
+                              (cons 'pad (cdr tl))) ;; <- padding depending on size
+                           ((eq? (car tl) #\D) ;; date + time
+                              (render (now env) (cdr tl)))
+                           (else
+                              (cons c tl)))
+                        (cons c tl)))
+                  '()
+                  template))
+             ;; length without pad
+             (len (fold (lambda (n x) (if (eq? x 'pad) n (+ n 1))) 0 data))
+             (pad-width (- width len))
+             (data
+                (foldr
+                   (lambda (x tl)
+                      (if (eq? x 'pad)
+                         (repeat #\space (max pad-width 0) tl)
+                         (cons x tl)))
+                   '() data))
+             (data (take data width)))
+            data))
+
       ;; -> runes
       (define (render-info buff env time width)
-         (lets
-           ((line (buffer-line buff))
-            (p  (buffer-pos buff))
-            (l  (buffer-selection-length buff))
-            (info
-                (str
-                   (get env 'path "*scratch*")
-                   ":"
-                   (if (eq? l 0) "" (str "[" l "] "))
-                   line
-                   " "
-                   time)))
-            (pad-to width (string->list info))))
+         (format-status env buff
+            (get env 'statusline "%f:%l+%s %b %P%D")
+            width))
+
 
       (define (status-line env buff id info w keys c)
          (lets ((envelope (wait-mail))

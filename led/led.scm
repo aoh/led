@@ -738,9 +738,9 @@
                      (string-buffer "")))
                1 1 10 10)) ;; <- ui sends terminal size as first message
          (link id)
-         (link
-            (thread status-thread-id
-               (start-status-line id 8)))
+         (link status-thread-id)
+         (thread status-thread-id
+            (start-status-line id 8))
          id)))
 
 
