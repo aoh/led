@@ -16,7 +16,7 @@
    (only (owl parse) byte-stream->exp-stream fd->exp-stream)
    (only (owl readline) port->readline-byte-stream)
    (owl unicode)
-   (only (owl sys) file? directory? kill sigkill)
+   (only (owl sys) file? directory? kill sigkill getenv)
    (owl terminal)
    (owl proof)
    (owl unicode)
@@ -35,8 +35,7 @@
    (only (owl syscall) link kill)
    (only (led ui) start-ui ui-put-yank ui-get-yank)
    (led render)
-   (led status-line)
-)
+   (led status-line))
 
 (define (bound lo x hi)
   (cond
@@ -74,6 +73,16 @@
             (led env mode bp (nice-cx bp w) 1 w h)
             (led env mode b cx cy w h)))))
 
+;; as above, set text to (say buff env)
+(define (moving-verbose-eval-op command say)
+   (lambda (env mode b cx cy w h led)
+      (lets ((bp env (led-eval b env command)))
+         (if bp
+            (led
+               (set-status-text env (say bp env))
+               mode bp (nice-cx bp w) 1 w h)
+            (led env mode b cx cy w h)))))
+
 ;; ui ops directly corresponding to evaluatable commands
 
 (define ui-indent  (eval-op (tuple 'call "indent")))
@@ -81,8 +90,14 @@
 (define ui-yank (eval-op (tuple 'copy)))
 (define ui-next-match (moving-eval-op (tuple 'next-match #f)))
 (define ui-paste (eval-op (tuple 'paste)))
-(define ui-undo  (moving-eval-op (tuple 'undo)))
-(define ui-redo  (moving-eval-op (tuple 'redo)))
+(define ui-undo
+   (moving-verbose-eval-op (tuple 'undo)
+      (lambda (b e)
+            (str "At undo " (length (get e 'undo '())) " / redo " (length (get e 'redo '()))))))
+(define ui-redo
+   (moving-verbose-eval-op (tuple 'redo)
+      (lambda (b e)
+            (str "At undo " (length (get e 'undo)) " / redo " (length (get e 'redo))))))
 
 (define ui-clean-buffer
    (moving-eval-op
@@ -136,6 +151,7 @@
       '()
       lst))
 
+;; show match in status line. alternatively could show the parent expression highlighted
 (define (show-matching-paren env b)
    (lets
       ((b (seek-delta b -1)) ;; move back inside expression
@@ -763,6 +779,31 @@
          *default-command-mode-control-key-bindings*)
       ))
 
+(import (only (led parse) parse-runes))
+
+(define (load-settings-from initial-env data)
+   (let ((cmds (parse-runes data)))
+      (log "PARSED " cmds)
+      (if cmds
+         (lets ((b env (led-eval (string-buffer "") initial-env cmds)))
+            (if b
+               env
+               #false))
+         #false)))
+
+(define (load-user-settings env)
+   (let ((home (getenv "HOME")))
+      (if home
+         (lets
+            ((settings-path (str home "/.ledrc"))
+             (data (file->list settings-path)))
+            (log "loading user settings from " settings-path)
+            (log "data is " data)
+            (if data
+               (load-settings-from env data)
+               env))
+         env)))
+
 (define (start-led-threads dict args)
    (cond
       ((get dict 'help)
@@ -778,34 +819,39 @@
             (empty-led-env *default-environment* #f  #f)))
       (else
          (lets ((input (terminal-input (put empty 'eof-exit? #f)))
-                (x y ll (get-terminal-size input)))
-            (link (start-logger (get dict 'log)))
-            (log "Terminal dimensions " (cons x y))
-            (start-screen x y)
-            (log "Screen running")
-            ;(clear-screen)
-            (start-input-terminal (start-ui) ll)
-            (log "Input terminal and UI running")
-            (thread 'clock (clock-server))
-            (mail 'ui (tuple 'add-opener default-led-opener))
-            (mail 'ui (tuple 'terminal-size x y))
-            (for-each
-               (lambda (path)
-                  (mail 'ui
-                     (tuple 'open path
-                        *default-environment*
-                        null)))
-               (if (null? args)
-                  (list #false)
-                  args))
-            (let loop ()
-               (let ((mail (wait-mail)))
-                  ;(print mail)
-                  (log "CRASH " mail)
-                  ;(write-bytes stderr (string->bytes (str mail "\n")))
-                  ;(halt 1)
-                  ;(loop)
-                  ))))))
+                (x y ll (get-terminal-size input))
+                (_ (link (start-logger (get dict 'log))))
+                (env (load-user-settings *default-environment*))
+                )
+            (if env
+               (begin
+                  (log "Terminal dimensions " (cons x y))
+                  (start-screen x y)
+                  (log "Screen running")
+                  ;(clear-screen)
+                  (start-input-terminal (start-ui) ll)
+                  (log "Input terminal and UI running")
+                  (thread 'clock (clock-server))
+                  (mail 'ui (tuple 'add-opener default-led-opener))
+                  (mail 'ui (tuple 'terminal-size x y))
+                  (for-each
+                     (lambda (path)
+                        (mail 'ui
+                           (tuple 'open path env null)))
+                     (if (null? args)
+                        (list #false)
+                        args))
+                  (let loop ()
+                     (let ((mail (wait-mail)))
+                        ;(print mail)
+                        (log "CRASH " mail)
+                        ;(write-bytes stderr (string->bytes (str mail "\n")))
+                        ;(halt 1)
+                        ;(loop)
+                        )))
+               (begin
+                  (print-to stderr "Failed to load $HOME/.ledrc")
+                  1))))))
 
 (import (only (owl sys) catch-signals sigpipe))
 (import (only (owl thread) set-signal-action signal-handler/ignore))

@@ -328,8 +328,8 @@
                               (set-status-text env "invalid boolean value")))))
                   ((equal? str-var "timezone-offset")
                      (values buff (put env 'timezone-offset str-var)))
-                  ((equal? str-var "statusline")
-                     (values buff (put env 'statusline str-var)))
+                  ((equal? str-var "status-line-template")
+                     (values buff (put env 'status-line-template str-val)))
                   (else
                      (values #f
                         (set-status-text env "Unknown variable. See :help")))))

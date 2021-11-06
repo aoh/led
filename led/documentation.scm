@@ -13,9 +13,9 @@
       (define main-help
 "GLOBAL COMMANDS ---------------------------------------------------------------
 
-  Ctrl-n - next, switch to next buffer
-  Ctrl-p - previous, switch to previous buffer
-  Ctrl-q - quit, lose all changes in all buffers and exit led directly
+  Ctrl-n - switch to [n]ext buffer
+  Ctrl-p - switch to [p]revious buffer
+  Ctrl-q - dangerous! [q]uit without saving any buffers
 
 
 COMMAND MODE ------------------------------------------------------------------
@@ -104,6 +104,14 @@ EDITOR VARIABLES --------------------------------------------------------------
 
  :set tab-width <number>          - change tab width
  :set expand-tabs? <true|false>   - convert tabs to spaces?
+ :set timezone-offset <number>    - set timezone offset in hours
+ :set status-line \"template\"      - set content of status line
+      %l[ine number in buffer]
+      %s[election length]
+      %f[ile path]
+      %b[inary name of subprocess]
+      %P[adding between left and right parts of status]
+      %D[ate and time]
 
 
 PLUGIN FUNCTIONS --------------------------------------------------------------

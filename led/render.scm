@@ -2,7 +2,7 @@
 
    (import
       (owl toplevel)
-      (only (owl terminal) font-normal font-reverse)
+      (only (owl terminal) font-normal font-reverse font-dim)
       (only (led env) env-char-width)
       (led log))
 
@@ -246,10 +246,13 @@
              (lsts
                 (append lsts
                    (list
-                      (overlay
-                         status-message
-                        (or status-bytes (list 32))))))
-             )
+                      (append
+                         (font-dim
+                            (overlay
+                               status-message
+                              (or status-bytes (list 32))))
+                         (font-normal '())))
+             )))
             (mail 'ui
                (tuple 'update-screen lsts))
             (mail 'ui ;; may choose to use status line instead later

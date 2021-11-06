@@ -37,15 +37,9 @@
              (d m y H M S (date (+ (* tz-offset 3600) (time)))))
             (str d "." m "." y " " (pad-time H) ":" (pad-time M))))
 
-      ; %l[ine in buffer]
-      ; %s[election length]
-      ; %f[ile path]
-      ; %b[inary name of subprocess]
-      ; %P[adding between left and right]
-      ; %D[ate and time]
-      ; %(D) == show in parenthesis with space if value is and is > 0
 
       (define (format-status env buff template width)
+         (log "Formatting status line " template)
          (lets
             ((data
                (str-foldr
@@ -90,7 +84,7 @@
       ;; -> runes
       (define (render-info buff env time width)
          (format-status env buff
-            (get env 'statusline "%f:%l+%s %b %P%D")
+            (get env 'status-line-template "?")
             width))
 
 

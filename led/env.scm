@@ -20,18 +20,19 @@
 
       (define empty-env
          (pipe empty
-
-            ; settable
-            (put 'tab-width 3)         ;; :set tab-width <n>
-            (put 'expand-tabs? #true)   ;; :set expand-tabs? true
-
-            ; soon settable
-            (put 'autoindent #true)  ;; will be :set autoindent <strategy>
-
             ; not settable
             (put 'undo null)
             (put 'redo null)
             (put 'subprocess #false) ;; each buffer can have own (ones)
+            ))
+
+      (define defaults-env
+         (pipe empty
+            ; settable, inherited from parent, and use these if nothing is set
+            (put 'tab-width 3)         ;; :set tab-width <n>
+            (put 'expand-tabs? #true)   ;; :set expand-tabs? true
+            (put 'autoindent #true)  ;; will be :set autoindent <strategy>
+            (put 'status-line-template "%f:%l+%s %b %P%D")
             ))
 
       ;; when was the last file modification time, when the contents of
@@ -50,7 +51,9 @@
                      env)))))
 
       (define (empty-led-env base-env id path)
-         (let ((env (ff-union empty-env base-env (lambda (a b) a))))
+         (lets
+            ((env (ff-union empty-env base-env (lambda (a b) a)))
+             (env (ff-union env   defaults-env (lambda (a b) a))))
             (if path
                ;; small chance of race between reading modification time and
                ;; reading contents to buffer

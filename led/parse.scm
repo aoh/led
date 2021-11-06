@@ -48,9 +48,15 @@
                 (rs (upto-line delim)))
                (cons r rs))))
 
+      (define (whitespace-char? x)
+         (or (eq? x #\newline)
+             (eq? x #\space)))
+
       (define get-whitespace
-         (get-byte-if
-            (λ (x) (or (eq? x #\newline) (eq? x #\space)))))
+         (get-byte-if whitespace-char?))
+
+      (define get-non-whitespace
+         (get-byte-if (lambda (x) (not (whitespace-char? x)))))
 
       (define get-whitespaces
          (get-plus get-whitespace))
@@ -62,8 +68,14 @@
              (var  (get-plus (get-rune-if (lambda (x) (not (eq? x #\space))))))
              (skip get-whitespaces)
              ;; this can also be a string
-             (val  (get-plus (get-rune-if (lambda (x) (not (eq? x #\space))))))
-             )
+             (val
+                (get-either
+                   (get-parses
+                      ((skip (get-imm #\"))
+                       (cs (get-star (get-rune-if (lambda (x) (not (eq? x #\"))))))
+                       (skip (get-imm #\")))
+                      cs)
+                   (get-plus get-non-whitespace))))
             (tuple 'set (list->string var) (list->string val))))
 
       (define get-spaced-word
@@ -201,7 +213,8 @@
 
       (define get-commands
          (get-parses
-            ((cmds (get-plus! get-command)))
+            ((cmds (get-plus! get-command))
+             (skip (get-star get-whitespace)))
             (sequence cmds)))
 
       (define (forward-read ll)
@@ -217,7 +230,6 @@
       ;; -> tuple | #false
       (define (parse-runes s)
          (get-parse get-commands s #false))
-
 
 ))
 
