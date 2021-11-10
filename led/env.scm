@@ -32,7 +32,7 @@
             (put 'tab-width 3)         ;; :set tab-width <n>
             (put 'expand-tabs? #true)   ;; :set expand-tabs? true
             (put 'autoindent #true)  ;; will be :set autoindent <strategy>
-            (put 'status-line-template "%f:%l+%s %b %P%D")
+            (put 'status-line-template "%[%b]%f:%l+%s %(%m) %P%D")
             ))
 
       ;; when was the last file modification time, when the contents of

@@ -59,10 +59,20 @@
                                  ((subprocess (get env 'subprocess #f))
                                   (subprocess-name (if subprocess (car (ref subprocess 2)) "")))
                                  (render subprocess-name (cdr tl))))
+                           ((eq? (car tl) #\m)
+                              (append (get env 'status-message '()) (cdr tl)))
                            ((eq? (car tl) #\P)
                               (cons 'pad (cdr tl))) ;; <- padding depending on size
                            ((eq? (car tl) #\D) ;; date + time
                               (render (now env) (cdr tl)))
+                           ((eq? (car tl) 40)
+                              (if (and (pair? (cdr tl)) (eq? (cadr tl) 41))
+                                 (cddr tl)
+                                 tl))
+                           ((eq? (car tl) 91)
+                              (if (and (pair? (cdr tl)) (eq? (cadr tl) 93))
+                                 (cddr tl)
+                                 tl))
                            (else
                               (cons c tl)))
                         (cons c tl)))

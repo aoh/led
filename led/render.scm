@@ -248,9 +248,11 @@
                    (list
                       (append
                          (font-dim
-                            (overlay
-                               status-message
-                              (or status-bytes (list 32))))
+                            ;(overlay
+                             ;  status-message
+                              (or status-bytes (list 32))
+                            ;  )
+                              )
                          (font-normal '())))
              )))
             (mail 'ui
