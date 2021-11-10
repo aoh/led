@@ -37,7 +37,7 @@
       buffer-left             ;; b -> (rune ...), reverse
       buffer-right            ;; b -> (rune ...), in order
       buffer-line-pos         ;; b -> n (character position in current line)
-      buffer-line-offset      ;; b -> n (visual position in current line)
+      buffer-line-offset      ;; (char -> width) b -> n (visual position in current line)
       buffer-line-end-pos     ;; b -> n
       buffer-delete           ;; b -> b' (delete selection)
       empty-buffer
@@ -481,7 +481,7 @@
                (else
                   (loop (cdr l) (+ n 1))))))
 
-      (define (next-line-same-pos b)
+      (define (next-line-same-pos width-fn b)
          (b
             (λ (pos l r len line)
                (lets ((lpos (or (distance-to l #\newline) (length l))) ;; maybe first line
@@ -523,15 +523,13 @@
       ;; now that there are different representations for characters, we should have a clear
       ;; abstraction barrier between code working on unicode code points and code working on
       ;; representations of them. this is one function where we leak such information.
-      (define (offset-to-newline l)
+      (define (offset-to-newline width-fn l)
          (let loop ((l l) (n 0))
             (cond
                ((null? l) n)
                ((eq? (car l) #\newline) n)
-               ((eq? (car l) #\tab)
-                  (loop (cdr l) (+ n 3)))
                (else
-                  (loop (cdr l) (+ n 1))))))
+                  (loop (cdr l) (+ n (width-fn (car l))))))))
 
       ;; character count
       (define (buffer-line-pos b)
@@ -539,9 +537,9 @@
             (distance-to-newline l))))
 
       ;; visual position
-      (define (buffer-line-offset b)
+      (define (buffer-line-offset width-fn b)
          (b (λ (pos l r len line)
-            (offset-to-newline l))))
+            (offset-to-newline width-fn l))))
 
       (define (line-indent l n)
          (cond

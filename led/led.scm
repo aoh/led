@@ -51,7 +51,12 @@
 
 (define (nice-cx b w)
    (bound 1
-      (+ 1 (buffer-line-offset b))
+      (+ 1 (buffer-line-offset (lambda (x) 1) b))
+      w))
+
+(define (env-nice-cx env b w)
+   (bound 1
+      (+ 1 (buffer-line-offset (lambda (x) (env-char-width env x)) b))
       w))
 
 (define (nice-cy b cy h)
@@ -185,14 +190,63 @@
       ;; something selected - unselect
       (led env mode (buffer-unselect b) cx cy w h)))
 
+
+;; move down, visual version only because it depends on visual representation of characters
+
+;; -> characters on screen
+(define (visual-distance-to-newline env l)
+   (let loop ((l l) (n 0))
+      (cond
+         ((null? l) n)
+         ((eq? (car l) #\newline)
+            n)
+         (else
+            (lets ((n (+ n (env-char-width env (car l)))))
+               (loop (cdr l) n))))))
+
+;; find position preceding next newline, or null at end of buffer, and count characters (now
+;; rendered)
+
+(define (seek-newline l)
+   (let loop ((l l) (n 0))
+      (cond
+         ((null? l)
+            (values l n))
+         ((eq? (car l) #\newline)
+            (values l n))
+         (else
+            (loop (cdr l) (+ n 1))))))
+
+(define (line-visual-pos env l n)
+   (let loop ((l l) (n n) (p 0))
+      (cond
+         ((null? l) p)
+         ((eq? (car l) #\newline) p)
+         ((< n 1) p)
+         (else
+            (loop (cdr l)
+               (- n (env-char-width env (car l)))
+               (+ p 1))))))
+
+
 (define (ui-down env mode b cx cy w h led)
-   (lets ((delta nleft (next-line-same-pos b)))
-      (if delta
-         (let ((b (seek-delta b delta)))
-            (led env mode b
-               (nice-cx b w)
-               (min (- h 1) (+ cy 1)) w h))
-         (led env mode b cx cy w h))))
+   (lets
+      ((l (buffer-left b))
+       (r (buffer-right b))
+       (lvlen (visual-distance-to-newline env l))
+       (rp rlen (seek-newline r))
+       (move
+          (if (null? rp)
+             rlen    ;; partial line, go to end
+             (+ rlen
+                (+ 1  ;; newline
+                   (line-visual-pos env (cdr rp) lvlen))))))
+      (log "lvlen " lvlen)
+      (let ((b (seek-delta b move)))
+         (led env mode b
+            (env-nice-cx env b w)
+            (min (- h 1) (+ cy 1)) w h))))
+
 
 (define (ui-up env mode b cx cy w h led)
    (lets ((delta nleft (prev-line-same-pos b)))
@@ -323,7 +377,7 @@
       ((pos (buffer-pos b))
        (len (buffer-selection-length b))
        (bx  (seek b (+ pos len)))
-       (delta nleft (next-line-same-pos bx)))
+       (delta nleft (next-line-same-pos env bx)))
       (if delta
          (led env mode (buffer-selection-delta b delta) cx cy w h)
          (led env mode b cx cy w h))))
@@ -516,6 +570,7 @@
       'j ui-format-paragraphs
       'w ui-save-buffer
       'x ui-send-to-subprocess
+      ;'c ui-send-break
       'm ui-do))
 
 (define (next-event env b w h cx cy)
