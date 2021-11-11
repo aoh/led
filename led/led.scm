@@ -62,6 +62,23 @@
 (define (nice-cy b cy h)
    (min cy (buffer-line b)))
 
+;; buffer b at cy changed to bp, screen height h
+(define (nicer-cy b cy bp h jump?)
+   (lets ((l1 (buffer-line b))
+          (l2 (buffer-line bp))
+          (delta (- l2 l1))
+          (cy (+ cy delta)))
+      ;(bound 1 cy (- h 1))
+      (cond
+         ((< cy 1)
+            (if jump?
+               (min cy l2)
+               1))
+         ((< cy h) cy)
+         (jump? (max 1 (>> h 1)))
+         (else (- h 1)))))
+
+
 ;; visual mode operations that are just wrappers to commands run via led-eval
 
 ; just eval and resume with current position
@@ -75,7 +92,9 @@
    (lambda (env mode b cx cy w h led)
       (lets ((bp env (led-eval b env command)))
          (if bp
-            (led env mode bp (nice-cx bp w) 1 w h)
+            (led env mode bp (nice-cx bp w)
+               (nicer-cy b cy bp h #t)
+               w h)
             (led env mode b cx cy w h)))))
 
 ;; as above, set text to (say buff env)
@@ -85,7 +104,8 @@
          (if bp
             (led
                (set-status-text env (say bp env))
-               mode bp (nice-cx bp w) 1 w h)
+               mode bp (nice-cx bp w)
+               (nicer-cy b cy bp h #t) w h)
             (led env mode b cx cy w h)))))
 
 ;; ui ops directly corresponding to evaluatable commands
@@ -99,6 +119,7 @@
    (moving-verbose-eval-op (tuple 'undo)
       (lambda (b e)
             (str "At undo " (length (get e 'undo '())) " / redo " (length (get e 'redo '()))))))
+
 (define ui-redo
    (moving-verbose-eval-op (tuple 'redo)
       (lambda (b e)
@@ -241,11 +262,10 @@
              (+ rlen
                 (+ 1  ;; newline
                    (line-visual-pos env (cdr rp) lvlen))))))
-      (log "lvlen " lvlen)
-      (let ((b (seek-delta b move)))
-         (led env mode b
-            (env-nice-cx env b w)
-            (min (- h 1) (+ cy 1)) w h))))
+      (let ((bp (seek-delta b move)))
+         (led env mode bp
+            (env-nice-cx env bp w)
+            (nicer-cy b cy bp h #f) w h))))
 
 
 (define (ui-up env mode b cx cy w h led)
@@ -297,7 +317,7 @@
        (env (put env 'insert-start (buffer-pos b)))
        (env (put env 'insert-original old))
        (b (buffer-delete b))) ;; remove old selection
-      (led env 'insert b cx cy w h)))
+      (led (clear-status-text env) 'insert b cx cy w h)))
 
 
 (define (ui-select-rest-of-line env mode b cx cy w h led)
@@ -618,7 +638,7 @@
                (if bp
                   (led envp mode bp
                      (nice-cx bp w)
-                     (nice-cy bp cy h)
+                     (nicer-cy b cy bp h)
                      w h)
                   (led
                      ;(set-status-text env "eval failed")
