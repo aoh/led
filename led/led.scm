@@ -99,7 +99,8 @@
    (lambda (env mode b cx cy w h led)
       (lets ((bp env (led-eval b env command)))
          (if bp
-            (led env mode bp (nice-cx bp w)
+            (led env mode bp
+               (env-nicer-cx env b cx bp w)
                (nicer-cy b cy bp h #t)
                w h)
             (led env mode b cx cy w h)))))
@@ -111,7 +112,8 @@
          (if bp
             (led
                (set-status-text env (say bp env))
-               mode bp (nice-cx bp w)
+               mode bp
+               (env-nicer-cx env b cx bp w)
                (nicer-cy b cy bp h #t) w h)
             (led env mode b cx cy w h)))))
 
@@ -440,7 +442,7 @@
       (if bp
          (let ((new-line (buffer-line bp)))
             (led env mode bp
-               (nice-cx bp w)
+               (env-nicer-cx env b cx bp w)
                (bound 1 (- cy (- old-line new-line)) h)
                w h))
          (led
