@@ -59,6 +59,13 @@
       (+ 1 (buffer-line-offset (lambda (x) (env-char-width env x)) b))
       w))
 
+(define (env-nicer-cx env b cx bp w)
+   (lets
+      ((wfn (lambda (x) (env-char-width env x)))
+       (offset (- (buffer-line-offset wfn b) cx))
+       (next (- (buffer-line-offset wfn bp) offset)))
+   (bound 1 next w)))
+
 (define (nice-cy b cy h)
    (min cy (buffer-line b)))
 
@@ -276,7 +283,7 @@
                    (line-visual-pos env (cdr rp) lvlen))))))
       (let ((bp (seek-delta b move)))
          (led env mode bp
-            (env-nice-cx env bp w)
+            (env-nicer-cx env b cx bp w)
             (nicer-cy b cy bp h #f) w h))))
 
 (define (ui-up env mode b cx cy w h led)
@@ -293,7 +300,7 @@
                    (+ 1 (reverse-line-visual-pos env (cdr lp) lvlen)))))))
       (let ((bp (seek-delta b move)))
          (led env mode bp
-            (env-nice-cx env bp w)
+            (env-nicer-cx env b cx bp w)
             (nicer-cy b cy bp h #f) w h))))
 
 
