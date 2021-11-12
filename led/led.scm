@@ -249,6 +249,18 @@
                (- n (env-char-width env (car l)))
                (+ p 1))))))
 
+(define (grab-line-rev l)
+   (let loop ((l l) (o '()))
+      (cond
+         ((null? l) o)
+         ((eq? (car l) #\newline) o)
+         (else (loop (cdr l) (cons (car l) o))))))
+
+(define (reverse-line-visual-pos env l n)
+   (lets
+      ((l (grab-line-rev l))
+       (from-left (line-visual-pos env l n)))
+      (- (length l) from-left)))
 
 (define (ui-down env mode b cx cy w h led)
    (lets
@@ -267,15 +279,23 @@
             (env-nice-cx env bp w)
             (nicer-cy b cy bp h #f) w h))))
 
-
 (define (ui-up env mode b cx cy w h led)
-   (lets ((delta nleft (prev-line-same-pos b)))
-      (if delta
-         (let ((b (seek-delta b delta)))
-            (led env mode b
-               (nice-cx b w)
-               (max 1 (- cy 1)) w h))
-         (led env mode b cx cy w h))))
+   (lets
+      ((l (buffer-left b))
+       (r (buffer-right b))
+       (lvlen (visual-distance-to-newline env l))
+       (lp llen (seek-newline l))
+       (move
+          (if (null? lp) ;; beginning of buffer
+             llen
+             (* -1
+                (+ llen
+                   (+ 1 (reverse-line-visual-pos env (cdr lp) lvlen)))))))
+      (let ((bp (seek-delta b move)))
+         (led env mode bp
+            (env-nice-cx env bp w)
+            (nicer-cy b cy bp h #f) w h))))
+
 
 (define (ui-right-one-char env mode b cx cy w h led)
    (lets ((delta-cx (or (maybe (lambda (x) (env-char-width env x))  (buffer-char b)) 0))
@@ -392,6 +412,7 @@
 
 
 
+;; todo, chang to work as in ui-down
 (define (ui-select-down env mode b cx cy w h led)
    (lets
       ((pos (buffer-pos b))
@@ -402,6 +423,7 @@
          (led env mode (buffer-selection-delta b delta) cx cy w h)
          (led env mode b cx cy w h))))
 
+;; todo, change to work as in up-up
 (define (ui-select-up env mode b cx cy w h led)
    (lets
       ((len (buffer-selection-length b))
@@ -682,7 +704,10 @@
                   ((get (get env 'command-mode-key-bindings empty) x ui-unbound-key)
                      env mode b cx cy w h led))
                ((esc)
-                  (led env mode (buffer-unselect b) cx cy w h))
+                  (led
+                     (clear-status-text env)
+                     mode
+                     (buffer-unselect b) cx cy w h))
                ((enter) ;; remove after owl 0.2.1
                   (ui-do env mode b cx cy w h led))
                ((arrow dir)
