@@ -37,9 +37,13 @@
              (d m y H M S (date (+ (* tz-offset 3600) (time)))))
             (str d "." m "." y " " (pad-time H) ":" (pad-time M))))
 
+      (define (maybe-drop-space l)
+         (if (and (pair? l) (eq? (car l) #\space))
+            (cdr l)
+            l))
 
       (define (format-status env buff template width)
-         (log "Formatting status line " template)
+         ;(log "Formatting status line " template)
          (lets
             ((data
                (str-foldr
@@ -67,11 +71,11 @@
                               (render (now env) (cdr tl)))
                            ((eq? (car tl) 40)
                               (if (and (pair? (cdr tl)) (eq? (cadr tl) 41))
-                                 (cddr tl)
+                                 (maybe-drop-space (cddr tl))
                                  tl))
                            ((eq? (car tl) 91)
                               (if (and (pair? (cdr tl)) (eq? (cadr tl) 93))
-                                 (cddr tl)
+                                 (maybe-drop-space (cddr tl))
                                  tl))
                            (else
                               (cons c tl)))
