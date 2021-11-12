@@ -49,8 +49,6 @@
       buffer-next-word-length ;; buff -> n
       buffer-append
       buffer-after-dot
-      next-line-same-pos
-      prev-line-same-pos
       first-match
       next-match
       seek-select
@@ -480,45 +478,6 @@
                ((eq? (car l) #\newline) n)
                (else
                   (loop (cdr l) (+ n 1))))))
-
-      (define (next-line-same-pos width-fn b)
-         (b
-            (λ (pos l r len line)
-               (lets ((lpos (or (distance-to l #\newline) (length l))) ;; maybe first line
-                      (rlen (distance-to r #\newline)))
-                  (if rlen ;; lines ahead
-                     (lets ((r (drop r (+ rlen 1))) ;; also newline
-                            (rlen-next (or (distance-to r #\newline) (length r)))) ;; maybe last line
-                        (cond
-                           ((eq? rlen-next 0)
-                              ;; next line is empty
-                              (values (+ rlen 1) lpos))
-                           ((<= rlen-next lpos)
-                              ;; next line is short, need to move left
-                              (values (+ rlen rlen-next)
-                                 (- lpos rlen-next -1)))
-                           (else
-                              (values (+ rlen 1 lpos) 0))))
-                     (values #f #f))))))
-
-      (define (prev-line-same-pos b)
-         (b
-            (λ (pos l r len line)
-               (lets ((lpos (distance-to l #\newline)))
-                  (if lpos
-                     (lets
-                        ((l (drop l (+ lpos 1)))
-                         (next-len (or (distance-to l #\newline) (length l))))
-                        (cond
-                           ((eq? next-len 0)
-                              ;; prev line is empty
-                              (values (* -1 (+ lpos 1)) lpos))
-                           ((<= next-len lpos)
-                              (values (* -1 (+ lpos 2)) (- lpos next-len -1)))
-                           (else
-                              (values (* -1 (+ lpos 1 (- next-len lpos))) 0))))
-                     (values #f #f))))))
-
 
       ;; now that there are different representations for characters, we should have a clear
       ;; abstraction barrier between code working on unicode code points and code working on

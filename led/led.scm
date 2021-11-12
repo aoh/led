@@ -269,40 +269,41 @@
        (from-left (line-visual-pos env l n)))
       (- (length l) from-left)))
 
-(define (ui-down env mode b cx cy w h led)
+(define (ui-down-move env b)
    (lets
       ((l (buffer-left b))
        (r (buffer-right b))
        (lvlen (visual-distance-to-newline env l))
-       (rp rlen (seek-newline r))
-       (move
-          (if (null? rp)
-             rlen    ;; partial line, go to end
-             (+ rlen
-                (+ 1  ;; newline
-                   (line-visual-pos env (cdr rp) lvlen))))))
-      (let ((bp (seek-delta b move)))
-         (led env mode bp
-            (env-nicer-cx env b cx bp w)
-            (nicer-cy b cy bp h #f) w h))))
+       (rp rlen (seek-newline r)))
+      (if (null? rp)
+         rlen    ;; partial line, go to end
+         (+ rlen
+            (+ 1  ;; newline
+               (line-visual-pos env (cdr rp) lvlen))))))
+
+(define (ui-up-move env b)
+   (lets
+      ((l (buffer-left b))
+       (r (buffer-right b))
+       (lvlen (visual-distance-to-newline env l))
+       (lp llen (seek-newline l)))
+      (if (null? lp) ;; beginning of buffer
+         (- 0 llen)
+         (* -1
+            (+ llen
+               (+ 1 (reverse-line-visual-pos env (cdr lp) lvlen)))))))
+
+(define (ui-down env mode b cx cy w h led)
+   (let ((bp (seek-delta b (ui-down-move env b))))
+      (led env mode bp
+         (env-nicer-cx env b cx bp w)
+         (nicer-cy b cy bp h #f) w h)))
 
 (define (ui-up env mode b cx cy w h led)
-   (lets
-      ((l (buffer-left b))
-       (r (buffer-right b))
-       (lvlen (visual-distance-to-newline env l))
-       (lp llen (seek-newline l))
-       (move
-          (if (null? lp) ;; beginning of buffer
-             llen
-             (* -1
-                (+ llen
-                   (+ 1 (reverse-line-visual-pos env (cdr lp) lvlen)))))))
-      (let ((bp (seek-delta b move)))
-         (led env mode bp
-            (env-nicer-cx env b cx bp w)
-            (nicer-cy b cy bp h #f) w h))))
-
+   (let ((bp (seek-delta b (ui-up-move env b))))
+      (led env mode bp
+         (env-nicer-cx env b cx bp w)
+         (nicer-cy b cy bp h #f) w h)))
 
 (define (ui-right-one-char env mode b cx cy w h led)
    (lets ((delta-cx (or (maybe (lambda (x) (env-char-width env x))  (buffer-char b)) 0))
@@ -418,26 +419,23 @@
       (led env mode buff cx cy w h)))
 
 
-
-;; todo, chang to work as in ui-down
 (define (ui-select-down env mode b cx cy w h led)
    (lets
       ((pos (buffer-pos b))
        (len (buffer-selection-length b))
        (bx  (seek b (+ pos len)))
-       (delta nleft (next-line-same-pos env bx)))
-      (if delta
-         (led env mode (buffer-selection-delta b delta) cx cy w h)
+       (move (ui-down-move env bx)))
+      (if move
+         (led env mode (buffer-selection-delta b move) cx cy w h)
          (led env mode b cx cy w h))))
 
-;; todo, change to work as in up-up
 (define (ui-select-up env mode b cx cy w h led)
    (lets
       ((len (buffer-selection-length b))
-       (delta nleft (prev-line-same-pos (seek-delta b len))))
+       (move (ui-up-move env (seek-delta b len))))
       (led env mode
-         (if delta
-            (buffer-selection-delta b delta)
+         (if move
+            (buffer-selection-delta b move)
             b)
          cx cy w h)))
 
