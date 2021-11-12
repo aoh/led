@@ -418,25 +418,20 @@
    (lets ((buff env (led-eval b env (tuple 'delete))))
       (led env mode buff cx cy w h)))
 
-
 (define (ui-select-down env mode b cx cy w h led)
    (lets
       ((pos (buffer-pos b))
        (len (buffer-selection-length b))
        (bx  (seek b (+ pos len)))
        (move (ui-down-move env bx)))
-      (if move
-         (led env mode (buffer-selection-delta b move) cx cy w h)
-         (led env mode b cx cy w h))))
+      (led env mode (buffer-selection-delta b move) cx cy w h)))
 
 (define (ui-select-up env mode b cx cy w h led)
    (lets
       ((len (buffer-selection-length b))
        (move (ui-up-move env (seek-delta b len))))
       (led env mode
-         (if move
-            (buffer-selection-delta b move)
-            b)
+         (buffer-selection-delta b move)
          cx cy w h)))
 
 (define (ui-select-parent-expression env mode b cx cy w h led)
