@@ -16,12 +16,14 @@
 
    (begin
 
-      ;; flip sign in leading n values, hack since 0 cannot be selected.
-      ;; fix hack would be to (n+1)*-1
+      (define (toggle-selected x) (* -1 (+ x 1)))
+      (define (i x) x)
+
+      ;; n first values to -(x+1) to denote selected code points
       (define (mark-selected lst n)
          (if (eq? n 0)
             lst
-            (cons (* -1 (+ 1 (car lst)))
+            (cons (toggle-selected (car lst))
                (mark-selected (cdr lst) (- n 1)))))
 
       (define hex
@@ -30,14 +32,14 @@
             (lambda (c)
                (vector-ref cs c))))
 
-      (define (render-hex x tail)
+      (define (render-hex x tail op)
          (if (< x 0)
-            (render-hex (- (* x -1) 1) tail)
+            (render-hex (toggle-selected x) tail toggle-selected)
             (ilist
-               (hex (band x #b1111))
-               (hex (band (>> x 4) #b1111))
-               #\x
-               #\0
+               (op (hex (band x #b1111)))
+               (op (hex (band (>> x 4) #b1111)))
+               (op #\x)
+               (op #\0)
                tail)))
 
       (define (repeat-char x n tl)
@@ -45,18 +47,30 @@
             tl
             (repeat-char x (- n 1) (cons x tl))))
 
+      ;; convert possibly selected chars to a renderable sequence
       ;; char tail -> tail' len
       (define (represent env char tail)
          (cond
             ((lesser? char 32)
-               (if (eq? char #\tab)
-                  (let ((n (get env 'tab-width 3)))
+               (cond
+                  ((eq? char #\tab) ;; tab
+                     (let ((n (get env 'tab-width 3)))
+                        (values
+                           (repeat-char #\_ n tail)
+                           n)))
+                  ((eq? char -10) ;; selected tab
+                     (let ((n (get env 'tab-width 3)))
+                        (values
+                           (repeat-char (toggle-selected #\_) n tail)
+                           n)))
+                  (else
                      (values
-                        (repeat-char #\_ n tail)
-                        n))
-                  (values (render-hex char tail) 4)))
+                        (render-hex char tail i)
+                        4))))
             ((eq? char 127)
-               (values (render-hex char tail) 4))
+               (values
+                  (render-hex char tail i)
+                  4))
             (else
                (values (cons char tail) 1))))
 
@@ -154,8 +168,6 @@
                lst)
             ((eq? (car lst) -11)
                lst)
-            ;((eq? (car lst) #\tab)
-            ;   (handle-padding (ilist #\_ #\_ #\_ (cdr lst)) pad))
             ((< pad 0)
                (lets ((lst width (represent env (car lst) (cdr lst))))
                   (handle-padding env (cdr lst) (+ pad 1))))
@@ -167,7 +179,7 @@
             ((null? lst)
                (font-normal lst))
             ((< (car lst) 0)
-               (cons (* (+ (car lst) 1) -1)
+               (cons (toggle-selected (car lst))
                   (ansi-unselection (cdr lst))))
             (else
                (font-normal lst))))
@@ -229,15 +241,6 @@
                         (values lines line-col-width))
                      (values lines 0))))))
 
-      ;; overwrite values of b with list a
-      (define (overlay a b)
-         (cond
-            ((null? a) b)
-            ((null? b) a)
-            (else
-               (cons (car a)
-                  (overlay (cdr a) (cdr b))))))
-
       (define (update-buffer-view env b w h cx cy)
          (lets
             ((lsts dcx (render-buffer env b w h cx cy))
@@ -247,12 +250,7 @@
                 (append lsts
                    (list
                       (append
-                         (font-dim
-                            ;(overlay
-                             ;  status-message
-                              (or status-bytes (list 32))
-                            ;  )
-                              )
+                         (font-dim (or status-bytes '()))
                          (font-normal '())))
              )))
             (mail 'ui
