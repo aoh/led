@@ -100,6 +100,19 @@ LEX COMMANDS ------------------------------------------------------------------
  :set <variable> <value> - set and editor setting. see VARIABLES below.
 
 
+SUBPROCESSES ------------------------------------------------------------------
+
+Each editor buffer may be associated to one subprocess, which can be easily
+sent data to and which can write to the end of the buffer. Typically the
+subprocess is a shell or a programming languge read-eval-print -loop.
+
+   Example:
+      - run :subprocess /bin/bash
+      - write ls / to a line
+      - select the line with .
+      - Press Ctrl-x
+
+
 EDITOR VARIABLES --------------------------------------------------------------
 
  :set tab-width <number>          - change tab width
