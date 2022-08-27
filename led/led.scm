@@ -26,7 +26,7 @@
    (only (led log) start-logger log)
    (only (led subprocess) start-repl communicate)
    (only (led parse) parse-runes get-command led-syntax-error-handler)
-   (only (led screen) start-screen print-to clear-screen)
+   (only (led screen) start-screen start-no-screen print-to clear-screen)
    (led buffer)
    (led env)
    (led eval)
@@ -520,6 +520,7 @@
 (define (ui-repaint env mode b cx cy w h led)
    (mail 'ui (tuple 'clear)) ;; clear screen
    ;(mail 'ui (tuple 'terminal-size 64 12)) ;; <- temporary
+   (mail 'ui (tuple 'request-update-terminal-size)) ;; request for an update on terminal size
    (led
       (clear-status-text env)
       mode b cx cy w h))
@@ -917,6 +918,8 @@
          0)
       ((get dict 'repl)
          (link (start-logger (get dict 'log)))
+         (start-no-screen)
+         (start-ui)
          (led-repl (string-buffer "")
             (empty-led-env *default-environment* #f  #f)))
       (else
@@ -969,6 +972,4 @@
       start-led-threads))
 
 main
-
-
 

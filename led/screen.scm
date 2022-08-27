@@ -9,6 +9,7 @@
 
    (export
       start-screen
+      start-no-screen
       clear-screen
       print-to)
 
@@ -30,10 +31,12 @@
             (else
                (values p new))))
 
+
       (define (screen w h old)
          (lets
             ((msg (wait-mail))
              (from msg msg))
+            ;(log "got " (ref msg 1) "-message from " from)
             (tuple-case msg
                ((update-screen new-rows)
                   (let loop ((row 1) (rows new-rows) (old old) (out (cursor-show null)) (shared 0))
@@ -82,12 +85,17 @@
                   (write-bytes stdout
                      (clear-line-right null))
                   (screen w h null))
+               ((output-raw bytes)
+                  ;; output arbitrary data
+                  (write-bytes stdout bytes)
+                  (log "outputting raw " bytes)
+                  (screen w h null))
                ((ping)
                   ;; used for synchronization
                   (mail from (tuple 'pong))
                   (screen w h null))
                (else
-                  (print "screen: wat " msg " from " from)
+                  (log "ERROR: screen wat " msg " from " from)
                   (screen w h old)))))
 
       (define (start-screen w h)
@@ -95,6 +103,14 @@
             (thread name (screen w h null))
             (link name)
             name))
+
+      (define (message-sink)
+         (wait-mail)
+         (message-sink))
+
+      (define (start-no-screen)
+         (thread 'screen (message-sink))
+         'screen)
 
       ;;
       ;; Functions for talkin to the screen from buffers, via UI

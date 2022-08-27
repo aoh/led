@@ -13,6 +13,10 @@
 
    (begin
 
+
+      (define (request-cursor-position)
+         (write-bytevector #(27 #\[ #\6 #\n) stdout))
+
       ;; protocol helpers
 
       (define (ui-put-yank text)
@@ -56,7 +60,7 @@
       (define (ui l r i)
          (lets ((msg (wait-mail))
                 (from msg msg))
-            ; (log "ui: " msg " from " from)
+            ;(log "got " msg " from " from)
             (cond
                ((eq? from 'input-terminal)
                   (tuple-case msg
@@ -89,6 +93,11 @@
                            (else
                               (mail (car l) msg)
                               (ui l r i))))
+                     ((cursor-position x y)
+                        ;; the only way this can occur is if we asked for cursor position after trying to
+                        ;; move if off screen in order to figure out the terminal size
+                        (mail 'ui (tuple 'terminal-size y x))
+                        (ui l r i))
                      (else
                         (mail (car l) msg)
                         (ui l r i))))
@@ -146,6 +155,7 @@
                            (refresh (car l))
                            (ui l r i)))))
                ((eq? (ref msg 1) 'terminal-size)
+                  ;; UI hears about new terminal size. let other buffers know about it.
                   (lets ((_ w h msg))
                      (map
                         (λ (id)
@@ -156,17 +166,26 @@
                         (pipe i
                            (put 'width w)
                            (put 'height h)))))
+               ((eq? 'error (ref msg 1))
+                  (log "UI received ERROR: " msg " from " from)
+                  (ui l r i))
+               ((eq? 'request-update-terminal-size (ref msg 1))
+                  ;; a buffer would like to know what the current terminal size is
+                  ;; a portable-ish hack to do it: set cursor far away and find out where it
+                  ;; actually is
+                  (mail 'screen (tuple 'set-cursor 4096 4096)) ;; ends up in lower right corner
+                  (mail 'screen (tuple 'output-raw '(27 91 #\6 #\n))) ;; request cursor position
+                  ;; input handling knows that if a cursor position response is received, then it
+                  ;; means we have requested it with the intent of finding out what the terminal
+                  ;; size is
+                  (ui l r i))
                ((eq? from (car l))
                   ;; forward print message from current window
                   (mail 'screen msg)
                   ;(print " - forwarding to screen")
                   (ui l r i))
-               ((eq? 'error (ref msg 1))
-                  (log "UI received ERROR: " msg " from " from)
-                  (ui l r i))
                (else
-                  ;(print-to 3 3 "waty" from)
-                  ;(print-to 3 4 "watz " msg)
+                  (log "ERROR: UI bad message " msg " from " from)
                   (ui l r i)))))
 
       (define (start-ui)
