@@ -67,7 +67,7 @@ COMMAND MODE ------------------------------------------------------------------
 
    Ctrl-j - justify selected content keeping paragraphs separate
    Ctrl-e - remove trailing whitespaces from entire buffer
-   Ctrl-l - repaint screen
+   Ctrl-l - repaint and resize screen
    Ctrl-w - write buffer to file, if path is known (same as :w)
    Ctrl-x - send selection to subprocess (see SUBPROCESSES)
 
@@ -92,11 +92,12 @@ LEX COMMANDS ------------------------------------------------------------------
  :next-match - find next search match forwards
 
  :subprocess [binary] [arg] ...
-             - start a persistent subprocess for use with Ctrl-x
+             - start a persistent subprocess. see SUBPROCESSES.
 
- :call <function> - replace selection with result of calling a plugin function
+ :call <function>
+            - replace selection with result of calling a plugin function
 
- :<regex>    - apply regular expression on selection
+ :<regex>    - apply regular expression on selection. see REGEX.
  :set <variable> <value> - set and editor setting. see VARIABLES below.
 
 
@@ -125,7 +126,23 @@ EDITOR VARIABLES --------------------------------------------------------------
       %b[inary name of subprocess]
       %P[adding between left and right parts of status]
       %D[ate and time]
+ :set autoindent <true|false>
 
+
+
+REGULAR EXPRESSIONS -----------------------------------------------------------
+
+Regular expressions operate on the selection, not individual lines of it. A plain
+replace regular expression operates on the selection and leaves the result selected.
+Multiple commands can be given at once, so a selection command followed by a regular
+expression is frequently useful.
+
+Examples:
+   :s/foo/bar/          - replace foo with bar in current selection
+   :%s/foo/bar/g        - replace all foos with bars in buffer
+   :s/(...)/\\1\\1/       - repeat first 3 charactersj
+   :.s/([^ ]+) /\\1 \\1 / - repeat any non-space characters in current line
+   :%s/\\n/ /g           - join all lines
 
 PLUGIN FUNCTIONS --------------------------------------------------------------
 

@@ -81,6 +81,8 @@
          (cond
             ((equal? s "true") #t)
             ((equal? s "false") #f)
+            ((equal? s "on") #t)
+            ((equal? s "off") #f)
             (else 'no)))
 
       (define (any->list x)
@@ -330,6 +332,13 @@
                      (values buff (put env 'timezone-offset str-var)))
                   ((equal? str-var "status-line-template")
                      (values buff (put env 'status-line-template str-val)))
+                  ((equal? str-var "autoindent")
+                     (let ((v (string->boolean str-val)))
+                        (values buff
+                           (pipe env
+                              (put 'autoindent v)
+                              (set-status-text (str "autoindent = " str-val))))))
+                  ;; could add familiar shortcuts here ai -> autoindent true, noai, ...
                   (else
                      (values #f
                         (set-status-text env "Unknown variable. See :help")))))
