@@ -757,13 +757,6 @@
                            (led env 'insert b
                               (bound 1 (+ (length i) 1) w)
                               (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
-                     ((eq? k 'i) ;; tab
-                        (let ((n (tab-width env)))
-                           (if (get env 'expand-tabs? #t)
-                              (lets ((b (buffer-append-noselect b (repeat-char #\space n '()))))
-                                 (led env mode b (min w (+ cx n)) cy w h))
-                              (lets ((b (buffer-append-noselect b (list #\tab))))
-                                 (led env mode b (min w (+ cx n)) cy w h)))))
                      ((eq? k 'w)
                         (let ((pathp (get env 'path)))
                            (if pathp
@@ -778,8 +771,13 @@
                      (else
                         (led env mode b cx cy w h))))
                ((tab) ;; remove after owl 0.2.1
-                  (lets ((b (buffer-append-noselect b (list #\space #\space #\space))))
-                     (led env mode b (min w (+ cx 3)) cy w h)))
+                  (let ((n (tab-width env)))
+                     (log "tab. width is " n ", expand is " (get env 'expand-tabs? #t))
+                     (if (get env 'expand-tabs? #t)
+                        (lets ((b (buffer-append-noselect b (repeat-char #\space n '()))))
+                           (led env mode b (min w (+ cx n)) cy w h))
+                        (lets ((b (buffer-append-noselect b (list #\tab))))
+                           (led env mode b (min w (+ cx n)) cy w h)))))
                ((enter) ;; remove after owl 0.2.1
                   (lets
                      ((i (if (get env 'autoindent) (buffer-line-indent b) null))
@@ -803,12 +801,13 @@
                         ((p (buffer-pos b))
                          (lp (buffer-line-pos b))
                          (b (select b (- p 1) p))
+                         (bp b)
                          (b (buffer-delete b)))
                         (if (eq? lp 0)
                            (led env mode b
                               (min w (+ 1 (buffer-line-pos b)))
                               (max (- cy 1) 1) w h)
-                           (led env mode b (max 1 (- cx 1)) cy w h)))
+                           (led env mode b (max 1 (- cx (env-char-width env (buffer-char bp)))) cy w h)))
                      (led env mode b cx cy w h)))
                (else is foo
                   (mail 'ui

@@ -340,7 +340,7 @@
                               (set-status-text (str "autoindent = " str-val))))))
                   ;; could add familiar shortcuts here ai -> autoindent true, noai, ...
                   (else
-                     (values #f
+                     (values buff
                         (set-status-text env "Unknown variable. See :help")))))
             ((push data)
                (lets
@@ -353,6 +353,8 @@
                    (buff (seek-delta buff (- 0 move)))
                    (buff (set-selection-length buff slen)))
                   (values buff env)))
+            ((nop)
+               (values buff env))
             (else
                (log (list 'wat-eval exp))
                (values #f env))))

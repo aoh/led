@@ -206,14 +206,18 @@
             val))
 
       (define (sequence cmds)
-         (if (null? (cdr cmds))
-            (car cmds)
-            (tuple 'seq (car cmds)
-               (sequence (cdr cmds)))))
+         (cond
+            ((null? cmds)
+               (tuple 'nop))
+            ((null? (cdr cmds))
+               (car cmds))
+            (else
+               (tuple 'seq (car cmds)
+                  (sequence (cdr cmds))))))
 
       (define get-commands
          (get-parses
-            ((cmds (get-plus! get-command))
+            ((cmds (get-star! get-command))
              (skip (get-star get-whitespace)))
             (sequence cmds)))
 
