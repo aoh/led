@@ -315,10 +315,18 @@
             ((unindent)
                (led-eval buff env (tuple 'call "unindent")))
             ((set str-var str-val)
-               (let ((envp (update-env-value env str-var str-val)))
-                  (if envp
-                     (values buff (set-status-text envp (str str-var " -> " str-val)))
-                     (values buff env))))
+               (lets ((ok? envp (update-env-value env str-var str-val)))
+                  (cond
+                     (ok?
+                        (values buff (set-status-text envp (str str-var " -> " str-val))))
+                     ((eq? envp 0)
+                        (values buff
+                           (set-status-text env
+                              (str "No such variable. See :help"))))
+                     (else
+                        (values buff
+                           (set-status-text env
+                              (str "Invalid value for " str-var ". See :help")))))))
             ((push data)
                (lets
                   ((p (buffer-pos buff))

@@ -11,7 +11,7 @@
       disk-modification-time     ;; what was file modification time when opened / last saved
       update-disk-modification-time
       env-char-width  ;; env rune -> n
-      update-env-value        ;; env svar sval -> env' | #f
+      update-env-value        ;; env svar sval -> ok? env'
       tab-width
       *editor-variables*        ;; '((symbol   type    default-value) ...)
 
@@ -36,16 +36,6 @@
            (status-line-template string   "%(%b) %f:%l+%s %[%m] %P%D")
            (autoindent           boolean  #false)))
 
-      (define (string->boolean s)
-         (cond
-            ((equal? s "true") #t)
-            ((equal? s "false") #f)
-            ((equal? s "on") #t)
-            ((equal? s "off") #f)
-            ((equal? s "1") #t)
-            ((equal? s "0") #f)
-            (else 'no)))
-
       (define (env-cook type string)
          (cond
             ((eq? type 'number)
@@ -66,17 +56,18 @@
             (else
                (values #f #f))))
 
-      ;; env s s -> env' | #false (cannot be empty)
+      ;; env s s -> env' | #t env' | #f 0 (nonexistent variable) | #f 1 (bad value)
       (define (update-env-value env svar sval)
-         (fold
-            (lambda (env node)
-               (if (equal? (symbol->string (car node)) svar)
-                  (lets ((ok? val (env-cook (cadr node) sval)))
-                     (if ok?
-                        (put env (car node) val)
-                        #f))
-                  env))
-            env *editor-variables*))
+         (let loop ((nodes *editor-variables*))
+            (if (null? nodes)
+               (values #f 0)
+               (let ((node (car nodes)))
+                  (if (equal? (symbol->string (car node)) svar)
+                     (lets ((ok? val (env-cook (cadr node) sval)))
+                        (if ok?
+                           (values #t (put env (car node) val))
+                           (values #f 1)))
+                     (loop (cdr nodes)))))))
 
       (define defaults-env
          (fold
