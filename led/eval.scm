@@ -315,39 +315,10 @@
             ((unindent)
                (led-eval buff env (tuple 'call "unindent")))
             ((set str-var str-val)
-               ;; convert this to use variables defined in (led env)
-               (cond
-                  ((equal? str-var "tab-width")
-                     (let ((n (string->number str-val)))
-                        (if (and n (> n 0) (integer? n))
-                           (values buff
-                              (put env 'tab-width n))
-                           (values #f
-                              (set-status-text env "invalid number")))))
-                  ((equal? str-var "expand-tabs")
-                     (let ((v (string->boolean str-val)))
-                        (if (boolean? v)
-                           (values buff
-                              (put env 'expand-tabs v))
-                           (values #f
-                              (set-status-text env "invalid boolean value")))))
-                  ((equal? str-var "timezone-offset")
-                     (let ((n (string->number str-val)))
-                        (if n
-                           (values buff (put env 'timezone-offset n))
-                           (values buff env))))
-                  ((equal? str-var "status-line-template")
-                     (values buff (put env 'status-line-template str-val)))
-                  ((equal? str-var "autoindent")
-                     (let ((v (string->boolean str-val)))
-                        (values buff
-                           (pipe env
-                              (put 'autoindent v)
-                              (set-status-text (str "autoindent = " str-val))))))
-                  ;; could add familiar shortcuts here ai -> autoindent true, noai, ...
-                  (else
-                     (values buff
-                        (set-status-text env "Unknown variable. See :help")))))
+               (let ((envp (update-env-value env str-var str-val)))
+                  (if envp
+                     (values buff (set-status-text envp (str str-var " -> " str-val)))
+                     (values buff env))))
             ((push data)
                (lets
                   ((p (buffer-pos buff))

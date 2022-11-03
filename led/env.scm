@@ -11,6 +11,7 @@
       disk-modification-time     ;; what was file modification time when opened / last saved
       update-disk-modification-time
       env-char-width  ;; env rune -> n
+      update-env-value        ;; env svar sval -> env' | #f
       tab-width
       *editor-variables*        ;; '((symbol   type    default-value) ...)
 
@@ -35,13 +36,54 @@
            (status-line-template string   "%(%b) %f:%l+%s %[%m] %P%D")
            (autoindent           boolean  #false)))
 
+      (define (string->boolean s)
+         (cond
+            ((equal? s "true") #t)
+            ((equal? s "false") #f)
+            ((equal? s "on") #t)
+            ((equal? s "off") #f)
+            ((equal? s "1") #t)
+            ((equal? s "0") #f)
+            (else 'no)))
+
+      (define (env-cook type string)
+         (cond
+            ((eq? type 'number)
+               (let ((n (string->number string)))
+                  (if n
+                     (values #t n)
+                     (values #f #f))))
+            ((eq? type 'string)
+               (values #t string))
+            ((eq? type 'boolean)
+               (cond
+                  ((mem equal? '("true" "yes" "on" "1") string)
+                     (values #t #t))
+                  ((mem equal? '("false" "no" "off" "0") string)
+                     (values #t #f))
+                  (else
+                     (values #f #f))))
+            (else
+               (values #f #f))))
+
+      ;; env s s -> env' | #false (cannot be empty)
+      (define (update-env-value env svar sval)
+         (fold
+            (lambda (env node)
+               (if (equal? (symbol->string (car node)) svar)
+                  (lets ((ok? val (env-cook (cadr node) sval)))
+                     (if ok?
+                        (put env (car node) val)
+                        #f))
+                  env))
+            env *editor-variables*))
+
       (define defaults-env
          (fold
             (lambda (env node)
                (put env (car node) (caddr node)))
             empty-env
             *editor-variables*))
-
 
       ;; when was the last file modification time, when the contents of
       ;; the file was read to buffer or buffer was written to file?
