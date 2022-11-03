@@ -92,6 +92,8 @@
             (else
                (any->list (str x)))))
 
+      ;; expand-tabs tab-width timezone-offset status-line-template autoindent
+
       (define (led-eval buff env exp)
          (log "led-eval " exp) ;; can be large
          (tuple-case exp
@@ -313,6 +315,7 @@
             ((unindent)
                (led-eval buff env (tuple 'call "unindent")))
             ((set str-var str-val)
+               ;; convert this to use variables defined in (led env)
                (cond
                   ((equal? str-var "tab-width")
                      (let ((n (string->number str-val)))
@@ -321,15 +324,18 @@
                               (put env 'tab-width n))
                            (values #f
                               (set-status-text env "invalid number")))))
-                  ((equal? str-var "expand-tabs?")
+                  ((equal? str-var "expand-tabs")
                      (let ((v (string->boolean str-val)))
                         (if (boolean? v)
                            (values buff
-                              (put env 'expand-tabs? v))
+                              (put env 'expand-tabs v))
                            (values #f
                               (set-status-text env "invalid boolean value")))))
                   ((equal? str-var "timezone-offset")
-                     (values buff (put env 'timezone-offset str-var)))
+                     (let ((n (string->number str-val)))
+                        (if n
+                           (values buff (put env 'timezone-offset n))
+                           (values buff env))))
                   ((equal? str-var "status-line-template")
                      (values buff (put env 'status-line-template str-val)))
                   ((equal? str-var "autoindent")

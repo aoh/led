@@ -12,6 +12,7 @@
       update-disk-modification-time
       env-char-width  ;; env rune -> n
       tab-width
+      *editor-variables*        ;; '((symbol   type    default-value) ...)
 
       ;; move later
       file-modification-time)
@@ -26,14 +27,21 @@
             (put 'subprocess #false) ;; each buffer can have own (ones)
             ))
 
+      ;; variables settable via :set <name> <value> along with defaults
+      (define *editor-variables*
+         '((expand-tabs          boolean  #false)
+           (tab-width            number   3)
+           (timezone-offset      number   1)
+           (status-line-template string   "%(%b) %f:%l+%s %[%m] %P%D")
+           (autoindent           boolean  #false)))
+
       (define defaults-env
-         (pipe empty
-            ; settable, inherited from parent, and use these if nothing is set
-            (put 'tab-width 3)         ;; :set tab-width <n>
-            (put 'expand-tabs? #true)   ;; :set expand-tabs? true
-            (put 'autoindent #true)  ;; will be :set autoindent <strategy>
-            (put 'status-line-template "%(%b) %f:%l+%s %[%m] %P%D")
-            ))
+         (fold
+            (lambda (env node)
+               (put env (car node) (caddr node)))
+            empty-env
+            *editor-variables*))
+
 
       ;; when was the last file modification time, when the contents of
       ;; the file was read to buffer or buffer was written to file?

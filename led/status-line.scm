@@ -33,7 +33,7 @@
 
       (define (now env)
          (lets
-            ((tz-offset (or (string->number (get env 'timezone-offset "+2.0")) 0))
+            ((tz-offset (get env 'timezone-offset 0))
              (d m y H M S (date (+ (* tz-offset 3600) (time)))))
             (str d "." m "." y " " (pad-time H) ":" (pad-time M))))
 

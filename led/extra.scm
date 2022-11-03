@@ -175,8 +175,7 @@
       (define (current-date settings data)
          (string->list
             (date-str (time)
-               ; (get settings 'utc-offset 0)
-               0)))
+               (get settings 'timezone-offset 0))))
 
       (define (lex-less? a b)
          (cond

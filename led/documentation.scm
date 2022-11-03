@@ -117,7 +117,7 @@ subprocess is a shell or a programming languge read-eval-print -loop.
 EDITOR VARIABLES --------------------------------------------------------------
 
  :set tab-width <number>          - change tab width
- :set expand-tabs? <true|false>   - convert tabs to spaces?
+ :set expand-tabs <true|false>   - convert tabs to spaces?
  :set timezone-offset <number>    - set timezone offset in hours
  :set status-line \"template\"      - set content of status line
       %l[ine number in buffer]
