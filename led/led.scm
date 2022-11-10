@@ -4,7 +4,7 @@
 
 (define usage-text "led [args] [file-or-directory] ...")
 
-(define *expected-owl-version* "0.2")
+(define *expected-owl-version* "0.2.1a")
 
 (if (not (equal? *owl-version* *expected-owl-version*))
    (begin
@@ -663,7 +663,7 @@
                (if bp
                   (led envp mode bp
                      (nice-cx bp w)
-                     (nicer-cy b cy bp h)
+                     (nicer-cy b cy bp h #t)
                      w h)
                   (led
                      ;(set-status-text env "eval failed")
@@ -742,20 +742,19 @@
                             (tuple start
                                (get env 'insert-original null)
                                (buffer-get-range b start end))))
-                  (led
-                     (push-undo env delta)
-                     'command b cx cy w h)))
+                     (led
+                        (push-undo env delta)
+                        'command b cx cy w h)))
                ((ctrl k)
                   (cond
                      ;((eq? k 'c)
                      ;   (led env 'command b cx cy w h))
                      ((eq? k 'm) ;; enter
-                        (log "enter")
                         (lets
                            ((i (if (get env 'autoindent) (buffer-line-indent b) null))
                             (b (buffer-append-noselect b (cons #\newline i))))
                            (led env 'insert b
-                              (bound 1 (+ (length i) 1) w)
+                              (env-nice-cx env b w)
                               (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                      ((eq? k 'w)
                         (let ((pathp (get env 'path)))
@@ -772,18 +771,18 @@
                         (led env mode b cx cy w h))))
                ((tab) ;; remove after owl 0.2.1
                   (let ((n (tab-width env)))
-                     (log "tab. width is " n ", expand is " (get env 'expand-tabs? #t))
-                     (if (get env 'expand-tabs? #t)
+                     (log "tab. width is " n ", expand is " (get env 'expand-tabs #t))
+                     (if (get env 'expand-tabs #t)
                         (lets ((b (buffer-append-noselect b (repeat-char #\space n '()))))
                            (led env mode b (min w (+ cx n)) cy w h))
                         (lets ((b (buffer-append-noselect b (list #\tab))))
                            (led env mode b (min w (+ cx n)) cy w h)))))
-               ((enter) ;; remove after owl 0.2.1
+               ((enter)
                   (lets
                      ((i (if (get env 'autoindent) (buffer-line-indent b) null))
                       (b (buffer-append-noselect b (cons #\newline i))))
                      (led env 'insert b
-                        (bound 1 (+ (length i) 1) w)
+                        (env-nice-cx env b w)
                         (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                ((arrow dir)
                   (cond
