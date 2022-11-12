@@ -72,9 +72,28 @@ COMMAND MODE ------------------------------------------------------------------
    Ctrl-x - send selection to subprocess (see SUBPROCESSES)
 
 
+
 INSERT MODE -------------------------------------------------------------------
 
    Esc - exit insert mode
+
+
+
+EDITOR VARIABLES --------------------------------------------------------------
+
+ :set autoindent <true|false>
+ :set encoding <utf8|none>       -
+ :set expand-tabs <true|false>   - convert tabs to spaces?
+ :set status-line \"template\"   - set content of status line
+      %l[ine number in buffer]
+      %s[election length]
+      %f[ile path]
+      %b[inary name of subprocess]
+      %P[adding between left and right parts of status]
+      %D[ate and time]
+ :set tab-width <number>         - change tab width
+ :set timezone-offset <number>   - set timezone offset in hours
+
 
 
 LEX COMMANDS ------------------------------------------------------------------
@@ -101,6 +120,7 @@ LEX COMMANDS ------------------------------------------------------------------
  :set <variable> <value> - set and editor setting. see VARIABLES below.
 
 
+
 SUBPROCESSES ------------------------------------------------------------------
 
 Each editor buffer may be associated to one subprocess, which can be easily
@@ -112,21 +132,6 @@ subprocess is a shell or a programming languge read-eval-print -loop.
       - write ls / to a line
       - select the line with .
       - Press Ctrl-x
-
-
-EDITOR VARIABLES --------------------------------------------------------------
-
- :set tab-width <number>          - change tab width
- :set expand-tabs <true|false>   - convert tabs to spaces?
- :set timezone-offset <number>    - set timezone offset in hours
- :set status-line \"template\"      - set content of status line
-      %l[ine number in buffer]
-      %s[election length]
-      %f[ile path]
-      %b[inary name of subprocess]
-      %P[adding between left and right parts of status]
-      %D[ate and time]
- :set autoindent <true|false>
 
 
 
@@ -143,6 +148,8 @@ Examples:
    :s/(...)/\\1\\1/       - repeat first 3 charactersj
    :.s/([^ ]+) /\\1 \\1 / - repeat any non-space characters in current line
    :%s/\\n/ /g           - join all lines
+
+
 
 PLUGIN FUNCTIONS --------------------------------------------------------------
 

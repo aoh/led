@@ -224,7 +224,7 @@
          (if (file? path)
             (lets
                ((bytes (file->list path))
-                (data (utf8-decode bytes)))
+                (data (utf8-decode (or bytes '()))))
                (cond
                   ((not bytes)
                      (values env #false))
@@ -233,7 +233,7 @@
                         (put env 'encoding 'none)
                         (buffer 0 null bytes 0 1)))
                   (else
-                     (values env
+                     (values
                         (put env 'encoding 'utf8)
                         (buffer 0 null data 0 1)))))
             (values env #false)))
