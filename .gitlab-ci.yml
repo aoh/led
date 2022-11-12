@@ -3,6 +3,7 @@ image: gcc
 stages:
   - build
 
+
 build:
   stage: build
   except:
