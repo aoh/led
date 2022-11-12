@@ -121,10 +121,10 @@
                   (else
                      (lets ((path (or target (get env 'path)))
                             (fd (and path (open-output-file path))))
-                        (log "Writing buffer to " path)
+                        (log "Writing buffer to " path " with encoding " (get env 'encoding))
                         (cond
                            (fd
-                              (let ((data (buffer->bytes buff)))
+                              (let ((data (buffer->bytes env buff)))
                                  (if (write-bytes fd data)
                                     (begin
                                        (close-port fd)

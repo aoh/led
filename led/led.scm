@@ -836,24 +836,28 @@
       (log "UI: opening buffer " path)
       (lets
          ((id (or path (list '*scratch*)))
-          (status-thread-id (cons id 'status-line)))
+          (status-thread-id (cons id 'status-line))
+          (env buffer
+             (cond
+                  ((string? path)
+                     (lets ((e b (file-buffer env path)))
+                        (if b
+                           (values e b)
+                           (lets ((e b (dir-buffer env path)))
+                              (if b
+                                 (values e b)
+                                 (string-buffer env ""))))))
+                  ((pair? path)
+                     (list-buffer env path))
+                  (else
+                     (string-buffer env "")))))
          (thread id
             (led
                (pipe env
                   (empty-led-env id (if (string? path) path #f))
                   (put 'status-thread-id status-thread-id))
                'command
-               (cond
-                  ((string? path)
-                     (or
-                        (file-buffer path) ;; <- grab encoding to env later
-                        (dir-buffer path)
-                        (string-buffer "")))
-                  ((pair? path)
-                     (list-buffer path))
-                  (else
-                     (string-buffer "")))
-               1 1 10 10)) ;; <- ui sends terminal size as first message
+               buffer 1 1 10 10)) ;; <- ui sends terminal size as first message
          (link id)
          (link status-thread-id)
          (thread status-thread-id
@@ -886,7 +890,9 @@
    (let ((cmds (parse-runes data)))
       (log "PARSED " cmds)
       (if cmds
-         (lets ((b env (led-eval (string-buffer "") initial-env cmds)))
+         (lets
+             ((b env (string-buffer initial-env ""))
+              (b env (led-eval b initial-env cmds)))
             (if b
                env
                #false))
@@ -918,14 +924,17 @@
          (link (start-logger (get dict 'log)))
          (start-no-screen)
          (start-ui)
-         (led-repl (string-buffer "")
-            (empty-led-env *default-environment* #f  #f)))
+         (lets
+            ((env buffer
+               (string-buffer
+                  (empty-led-env *default-environment* #f #f)
+                  "")))
+            (led-repl buffer env)))
       (else
          (lets ((input (terminal-input (put empty 'eof-exit? #f)))
                 (x y ll (get-terminal-size input))
                 (_ (link (start-logger (get dict 'log))))
-                (env (load-user-settings *default-environment*))
-                )
+                (env (load-user-settings *default-environment*)))
             (if env
                (begin
                   (log "Terminal dimensions " (cons x y))
@@ -939,6 +948,7 @@
                   (mail 'ui (tuple 'terminal-size x y))
                   (for-each
                      (lambda (path)
+                        (log "opening " path)
                         (mail 'ui
                            (tuple 'open path env null)))
                      (if (null? args)

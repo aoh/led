@@ -176,8 +176,9 @@
       (define empty-buffer
          (buffer 0 null null 0 1))
 
-      (define (string-buffer str)
-         (buffer 0 null (string->list str) 0 1))
+      (define (string-buffer env str)
+         (values env
+            (buffer 0 null (string->list str) 0 1)))
 
       (define (drop-seq r ds k)
          (cond
@@ -204,36 +205,53 @@
       (define (seek-delta b n)
          (b (λ (pos l r len line) (seek b (+ pos n)))))
 
-      (define (buffer->bytes b)
-         (b (λ (pos l r len line) (utf8-encode (append (reverse l) r)))))
+      (define (buffer->bytes env b)
+         (let ((data (b (λ (pos l r len line) (append (reverse l) r)))))
+            (cond
+               ;; known utf8, or assumed such
+               ((eq? (get env 'encoding 'utf8) 'utf8)
+                  (utf8-encode data))
+               ;; explicitly stated no encoding (decoding failed while opening)
+               ((eq? (get env 'encoding #f) 'none)
+                  data)
+               (else
+                  (log "ERROR: unknown encoding: '" (get env 'encoding) "'")
+                  data))))
 
       ;; -> buffer | #false
-      (define (file-buffer path)
+      (define (file-buffer env path)
          (log (str "trying to open " path " as file"))
          (if (file? path)
             (lets
                ((bytes (file->list path))
                 (data (utf8-decode bytes)))
                (cond
-                  ((not bytes) #false)
+                  ((not bytes)
+                     (values env #false))
                   ((not data)
-                     (buffer 0 null bytes 0 1))
+                     (values
+                        (put env 'encoding 'none)
+                        (buffer 0 null bytes 0 1)))
                   (else
-                     (buffer 0 null data 0 1))))
-            #false))
+                     (values env
+                        (put env 'encoding 'utf8)
+                        (buffer 0 null data 0 1)))))
+            (values env #false)))
 
       ;; -> buffer | #false
-      (define (dir-buffer path)
+      (define (dir-buffer env path)
          (log (str "trying to open " path " as directory"))
          (let ((paths (led-dir->list path)))
             (log "paths " paths)
             (if paths
-               (buffer 0 null
-                  (foldr
-                     (λ (x tail) (append (string->list x) (cons #\newline tail)))
-                     null paths)
-                   0 1)
-                #false)))
+               (values env
+                  (buffer 0 null
+                     (foldr
+                        (λ (x tail) (append (string->list x) (cons #\newline tail)))
+                        null paths)
+                      0 1))
+                (values env #f))))
+
       (define (buffer-append-to-end b data)
          (b (λ (pos l r len line)
                (buffer pos l (append r data) len line))))

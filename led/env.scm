@@ -34,7 +34,8 @@
            (tab-width            number   3)
            (timezone-offset      number   1)
            (status-line-template string   "%(%b) %f:%l+%s %[%m] %P%D")
-           (autoindent           boolean  #false)))
+           (autoindent           boolean  #false)
+           (encoding             encoding 'utf8)))
 
       (define (env-cook type string)
          (cond
@@ -53,6 +54,11 @@
                      (values #t #f))
                   (else
                      (values #f #f))))
+            ((eq? type 'encoding)
+               (cond
+                  ((equal? string "none") (values #t 'none))
+                  ((equal? string "utf8") (values #t 'utf8))
+                  (else (values #f #f))))
             (else
                (values #f #f))))
 
