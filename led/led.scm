@@ -894,7 +894,7 @@
              ((b env (string-buffer initial-env ""))
               (b env (led-eval b initial-env cmds)))
             (if b
-               env
+               (clear-status-text env)
                #false))
          #false)))
 
@@ -954,6 +954,8 @@
                      (if (null? args)
                         (list #false)
                         args))
+                  (if (> (length args) 1)
+                     (mail 'ui (tuple 'home))) ;; move to first buffer
                   (let loop ()
                      (let ((mail (wait-mail)))
                         ;(print mail)

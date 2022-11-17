@@ -122,6 +122,10 @@
                ((eq? (ref msg 1) 'whoami)
                   (mail from from)
                   (ui l r i))
+               ((eq? (ref msg 1) 'home) ;; move to first buffer (for startup)
+                  (let ((r (append (reverse l) r)))
+                     (refresh (car r))
+                     (ui (list (car r)) (cdr r) i)))
                ;; yanking
                ((eq? (ref msg 1) 'yank)
                    ;; replace replace yanks with something like (store/load [key] [value])
