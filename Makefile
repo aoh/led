@@ -54,4 +54,8 @@ future:
 	-cd owl && make
 	test -x owl/bin/ol && make OL=owl/bin/ol
 
+.source.map: led/*.scm
+	grep -n "(define " led/*.scm | sed -re 's/: *\(define \(?/:/' -e 's/ .*//' -e 's/\)//g' > .source.map
+
+
 .PHONY: mrproper clean test install uninstall fasltest everything

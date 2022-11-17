@@ -6,3 +6,4 @@ bin
 tmp
 test/config
 test/*.out
+.source.map

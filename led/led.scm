@@ -481,6 +481,73 @@
                cy w h)
             (led (set-status-text env "nothing happened") mode b cx cy w h)))))
 
+(define (after-newline lst)
+   (cond
+      ((null? lst) lst)
+      ((eq? (car lst) #\newline) (cdr lst))
+      (else (after-newline (cdr lst)))))
+
+;; map format designed mainly to work easily with grep output
+(define (find-definition-from data pattern pcs num)
+   (cond
+      ((null? data)
+         (values #f "not found"))
+      ((eq? (car data) #\newline)
+         (values #f "invalid source map"))
+      ((eq? (car data) #\:) ;; between path and number, or number and name
+         (if num ;; number read, try to read pattern
+            (let loop ((data (cdr data)) (pat pattern))
+               (cond
+                  ((null? data) ;; fail
+                     (find-definition-from null pattern '() #f))
+                  ((eq? (car data) #\newline)
+                     (if (null? pat) ;; match
+                        (let ((path (list->string (reverse pcs))))
+                           (log "found match from '" path "', row " num)
+                           (values path num))
+                        (find-definition-from (cdr data) pattern '() #f)))
+                  ((null? pat) ;; fail
+                     (find-definition-from (after-newline data) pattern '() #f))
+                  ((eq? (car data) (car pat))
+                     (loop (cdr data) (cdr pat)))
+                  (else
+                     (find-definition-from (after-newline data) pattern '() #f))))
+           ;; end of patch chars, read number
+           (find-definition-from (cdr data) pattern pcs 0)))
+     (num ;; reading row number
+        (cond
+           ((< (car data) 48)
+              (values #f "invalid row number"))
+           ((> (car data) 57)
+              (values #f "invalid row number"))
+           (else
+              (find-definition-from (cdr data) pattern pcs (+ (- (car data) 48) (* num 10))))))
+     (else
+        (find-definition-from (cdr data) pattern (cons (car data) pcs) num))))
+
+
+; -> path-string line-number | #f error-string
+(define (find-definition map-path chars)
+   (let ((data (file->list map-path)))
+      (if data
+         (find-definition-from data chars null #f)
+         (values #f "no source map"))))
+
+(define (ui-jump-to env mode b cx cy w h led)
+   (lets
+      ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b))
+       (chars (get-selection bp)))
+      (lets ((path line (find-definition (get env 'source-map ".source.map") chars)))
+         (if path
+            (begin
+               (mail 'ui (tuple 'open path env (list (tuple 'select-line line))))
+               (led
+                  (set-status-text env (list->string (get-selection bp)))
+                   mode b cx cy w h))
+            (led
+               (set-status-text env line)
+               mode b cx cy w h)))))
+
 (define *default-command-mode-key-bindings*
    (ff
       ;#\q ui-memory-info
@@ -514,7 +581,8 @@
       #\: ui-start-lex-command
       #\/ ui-start-search
       #\% ui-select-everything
-      #\? ui-spell
+      #\s ui-spell
+      #\? ui-jump-to
       ))
 
 (define (ui-repaint env mode b cx cy w h led)
@@ -605,6 +673,7 @@
                (led env mode buff cx cy w h)))
          (else
             (led env mode bp cx cy w h)))))
+
 
 (define *default-command-mode-control-key-bindings*
    (ff
