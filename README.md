@@ -30,7 +30,7 @@ led.
 ## Building
 
 ```sh
-   $ git clone https://haltp.org/git/led.git # or https://gitlab.com/akihe/led
+   $ git clone https://haltp.org/git/led.git # or https://github.com/aoh/led
    $ cd led
    $ make
    $ sudo make install
