@@ -7,7 +7,7 @@ OL=bin/ol
 
 everything: bin/led .parrot
 
-.parrot: bin/led
+.parrot: test/* bin/led
 	test/run bin/led
 	touch .parrot
 
