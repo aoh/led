@@ -539,11 +539,20 @@
        (chars (get-selection bp)))
       (lets ((path line (find-definition (get env 'source-map ".source.map") chars)))
          (if path
-            (begin
-               (mail 'ui (tuple 'open path env (list (tuple 'select-line line))))
-               (led
-                  (set-status-text env (list->string (get-selection bp)))
-                   mode b cx cy w h))
+            ;; is it me maybe?
+            (let ((me (interact 'ui (tuple 'whoami))))
+               (if (equal? me path)
+                  (lets ((b env (led-eval b env (tuple 'add-mark #\q))))
+                     (led
+                        (set-status-text env "Found in same file. Return via 'q")
+                        mode
+                        (select-line b line)
+                        1 1 w h))
+                  (begin
+                     (mail 'ui (tuple 'open path env (list (tuple 'select-line line))))
+                     (led
+                        (set-status-text env (list->string (get-selection bp)))
+                         mode b cx cy w h))))
             (led
                (set-status-text env line)
                mode b cx cy w h)))))
