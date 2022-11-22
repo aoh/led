@@ -899,15 +899,15 @@
             (led env 'command b cx cy w h)))))
 
 ;; (help), etc
-(define (list-buffer x)
+(define (list-buffer e x)
    (log "List buffer " x)
    (if (eq? (car x) 'help)
       (begin
          (log "Opening help buffer")
-         (help-buffer x))
+         (help-buffer e x))
       (begin
          (log "Unknown list")
-         #f)))
+         (values #f #f))))
 
 (define default-led-opener
    (lambda (path env)

@@ -164,8 +164,8 @@ PLUGIN FUNCTIONS --------------------------------------------------------------
 ")
 
 
-      (define (help-buffer subject)
+      (define (help-buffer env subject)
          (log "HELP: opening help on " subject)
          (cond
             (else
-               (string-buffer main-help))))))
+               (string-buffer env main-help))))))
