@@ -457,7 +457,7 @@
    (lets ((bp ep (led-eval b env (tuple 'quit #f))))
       ;; only exits on failure
       (led
-         (set-status-text env "Buffer has unsaved content.")
+         (set-status-text env "Buffer has unsaved content. Force close with :q!")
          mode b cx cy w h)))
 
 (define (ui-start-lex-command env mode b cx cy w h led)
@@ -715,7 +715,7 @@
 (define (led env mode b cx cy w h)
    (lets ((from msg (next-event env b w h cx cy))
           (op (ref msg 1)))
-      ;(log "led: " mode " <- " msg " from " from)
+      ; (log "led: " mode " <- " msg " from " from)
       (cond
          ((eq? op 'terminal-size)
             (lets ((_ w h msg))

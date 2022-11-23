@@ -26,6 +26,7 @@
             (put 'undo null)
             (put 'redo null)
             (put 'subprocess #false) ;; each buffer can have own (ones)
+            (put 'clients null)      ;; threads requesting updates
             ))
 
       ;; variables settable via :set <name> <value> along with defaults
