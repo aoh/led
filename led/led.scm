@@ -533,7 +533,9 @@
          (find-definition-from data chars null #f)
          (values #f "no source map"))))
 
-(define (ui-jump-to env mode b cx cy w h led)
+;; read .source.map, or whatever is set via env, end jump to corresponding file+line,
+;; usually being the definition of something
+(define (ui-jump-via-map env mode b cx cy w h led)
    (lets
       ((bp (if (= 0 (buffer-selection-length b)) (buffer-select-current-word b) b))
        (chars (get-selection bp)))
@@ -556,6 +558,16 @@
             (led
                (set-status-text env line)
                mode b cx cy w h)))))
+
+(define (ui-find-occurrences env mode b cx cy w h led)
+   (lets
+      ((bp (if (= 0 (buffer-selection-length b))
+               (buffer-select-current-word b)
+               b))
+       (chars (get-selection bp)))
+      (mail 'ui
+         (tuple 'open (cons 'find chars) env '()))
+      (led env mode b cx cy w h)))
 
 (define *default-command-mode-key-bindings*
    (ff
@@ -591,7 +603,8 @@
       #\/ ui-start-search
       #\% ui-select-everything
       #\s ui-spell
-      #\? ui-jump-to
+      #\? ui-jump-via-map
+      #\F ui-find-occurrences
       ))
 
 (define (ui-repaint env mode b cx cy w h led)
@@ -901,11 +914,13 @@
 ;; (help), etc
 (define (list-buffer e x)
    (log "List buffer " x)
-   (if (eq? (car x) 'help)
-      (begin
+   (cond
+      ((eq? (car x) 'help)
          (log "Opening help buffer")
          (help-buffer e x))
-      (begin
+      ((eq? (car x) 'find)
+         (string-buffer e (str "Finding: " (list->string (cdr x)) "\n")))
+      (else
          (log "Unknown list")
          (values #f #f))))
 
