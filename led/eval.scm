@@ -95,7 +95,7 @@
       ;; expand-tabs tab-width timezone-offset status-line-template autoindent
 
       (define (led-eval buff env exp)
-         (log "led-eval " exp) ;; can be large
+         ;(log "led-eval " exp) ;; can be large
          (tuple-case exp
             ((left) ;; usually keyboard h, move left by one character on current line
                ;; convert to match ui-left

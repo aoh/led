@@ -93,8 +93,9 @@ EDITOR VARIABLES --------------------------------------------------------------
       %D[ate and time]
  :set tab-width <number>         - change tab width
  :set timezone-offset <number>   - set timezone offset in hours
-
-
+ :set find-path <path>           - dir under which to search for find-matches
+ :set find-regex <regex>         - path pattern to match before looking for find
+                                   matches, e.g. scm$
 
 LEX COMMANDS ------------------------------------------------------------------
 
@@ -117,7 +118,7 @@ LEX COMMANDS ------------------------------------------------------------------
             - replace selection with result of calling a plugin function
 
  :<regex>    - apply regular expression on selection. see REGEX.
- :set <variable> <value> - set and editor setting. see VARIABLES below.
+ :set <variable> <value> - set and editor setting. see VARIABLES.
 
 
 

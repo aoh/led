@@ -31,12 +31,15 @@
 
       ;; variables settable via :set <name> <value> along with defaults
       (define *editor-variables*
-         '((expand-tabs          boolean  #false)
+         `((expand-tabs          boolean  #false)
            (tab-width            number   3)
            (timezone-offset      number   1)
            (status-line-template string   "%(%b) %f:%l+%s %[%m] %P%D")
            (autoindent           boolean  #false)
-           (encoding             encoding 'utf8)))
+           (encoding             encoding 'utf8)
+           (find-regex           regex    (string->regex "m/./"))
+           (find-path            string   ".")
+           ))
 
       (define (env-cook type string)
          (cond
@@ -60,6 +63,11 @@
                   ((equal? string "none") (values #t 'none))
                   ((equal? string "utf8") (values #t 'utf8))
                   (else (values #f #f))))
+            ((eq? type 'regex)
+               (let ((r (string->regex (str "m/" string "/"))))
+                  (if r
+                     (values #t r)
+                     (values #f #f))))
             (else
                (values #f #f))))
 
