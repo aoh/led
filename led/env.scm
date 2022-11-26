@@ -37,7 +37,7 @@
            (status-line-template string   "%(%b) %f:%l+%s %[%m] %P%D")
            (autoindent           boolean  #false)
            (encoding             encoding 'utf8)
-           (find-regex           regex    (string->regex "m/./"))
+           (find-regex           regex    ,(string->regex "m/./"))
            (find-path            string   ".")
            ))
 
