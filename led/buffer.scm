@@ -121,7 +121,7 @@
                #f)))
 
       (define (apply-delta buff delta)
-         (log "delta " delta)
+         ;(log "delta " delta)
          (lets ((buff (seek buff (ref delta 1))))
             (if buff
                (buff

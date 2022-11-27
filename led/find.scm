@@ -3,12 +3,14 @@
    (import
       (owl toplevel)
       (led system)
+      (led log)
       (only (owl sys) file?))
 
    (export
       start-find-thread)
 
    (begin
+
       (define (path-finder env full-path tail)
          (cond
             ((file? full-path)
@@ -38,32 +40,68 @@
             (cons (car lst)
                (grab-row (cdr lst)))))
 
-      (define (match-finder data row-start path pat id row)
+      ; -> #(push (byte ...))
+      (define (match-finder data row-start path pat id row tl)
          (cond
             ((null? data)
-               'ok)
+               tl)
             ((match-here? data pat)
-               (let ((row-chars (grab-row row-start)))
-                  (mail id (tuple 'push (string->list (str path ":" row ":" (list->string row-chars) "\n"))))
-                  (sleep 100)  ;; not really needed: give time for the receiving buffer to work
-                  (match-finder (cdr data) row-start path pat id row)))
+               (lets
+                  ((row-chars (grab-row row-start))
+                   (row-string (str path ":" row ":" (list->string row-chars) "\n")))
+                  (cons row-string
+                     (lambda ()
+                        (match-finder (cdr data) row-start path pat id row tl)))))
             ((eq? (car data) #\newline)
-               (match-finder (cdr data) (cdr data) path pat id (+ row 1)))
+               (match-finder (cdr data) (cdr data) path pat id (+ row 1) tl))
             (else
-               (match-finder (cdr data) row-start path pat id row))))
+               (match-finder (cdr data) row-start path pat id row tl))))
+
+      (define send-interval-ms 500)
+
+      (define (flush id rlines)
+         (mail id
+            (tuple 'push
+               (foldr
+                  (lambda (s tl)
+                     (append (string->list s) tl))
+                  '()
+                  rlines))))
+
+      (define (result-sender ress id at rlines)
+         (cond
+            ((null? ress)
+               (flush id rlines))
+            ((pair? ress)
+               (let ((rlines (cons (car ress) rlines))
+                     (now (time-ms)))
+                  (if (> now at)
+                     (begin
+                        (flush id rlines)
+                        (result-sender (cdr ress) id (+ now send-interval-ms) '()))
+                     (result-sender (cdr ress) id at rlines)))
+               )
+            (else
+               (result-sender (ress) id at rlines))))
 
       (define (start-find-thread env chars id)
          (thread (list 'finder-of id)
             (begin
                (mail id
                   (tuple 'set-status-text "Search running..."))
-               (lfold
-                  (lambda (_ path)
-                     (if ((get env 'find-regex) path)
-                        (let ((data (file->list path)))
-                           (if data
-                              (match-finder data data path chars id 1)))))
-                  42 (path-finder env (get env 'find-path ".") '()))
+               (result-sender
+                  (lets
+                     ((path-ll (path-finder env (get env 'find-path ".") '()))
+                      (path-ll (lkeep (get env 'find-regex) path-ll)))
+                     (lfold
+                        (lambda (tl path)
+                           (let ((data (file->list path)))
+                              (if data
+                                 (match-finder data data path chars id 1 tl)
+                                 tl)))
+                        '()
+                        path-ll))
+                  id (+ (time-ms) 100) '())
                (mail id
                   (tuple 'set-status-text "Search finished."))
                )))))
