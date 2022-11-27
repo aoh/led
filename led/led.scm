@@ -27,6 +27,7 @@
    (only (led subprocess) start-repl communicate)
    (only (led parse) parse-runes get-command led-syntax-error-handler)
    (only (led screen) start-screen start-no-screen print-to clear-screen)
+   (only (led find) start-find-thread)
    (led buffer)
    (led env)
    (led eval)
@@ -745,6 +746,8 @@
          ((eq? op 'keep-me-posted)
             (led (put env 'clients (cons from (get env 'clients null)))
                mode b cx cy w h))
+         ((eq? op 'set-status-text)
+            (led (set-status-text env (ref msg 2)) mode b cx cy w h))
          ((eq? op 'push)
             ;(log "led got push of " (ref msg 2))
             (lets ((b env (led-eval b env msg)))
@@ -911,61 +914,6 @@
          (else
             (led env 'command b cx cy w h)))))
 
-(import (only (owl sys) file?))
-
-(define (path-finder env full-path tail)
-   (cond
-      ((file? full-path)
-         (cons full-path tail))
-      ((led-dir->list full-path) =>
-         (lambda (nodes)
-            (lambda ()
-               (foldr
-                  (lambda (x tail)
-                     (path-finder env
-                        ;(str full-path "/" x)
-                        x
-                        tail))
-                  tail nodes))))
-      (else tail)))
-
-(define (match-here? data pat)
-   (cond
-      ((null? pat) #t)
-      ((null? data) #f)
-      ((eq? (car data) (car pat))
-         (match-here? (cdr data) (cdr pat)))
-      (else #f)))
-
-(define (grab-row lst)
-   (if (or (null? lst) (eq? (car lst) #\newline))
-      '()
-      (cons (car lst)
-         (grab-row (cdr lst)))))
-
-(define (match-finder data row-start path pat id row)
-   (cond
-      ((null? data)
-         'ok)
-      ((match-here? data pat)
-         (let ((row-chars (grab-row row-start)))
-            (mail id (tuple 'push (string->list (str path ":" row ":" (list->string row-chars) "\n"))))
-            (sleep 100)  ;; not really needed: give time for the receiving buffer to work
-            (match-finder (cdr data) row-start path pat id row)))
-      ((eq? (car data) #\newline)
-         (match-finder (cdr data) (cdr data) path pat id (+ row 1)))
-      (else
-         (match-finder (cdr data) row-start path pat id row))))
-
-(define (start-find-thread env chars id)
-   (thread (list 'finder-of id)
-      (lfold
-         (lambda (_ path)
-            (if ((get env 'find-regex) path)
-               (let ((data (file->list path)))
-                  (if data
-                     (match-finder data data path chars id 1)))))
-         42 (path-finder env (get env 'find-path ".") '()))))
 
 (define default-led-opener
    (lambda (path env)
