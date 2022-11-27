@@ -251,7 +251,7 @@
                      (led-eval bp ep b)
                      (values #f #f))))
             ((quit force?)
-               (if (and (dirty? env) (not force?))
+               (if (and (dirty? env) (not force?) (not (get env 'close-if-dirty)))
                   (values #f #f)
                   (begin
                       (kill (get env 'status-thread 'id))

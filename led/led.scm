@@ -937,7 +937,9 @@
                            (log "Opening help buffer")
                            (help-buffer env path))
                         ((eq? (car path) 'find)
-                           (string-buffer env (str "Finding: " (list->string (cdr path)) "\n")))
+                           (string-buffer
+                              (put env 'close-if-dirty #true)
+                              (str "Finding: " (list->string (cdr path)) "\n")))
                         (else
                            (log "Unknown list")
                            (values #f #f))))

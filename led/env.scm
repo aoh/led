@@ -25,8 +25,8 @@
             ; not settable
             (put 'undo null)
             (put 'redo null)
-            (put 'subprocess #false) ;; each buffer can have own (ones)
-            (put 'clients null)      ;; threads requesting updates
+            (put 'subprocess #false)     ;; each buffer can have own (ones)
+            (put 'clients null)          ;; threads requesting updates
             ))
 
       ;; variables settable via :set <name> <value> along with defaults
@@ -39,6 +39,7 @@
            (encoding             encoding 'utf8)
            (find-regex           regex    ,(string->regex "m/./"))
            (find-path            string   ".")
+           (close-if-dirty       boolean  #false)
            ))
 
       (define (env-cook type string)

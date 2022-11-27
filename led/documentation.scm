@@ -169,4 +169,6 @@ PLUGIN FUNCTIONS --------------------------------------------------------------
          (log "HELP: opening help on " subject)
          (cond
             (else
-               (string-buffer env main-help))))))
+               (string-buffer
+                  (put env 'close-if-dirty #true)
+                  main-help))))))
