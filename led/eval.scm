@@ -338,6 +338,10 @@
                    (buff (seek-delta buff (- 0 move)))
                    (buff (set-selection-length buff slen)))
                   (values buff env)))
+            ((find str)
+               (mail 'ui
+                  (tuple 'open (cons 'find (string->list str)) env '()))
+               (values buff env))
             ((nop)
                (values buff env))
             (else

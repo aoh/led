@@ -108,16 +108,16 @@
              (verify (not (= x y)) #f))
             y))
 
+      ;; -> get-string-command?
       (define get-file-command
          (get-parses
             ((op
                (get-one-of
                   (get-word "write" 'write-buffer)
                   (get-word "w" 'write-buffer)     ;; the whole buffer + mark saved, not just selection
-                  ;(get-word "r" 'read)
                   (get-word "read" 'read)
-                  ;(get-word "n" 'new-buffer)
                   (get-word "new" 'new-buffer)
+                  (get-word "find" 'find)
                   (get-word "search-buffer" 'search-buffer)
                   ))
              (path
@@ -192,6 +192,7 @@
                   (get-word "quit" (tuple 'quit #f))
                   (get-word "indent" (tuple 'indent))
                   (get-word "unindent" (tuple 'unindent))
+                  (get-word "find" (tuple 'indent))
                   get-resize
                   (get-word "next-match" (tuple 'next-match #f))
                   get-insert
