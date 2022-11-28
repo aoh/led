@@ -969,7 +969,7 @@
       (version "-v" "--version" comment "show program version")
       (log "-L" "--log" has-arg comment "debug log file")
       (repl "-r" "--repl" comment "line-based repl")
-      ;(config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
+      (config "-c" "--config" has-arg comment "config file (default $HOME/.ledrc)")
       )))
 
 
@@ -982,7 +982,7 @@
 
 (import (only (led parse) parse-runes))
 
-(define (load-settings-from initial-env data)
+(define (load-config-from initial-env data)
    (let ((cmds (parse-runes data)))
       (log "PARSED " cmds)
       (if cmds
@@ -994,17 +994,11 @@
                #false))
          #false)))
 
-(define (load-user-settings env)
-   (let ((home (getenv "HOME")))
-      (if home
-         (lets
-            ((settings-path (str home "/.ledrc"))
-             (data (file->list settings-path)))
-            (log "loading user settings from " settings-path)
-            (log "data is " data)
-            (if data
-               (load-settings-from env data)
-               env))
+(define (load-user-settings path env)
+   (lets ((data (file->list path)))
+      (log "loading user settings from " path)
+      (if data
+         (load-config-from env data)
          env)))
 
 (define (start-led-threads dict args)
@@ -1030,7 +1024,11 @@
          (lets ((input (terminal-input (put empty 'eof-exit? #f)))
                 (x y ll (get-terminal-size input))
                 (_ (link (start-logger (get dict 'log))))
-                (env (load-user-settings *default-environment*)))
+                (env
+                   (load-user-settings
+                      (or (get dict 'config)
+                          (str (or (getenv "HOME") ".") "/.ledrc"))
+                      *default-environment*)))
             (if env
                (begin
                   (log "Terminal dimensions " (cons x y))
