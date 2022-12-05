@@ -4,6 +4,7 @@
       (owl toplevel)
       (led system)
       (led log)
+      (only (owl unicode) utf8-decode)
       (only (owl sys) file?))
 
    (export
@@ -95,7 +96,9 @@
                       (path-ll (lkeep (get env 'find-regex) path-ll)))
                      (lfold
                         (lambda (tl path)
-                           (let ((data (file->list path)))
+                           (lets
+                               ((data (file->list path))            ;; <- streaming would reduce memory load
+                                (data (utf8-decode (or data '()))))
                               (if data
                                  (match-finder data data path chars id 1 tl)
                                  tl)))
