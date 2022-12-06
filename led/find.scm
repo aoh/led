@@ -85,17 +85,37 @@
             (else
                (result-sender (ress) id at rlines))))
 
+      (define (ping-or-exit tid exit)
+         (mail tid (tuple 'ping))
+         (let loop ((n 100))
+            (cond
+               ((eq? n 0)
+                  (log "no pong, exiting search")
+                  (exit 1))
+               ((check-mail) =>
+                  (lambda (envelope)
+                     (log "pong at " n)
+                     ;; no other mails are sent here
+                     envelope))
+               (else
+                  (set-ticker 0)
+                  (loop (- n 1))))))
+
       (define (start-find-thread env chars id)
          (thread (list 'finder-of id)
             (begin
                (mail id
                   (tuple 'set-status-text "Search running..."))
                (result-sender
-                  (lets
+                  (lets/cc exit
                      ((path-ll (path-finder env (get env 'find-path ".") '()))
                       (path-ll (lkeep (get env 'find-regex) path-ll)))
                      (lfold
                         (lambda (tl path)
+                           ;; check if parent buffer is still there
+                           (log "find " path)
+                           (ping-or-exit id exit)
+                           ;; search a specific file
                            (lets
                                ((data (file->list path))            ;; <- streaming would reduce memory load
                                 (data (utf8-decode (or data '()))))

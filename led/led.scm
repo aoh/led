@@ -731,6 +731,10 @@
           (op (ref msg 1)))
       ; (log "led: " mode " <- " msg " from " from)
       (cond
+         ((eq? op 'ping)
+            ;; ping-pong. someone is checking if buffer is still responsive.
+            (mail from (tuple 'pong))
+            (led env mode b cx cy w h))
          ((eq? op 'terminal-size)
             (lets ((_ w h msg))
                (for-each
