@@ -98,7 +98,6 @@
       (define (disk-modification-time env)
          (get env 'disk-modification-time 0))
 
-
       (define (update-disk-modification-time env)
          (let ((p (get env 'path #f)))
             (if (string? p)
@@ -109,7 +108,8 @@
 
       (define (empty-led-env base-env id path)
          (lets
-            ((env (ff-union empty-env base-env (lambda (a b) a)))
+            ((base-env (del base-env 'path)) ;; forget path, if any
+             (env (ff-union empty-env base-env (lambda (a b) a)))
              (env (ff-union env   defaults-env (lambda (a b) a))))
             (if path
                ;; small chance of race between reading modification time and
