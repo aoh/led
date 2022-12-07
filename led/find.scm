@@ -63,8 +63,8 @@
       (define (flush id rlines)
          (mail id
             (tuple 'push
-               (foldr
-                  (lambda (s tl)
+               (fold
+                  (lambda (tl s)
                      (append (string->list s) tl))
                   '()
                   rlines))))
