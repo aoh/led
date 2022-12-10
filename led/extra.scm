@@ -1,6 +1,12 @@
 ;;;
 ;;; Extra processing functions
 ;;;
+;
+; This module contains simple extension functions for content editing in led.
+; They can be called via the call -command. The operation is essentially to
+; replace the current selection, represented as a list of unicode code points,
+; with the list of code points returned by the function. The buffer environment
+; is also given as input to the functions.
 
 (define-library (led extra)
 
