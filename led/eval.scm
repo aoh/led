@@ -14,6 +14,7 @@
       (led extra)
       (led parse)
       (led env)
+      (only (led abbreviate) add-abbreviation)
       (only (led system) led-path->runes)
       (only (led subprocess) start-repl)
       (only (led render) render-content)
@@ -95,7 +96,7 @@
       ;; expand-tabs tab-width timezone-offset status-line-template autoindent
 
       (define (led-eval buff env exp)
-         ;(log "led-eval " exp) ;; can be large
+         ; (log "led-eval " exp) ;; can be large
          (tuple-case exp
             ((left) ;; usually keyboard h, move left by one character on current line
                ;; convert to match ui-left
@@ -344,6 +345,11 @@
                (values buff env))
             ((nop)
                (values buff env))
+            ((abbreviate from to)
+               (values buff
+                  (set-status-text
+                     (add-abbreviation env from to)
+                     "abbreviated")))
             (else
                (log (list 'wat-eval exp))
                (values #f env))))

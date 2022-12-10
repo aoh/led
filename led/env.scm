@@ -2,7 +2,6 @@
 
    (import
       (owl toplevel)
-      (only (led abbreviate) add-abbreviation) ;; temp
       (led system))
 
    (export
@@ -111,8 +110,7 @@
          (lets
             ((base-env (del base-env 'path)) ;; forget path, if any
              (env (ff-union empty-env base-env (lambda (a b) a)))
-             (env (ff-union env   defaults-env (lambda (a b) a)))
-             (env (add-abbreviation env (string->list "zar") (string->list "→"))))
+             (env (ff-union env   defaults-env (lambda (a b) a))))
             (if path
                ;; small chance of race between reading modification time and
                ;; reading contents to buffer

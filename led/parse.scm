@@ -108,8 +108,7 @@
              (verify (not (= x y)) #f))
             y))
 
-      ;; -> get-string-command?
-      (define get-file-command
+      (define get-string-command
          (get-parses
             ((op
                (get-one-of
@@ -128,6 +127,25 @@
                       (list->string path))
                    (get-epsilon #false))))
             (tuple op path)))
+
+      (define get-word-arg
+         (get-plus (get-non-rune #\space)))
+
+      (define get-binop
+         (get-parses
+            ((op
+               (get-one-of
+                  (get-word "abbr" 'abbreviate)
+                  ))
+             (skip (get-plus (get-imm #\space)))
+             (arg1 get-word-arg)
+             (skip (get-plus (get-imm #\space)))
+             (arg2 (get-plus (get-non-rune #\newline)))
+             )
+            (tuple op
+               arg1
+               arg2
+               )))
 
       (define get-mark-command
          (get-parses
@@ -167,7 +185,8 @@
              (val
                (get-one-of
                   get-movement
-                  get-file-command
+                  get-binop
+                  get-string-command
                   get-subprocess
                   get-call
                   get-assignment

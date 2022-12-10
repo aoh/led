@@ -726,17 +726,6 @@
                (values
                   (ref m 1) (ref m 2)))))))
 
-(define (maybe-abbreviate env b char)
-   (cond
-      ((eq? char #\space)
-         (lets
-            ((pos l r len line <- b)
-             (l dx (abbreviate env l)))
-            (values
-               (prod pos l r len line)
-               dx)))
-      (else (values b 0))))
-
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
    (lets ((from msg (next-event env b w h cx cy))

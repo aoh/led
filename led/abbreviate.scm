@@ -1,6 +1,10 @@
 ;;;
 ;;; Abbreviations
 ;;;
+;
+; Abbreviations allow text being written interactively to be replaced
+; with other text. Abbreviations are checked after space and newline.
+;
 
 (define-library (led abbreviate)
 
@@ -9,8 +13,9 @@
       (led log))
 
    (export
-      add-abbreviation   ;; env abbr-chars abbr-val -> env'
-      abbreviate         ;; env lst -> lst'
+      add-abbreviation   ;; env abbr-chars abbr-val → env'
+      abbreviate         ;; env lst → lst'
+      maybe-abbreviate   ;; env b char → b' dx
       )
 
    (begin
@@ -51,6 +56,17 @@
                         (values (append to lstp) dx)
                         (loop (cdr as))))))))
 
+      ;; env b char → b' dx
+      (define (maybe-abbreviate env b char)
+         (if (or (eq? char #\space)
+                 (eq? char #\newline))
+            (lets
+               ((pos l r len line <- b)
+                (l dx (abbreviate env l)))
+               (values
+                  (prod pos l r len line)
+                  dx))
+            (values b 0)))
 
 ))
 
