@@ -16,7 +16,7 @@
       (owl toplevel)
       (led system)
       (led log)
-      (only (owl unicode) utf8-decode)
+      (only (owl unicode) utf8-decoder)
       (only (owl sys) file?))
 
    (export
@@ -34,35 +34,57 @@
                      (foldr path-finder tail nodes))))
             (else tail)))
 
-      (define (match-here? data pat)
+      (define (match-here? ll pat)
          (cond
-            ((null? pat) #t)
-            ((null? data) #f)
-            ((eq? (car data) (car pat))
-               (match-here? (cdr data) (cdr pat)))
-            (else #f)))
+            ((null? pat)
+               (values ll #t))
+            ((null? ll)
+               (values ll #f))
+            ((pair? ll)
+               (if (eq? (car ll) (car pat))
+                  (lets ((llp res (match-here? (cdr ll) (cdr pat))))
+                     (values (cons (car ll) llp) res))
+                  (values ll #f)))
+            (else
+               (match-here? (ll) pat))))
 
-      (define (grab-row lst)
-         (if (or (null? lst) (eq? (car lst) #\newline))
-            '()
-            (cons (car lst)
-               (grab-row (cdr lst)))))
+      ;; ll -> (char ...) ll', grab up to newline and remove it
+      (define (grab-row ll)
+         (cond
+            ((null? ll)
+               (values ll ll))
+            ((pair? ll)
+               (if (eq? (car ll) #\newline)
+                  (values '() (cdr ll))
+                  (lets ((r llp (grab-row (cdr ll))))
+                     (values
+                        (cons (car ll) r)
+                        llp))))
+            (else
+               (grab-row (ll)))))
 
       ; -> #(push (byte ...))
-      (define (match-finder data row-start path pat id row tl)
+      (define (match-finder ll rowr path pat id row tl)
          (cond
-            ((null? data)
+            ((null? ll)
                tl)
-            ((match-here? data pat)
-               (lets
-                  ((row-chars (grab-row row-start))
-                   (row-string (str path ":" row ":" (list->string row-chars) "\n")))
-                  (pair row-string
-                     (match-finder (cdr data) row-start path pat id row tl))))
-            ((eq? (car data) #\newline)
-               (match-finder (cdr data) (cdr data) path pat id (+ row 1) tl))
+            ((pair? ll)
+               (lets ((ll matched? (match-here? ll pat)))
+                  (cond
+                     (matched?
+                        ;(log "matched at " row " of " path)
+                        (lets
+                           ((post llp (grab-row ll))
+                            ;(row-chars (append (reverse rowr) post)) ;; with prefix
+                            (row-string (str path ":" row ":" (list->string post) "\n"))) ;; just after match
+                           (pair row-string
+                              (match-finder llp '() path pat id (+ row 1) tl))))
+                     ((eq? (car ll) #\newline)
+                        (match-finder (cdr ll) '() path pat id (+ row 1) tl))
+                     (else
+                        (match-finder (cdr ll) (cons (car ll) rowr) path pat id row tl)))))
             (else
-               (match-finder (cdr data) row-start path pat id row tl))))
+               (match-finder (ll) rowr path pat id row tl))))
 
       (define send-interval-ms 500)
 
@@ -141,11 +163,13 @@
                            (ping-or-exit id exit)
                            ;; search a specific file
                            (lets
-                               ((data (file->list path))            ;; <- streaming would reduce memory load
-                                (data (utf8-decode (or data '()))))
-                              (if data
-                                 (pair #f (match-finder data data path chars id 1 tll))
-                                 tll)))
+                               ((fd (open-input-file path)))
+                               (if fd
+                                  (lets
+                                     ((ll (port->byte-stream fd))
+                                      (cpll (utf8-decoder ll (lambda (a b c) (close-port fd) '()))))
+                                    (pair #f (match-finder cpll '() path chars id 1 tll)))
+                                  tll)))
                         '()
                         path-ll))
                   id (+ (time-ms) 100) '())
