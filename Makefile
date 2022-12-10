@@ -4,7 +4,6 @@ CFLAGS=-O2 -Wall
 PREFIX=/usr
 OWLURL=https://haltp.org/files/ol-0.2.c.gz
 OL=bin/ol
-
 everything: bin/led .parrot
 
 .parrot: test/* bin/led
@@ -15,12 +14,12 @@ everything: bin/led .parrot
 fasltest: led.fasl bin/ol
 	cd test && sh ./run  ../bin/ol -l ../led.fasl --
 
-bin/led: led.c
+bin/led: c/led.c
 	mkdir -p bin
-	$(CC) $(CFLAGS) -o bin/led led.c
+	$(CC) $(CFLAGS) -o bin/led c/led.c
 
-led.c: led/*.scm $(OL)
-	$(OL) $(OFLAGS) -o led.c led/led.scm
+c/led.c: led/*.scm $(OL)
+	$(OL) $(OFLAGS) -o c/led.c led/led.scm
 
 led.fasl: bin/ol led/*.scm
 	make bin/ol
@@ -33,15 +32,22 @@ install: bin/led # .parrot
 uninstall:
 	rm -v $(PREFIX)/bin/led
 
-bin/ol:
-	mkdir -p bin tmp
-	test -f tmp/ol.c || curl $(OWLURL) | gzip -d > tmp/ol.c
-	cc -O2 -o bin/ol tmp/ol.c
+c/ol-0.2.c.gz:
+	# this is normally bundled in the repository
+	mkdir -p c
+	cd c && wget $(OWLURL)
+
+c/ol.c: c/ol-0.2.c.gz
+	cat c/ol-0.2.c.gz | gzip -d > c/ol.c
+
+bin/ol: c/ol.c
+	mkdir -p bin
+	cc -O2 -o bin/ol c/ol.c
 
 test: .parrot
 
 clean:
-	-rm led.c led.log test/*.out bin/led bin/ol tmp/$(OWL).c
+	-rm c/*.c led.log test/*.out bin/led bin/ol
 	-rmdir bin
 
 mrproper:
@@ -56,6 +62,5 @@ future:
 
 .source.map: led/*.scm
 	grep -n "(define " led/*.scm | sed -re 's/: *\(define \(?/:/' -e 's/ .*//' -e 's/\)//g' > .source.map
-
 
 .PHONY: mrproper clean test install uninstall fasltest everything

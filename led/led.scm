@@ -1,10 +1,10 @@
 #!/usr/bin/ol --run
 
-(define version-str "led v0.2a")
+(define version-str "led v0.2.1a")
 
 (define usage-text "led [args] [file-or-directory] ...")
 
-(define *expected-owl-version* "0.2.1a")
+(define *expected-owl-version* "0.2")
 
 (if (not (equal? *owl-version* *expected-owl-version*))
    (begin
