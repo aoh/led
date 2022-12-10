@@ -33,6 +33,7 @@
    (led eval)
    (led input)
    (led documentation)
+   (led abbreviate)
    (only (owl syscall) link kill)
    (only (led ui) start-ui ui-put-yank ui-get-yank)
    (led render)
@@ -725,6 +726,17 @@
                (values
                   (ref m 1) (ref m 2)))))))
 
+(define (maybe-abbreviate env b char)
+   (cond
+      ((eq? char #\space)
+         (lets
+            ((pos l r len line <- b)
+             (l dx (abbreviate env l)))
+            (values
+               (prod pos l r len line)
+               dx)))
+      (else (values b 0))))
+
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
    (lets ((from msg (next-event env b w h cx cy))
@@ -825,12 +837,14 @@
          ((eq? mode 'insert)
             (tuple-case msg
                ((key x)
-                  (lets ((b (buffer-append-noselect b (list x))))
+                  (lets
+                     ((b dx (maybe-abbreviate env b x))
+                      (b (buffer-append-noselect b (list x))))
                      (led
                         (if (eq? x 41)
                            (show-matching-paren env b)
                            env)
-                        'insert b (min w (+ cx (env-char-width env x))) cy w h)))
+                        'insert b (min w (+ (+ cx dx) (env-char-width env x))) cy w h)))
                ((refresh)
                   (led env 'insert b cx cy w h))
                ((esc)
