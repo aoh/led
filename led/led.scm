@@ -761,7 +761,7 @@
             (lets ((bp envp (led-eval b env (ref msg 2))))
                (if bp
                   (led envp mode bp
-                     (nice-cx bp w)
+                     (env-nice-cx env bp w)
                      (nicer-cy b cy bp h #t)
                      w h)
                   (led
@@ -775,7 +775,7 @@
                      (lets ((buff env (led-eval-runes b env (cdr runes))))
                         (led env 'command   ;; env always there, may have error message
                            (or buff b)      ;; in case command fails
-                           (nice-cx buff w) ;; buffer may change from underneath
+                           (env-nice-cx env buff w)
                            (min cy (buffer-line buff)) ;; ditto
                            w h)))
                   ((eq? (car runes) #\/)
