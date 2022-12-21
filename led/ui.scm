@@ -183,6 +183,16 @@
                   ;; means we have requested it with the intent of finding out what the terminal
                   ;; size is
                   (ui l r i))
+               ((eq? 'crashed (ref msg 1))
+                  ;; the buffer thread has crashed
+                  (lets ((l r (close-buffer l r)))
+                     (log l)
+                     (if l
+                        (begin
+                           (refresh (car l))
+                           (mail (car l) (tuple 'set-status-text "previous buffer crashed"))
+                           (ui l r i))
+                        (halt 10))))
                ((eq? from (car l))
                   ;; forward print message from current window
                   (mail 'screen msg)
