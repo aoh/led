@@ -340,9 +340,10 @@
                    (buff (set-selection-length buff slen)))
                   (values buff env)))
             ((find str)
-               (mail 'ui
-                  (tuple 'open (cons 'find (string->list str)) env '()))
-               (values buff env))
+               (let ((what (if str (string->list str) (get-selection buff))))
+                  (mail 'ui
+                     (tuple 'open (cons 'find what) env '()))
+                  (values buff env)))
             ((nop)
                (values buff env))
             ((abbreviate from to)
