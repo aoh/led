@@ -14,9 +14,10 @@
       (led extra)
       (led parse)
       (led env)
+      (owl unicode)
       (only (led abbreviate) add-abbreviation)
       (only (led system) led-path->runes)
-      (only (led subprocess) start-repl)
+      (only (led subprocess) start-repl fd-pusher subprocess-eval)
       (only (led render) render-content)
       (only (led ui) ui-get-yank ui-put-yank))
 
@@ -186,12 +187,27 @@
                         (log " => call " call)
                         (log " => subprocess " info)
                         (if info
-                           (values buff
-                              (set-status-text
-                                 (put env 'subprocess info)
-                                 (str "Started " (ref info 2) " with PID " (ref info 1) ".")))
+                           (lets ((pid call in out <- info))
+                              (fd-pusher out pid) ;; for use in append mode
+                              (values buff
+                                 (set-status-text
+                                    (put env 'subprocess info)
+                                    (str "Started " call " with PID " pid "."))))
                            (values buff
                               (set-status-text env "no")))))))
+            ((pipe call)
+               ;; no proper encoding handling via env yet
+               (lets
+                  ((selection (get-selection buff))
+                   (ok? result (subprocess-eval call (utf8-encode selection) 1000))) ;; <- timeout and encoding via env later
+                  (if ok?
+                     (led-eval buff env
+                        (tuple 'replace
+                           (or (utf8-decode result) ;; <- no proper encoding handling yet
+                               (string->list "output was not valid UTF-8"))))
+                     (values buff
+                        (set-status-text env
+                           (list->string result))))))
             ((extend-selection movement)
                (lets ((buffp envp (led-eval buff env movement)))
                   (if buffp

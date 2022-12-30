@@ -60,9 +60,11 @@
                               (render (get env 'path "*scratch*") (cdr tl)))
                            ((eq? (car tl) #\b) ;; subprocess-binary
                               (lets
-                                 ((subprocess (get env 'subprocess #f))
-                                  (subprocess-name (if subprocess (car (ref subprocess 2)) "")))
-                                 (render subprocess-name (cdr tl))))
+                                 ((subprocess (get env 'subprocess #f)))
+                                 (if subprocess
+                                    (lets ((pid call in out <- subprocess))
+                                       (render (car call) (cdr tl)))
+                                    (cdr tl))))
                            ((eq? (car tl) #\m)
                               (append (get env 'status-message '()) (cdr tl)))
                            ((eq? (car tl) #\P)

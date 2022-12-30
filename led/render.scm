@@ -1,3 +1,4 @@
+
 (define-library (led render)
 
    (import
@@ -8,15 +9,14 @@
 
    (export
       update-buffer-view
-      ;char-width          ;; rune -> n
       distance-to         ;; lst x -> offset | #f, a shared utility function
       render-content      ;; runes -> printable-char-list
-      repeat-char
-      )
+      repeat-char)
 
    (begin
 
       (define (toggle-selected x) (* -1 (+ x 1)))
+
       (define (i x) x)
 
       ;; n first values to -(x+1) to denote selected code points
@@ -29,7 +29,7 @@
       (define hex
          (let ((cs (vector #\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9
                            #\a #\b #\c #\d #\e #\f)))
-            (lambda (c)
+            (λ (c)
                (vector-ref cs c))))
 
       (define (render-hex x tail op)

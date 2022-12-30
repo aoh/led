@@ -172,6 +172,12 @@
              (cmd  (get-plus get-spaced-word)))
             (tuple 'subprocess cmd)))
 
+      (define get-pipe
+         (get-parses
+            ((skip (get-word "pipe" 'foo))
+             (cmd  (get-plus get-spaced-word)))
+            (tuple 'pipe cmd)))
+
       (define get-resize
          (get-parses
             ((skip (get-word "resize" 'foo))
@@ -188,6 +194,7 @@
                   get-binop
                   get-string-command
                   get-subprocess
+                  get-pipe
                   get-call
                   get-assignment
                   (get-parses

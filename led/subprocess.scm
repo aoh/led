@@ -8,7 +8,10 @@
    (export
       start-repl
       communicate
-      close-pipe)
+      close-pipe
+      fd-pusher      ;; <- maybe relocate
+      subprocess-eval
+      )
 
    (begin
 
@@ -56,6 +59,7 @@
                            (mail my-id (tuple 'push (vector->list data))) ;; todo, utf8
                            (loop))))))))
 
+      ;; call -> ##(pid call stdin-write stdout-read)
       (define (start-repl call)
          (lets ((stdin-read  stdin-write  (pipe))
                 (stdout-read stdout-write (pipe))
@@ -72,8 +76,7 @@
                   ;; leave information on how to talk to the process
                   (close-port stdin-read)
                   (close-port stdout-write)
-                  (fd-pusher stdout-read pid) ;; for use in append mode
-                  (tuple pid call stdin-write stdout-read)
+                  (prod pid call stdin-write stdout-read)
                   )
                (else #false))))
 
@@ -93,20 +96,92 @@
       ;; pipe = #[pid (cmd ..) to-fd from-fd]
       (define (communicate pipe data)
          (log "sending " data)
-         (cond
-            ((string? data)
-               (communicate pipe (string->bytes data)))
-            ((write-bytes (ref pipe 3) data)
-               ;(wait-response (ref pipe 4) 2000)
-               #t
-               )
-            (else
-               #false)))
+         (lets ((pid call in out <- pipe))
+            (cond
+               ((string? data)
+                  (communicate pipe (string->bytes data)))
+               ((write-bytes in data)
+                  ;(wait-response out 2000)
+                  #t
+                  )
+               (else
+                  #false))))
 
       (define (close-pipe pipe)
-         (log "closing subprocess " pipe)
-         (kill (ref pipe 2) sigkill)
-         )
+         (lets ((pid call in out <- pipe))
+            (log "closing subprocess " pid)
+            (kill pid sigkill)))
+
+      ;;;
+      ;;; one-shot input -> output conversion
+      ;;;
+
+      ;; warning: assume potential UTF-8 encoding/decoding will be done outside
+      ;; todo: waitpid + check subprocess exit value
+      ;; → ok? byte-list|error-string-byte-list
+      (define (communicate-io pid sub-in sub-out in-data out-rread tend)
+         (cond
+            ((readable? sub-out)
+               (let ((block (try-get-block sub-out 1024 #f)))
+                  (cond
+                     ((eof-object? block)
+                        ;; ok exit
+                        (values #t
+                           (foldr
+                              (lambda (block tail)
+                                 (vec-foldr
+                                    (lambda (byte tail)
+                                       (cons byte tail))
+                                    tail block))
+                              '() (reverse out-rread))))
+                     ((vector? block)
+                        (communicate-io pid sub-in sub-out in-data (cons block out-rread) tend))
+                     (else
+                        (kill pid sigkill)
+                        (values #f
+                           (string->list "read error"))
+                        ))))
+            ((and (writeable? sub-in) (pair? in-data))
+               (lets
+                  ((next in-data (lsplit in-data 1024))
+                   (block (list->bytevector next))
+                   (res (try-write-block sub-in block (sizeb block))))
+                  (cond
+                     ((eq? res (sizeb block)) ;; block write success
+                        ;; if no more data, close port
+                        (if (null? in-data)
+                           (close-port sub-in))
+                        (communicate-io pid sub-in sub-out in-data out-rread tend))
+                     ((number? res) ;; partial write
+                        (lets
+                           ((in-data (append (ldrop next res) in-data)))
+                           (communicate-io pid sub-in sub-out in-data out-rread tend)))
+                     (else
+                        ;; write error / unexpected
+                        (kill pid sigkill)
+                        (values #f (string->list "write error"))))))
+            ((> (time-ms) tend)
+               ;; timeout
+               (kill pid sigkill)
+               (values #f (string->list "timeout")))
+            (else
+               (sleep 100) ;; ms
+               (communicate-io pid sub-in sub-out in-data out-rread tend))))
+
+      ;; call (byte ...) timeout → success? data-bytes|error-string-bytes
+      (define (subprocess-eval call input-data timeout-s)
+         (let ((proc (start-repl call)))
+            (if proc
+               (lets ((pid call in out <- proc))
+                  (communicate-io pid in out input-data '() (+ (time-ms) (* 1000 timeout-s))))
+               (values #f
+                  (string->list "failed to start subprocess")))))
+
+      '(print
+         (bytes->string (subprocess-eval
+            '("/bin/base64")
+            (string->list "foo\nbar\n")
+            1000)))
 
       ))
 
