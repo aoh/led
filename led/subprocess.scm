@@ -2,7 +2,7 @@
 
    (import
       (owl toplevel)
-      (only (owl sys) exec fork sigkill kill waitpid)
+      (only (owl sys) exec fork sigkill kill waitpid getenv file?)
       (led log))
 
    (export
@@ -59,26 +59,52 @@
                            (mail my-id (tuple 'push (vector->list data))) ;; todo, utf8
                            (loop))))))))
 
+      (define (find-binary path)
+         (log "looking for binary " path)
+         (if (file? path)
+            path
+            (fold
+               (lambda (found dir)
+                  (or found
+                     (let ((this (str dir "/" path)))
+                        (if (file? this)
+                           this
+                           #f))))
+               #f
+               (map list->string
+                  (split
+                     (partial eq? #\:)
+                     (string->list
+                        (or
+                           (getenv "PATH")
+                           "")))))))
+
       ;; call -> ##(pid call stdin-write stdout-read)
       (define (start-repl call)
-         (lets ((stdin-read  stdin-write  (pipe))
-                (stdout-read stdout-write (pipe))
-                (pid (fork)))
-            (cond
-               ((eq? pid #true) ;; child proces
-                  ;; remap stdio and call the command
-                  (dup2 stdin-read stdin)
-                  (close-port stdin-write)
-                  (dup2 stdout-write stdout)
-                  (close-port stdout-read)
-                  (exec (car call) call))
-               (pid
-                  ;; leave information on how to talk to the process
-                  (close-port stdin-read)
-                  (close-port stdout-write)
-                  (prod pid call stdin-write stdout-read)
-                  )
-               (else #false))))
+         (cond
+            ((null? call) #f)
+            ((find-binary (car call)) =>
+               (lambda (bin)
+                  (lets ((stdin-read  stdin-write  (pipe))
+                         (stdout-read stdout-write (pipe))
+                         (pid (fork)))
+                     (cond
+                        ((eq? pid #true) ;; child proces
+                           ;; remap stdio and call the command
+                           (dup2 stdin-read stdin)
+                           (close-port stdin-write)
+                           (dup2 stdout-write stdout)
+                           (close-port stdout-read)
+                           (exec bin call))
+                        (pid
+                           ;; leave information on how to talk to the process
+                           (close-port stdin-read)
+                           (close-port stdout-write)
+                           (prod pid call stdin-write stdout-read))
+                        (else #false)))))
+            (else
+               (log "cannot find binary")
+               #f)))
 
       (define (wait-response fd timeout)
          (lets ((req (tuple 'read-timeout fd timeout))
@@ -176,12 +202,5 @@
                   (communicate-io pid in out input-data '() (+ (time-ms) (* 1000 timeout-s))))
                (values #f
                   (string->list "failed to start subprocess")))))
-
-      '(print
-         (bytes->string (subprocess-eval
-            '("/bin/base64")
-            (string->list "foo\nbar\n")
-            1000)))
-
-      ))
+))
 
