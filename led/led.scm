@@ -4,7 +4,7 @@
 
 (define usage-text "led [args] [file-or-directory] ...")
 
-(define *expected-owl-version* "0.2")
+(define *expected-owl-version* "0.2.1b")
 
 (if (not (equal? *owl-version* *expected-owl-version*))
    (begin
