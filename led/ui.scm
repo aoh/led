@@ -13,12 +13,6 @@
 
    (begin
 
-
-      (define (request-cursor-position)
-         (write-bytevector #(27 #\[ #\6 #\n) stdout))
-
-      ;; protocol helpers
-
       (define (ui-put-yank text)
          (mail 'ui (tuple 'yank text)))
 
