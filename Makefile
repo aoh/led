@@ -2,7 +2,7 @@ CC?=gcc
 OFLAGS=-O1
 CFLAGS=-O2 -Wall
 PREFIX=/usr
-OWLURL=https://haltp.org/files/ol-0.2.c.gz
+OWLURL=https://haltp.org/files/ol-0.2.1.c.gz
 OL=bin/ol
 everything: bin/led .parrot
 
@@ -32,13 +32,13 @@ install: bin/led # .parrot
 uninstall:
 	rm -v $(PREFIX)/bin/led
 
-c/ol-0.2.c.gz:
+c/ol-0.2.1.c.gz:
 	# this is normally bundled in the repository
 	mkdir -p c
 	cd c && wget $(OWLURL)
 
-c/ol.c: c/ol-0.2.c.gz
-	cat c/ol-0.2.c.gz | gzip -d > c/ol.c
+c/ol.c: c/ol-0.2.1.c.gz
+	cat c/ol-0.2.1.c.gz | gzip -d > c/ol.c
 
 bin/ol: c/ol.c
 	mkdir -p bin
