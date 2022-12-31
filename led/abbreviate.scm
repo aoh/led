@@ -64,7 +64,7 @@
                ((pos l r len line <- b)
                 (l dx (abbreviate env l)))
                (values
-                  (prod pos l r len line)
+                  (prod (+ pos dx) l r len line)
                   dx))
             (values b 0)))
 
