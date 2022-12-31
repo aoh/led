@@ -375,7 +375,7 @@
 
       (define (led-eval-runes buff env s)
          ;(log "eval: parse " s)
-         (let ((exp (parse-runes s)))
+         (let ((exp (parse-runes s #f)))
             ;(log "eval " s " -> " exp)
             (if exp
                (lets ((buffp envp (led-eval buff env exp)))

@@ -259,8 +259,12 @@
 
 
       ;; -> tuple | #false
-      (define (parse-runes s)
-         (get-parse get-commands s #false))
+      (define (parse-runes s path)
+         (if path
+            ;; show error (loading config info)
+            (get-try-parse get-commands s path "cannot parse config file" #f)
+            ;; no syntax error printing (repl)
+            (get-parse get-commands s #f)))
 
 ))
 

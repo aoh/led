@@ -1,6 +1,6 @@
 #!/usr/bin/ol --run
 
-(define version-str "led v0.2.1a")
+(define version-str "led v0.2.1")
 
 (define usage-text "led [args] [file-or-directory] ...")
 
@@ -990,7 +990,7 @@
 (import (only (led parse) parse-runes))
 
 (define (load-config-from initial-env data)
-   (let ((cmds (parse-runes data)))
+   (let ((cmds (parse-runes data "config file:")))
       (log "PARSED " cmds)
       (if cmds
          (lets
@@ -1028,14 +1028,14 @@
                   "")))
             (led-repl buffer env)))
       (else
-         (lets ((input (terminal-input (put empty 'eof-exit? #f)))
-                (x y ll (get-terminal-size input))
-                (_ (link (start-logger (get dict 'log))))
-                (env
+         (lets ((env
                    (load-user-settings
                       (or (get dict 'config)
                           (str (or (getenv "HOME") ".") "/.ledrc"))
-                      *default-environment*)))
+                      *default-environment*))
+                (input (terminal-input (put empty 'eof-exit? #f)))
+                (x y ll (get-terminal-size input))
+                (_ (link (start-logger (get dict 'log)))))
             (if env
                (begin
                   (log "Terminal dimensions " (cons x y))
