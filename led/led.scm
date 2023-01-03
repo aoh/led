@@ -4,7 +4,7 @@
 
 (define usage-text "led [args] [file-or-directory] ...")
 
-(define *expected-owl-version* "0.2.1")
+(define *expected-owl-version* "0.2.2a")
 
 (if (not (equal? *owl-version* *expected-owl-version*))
    (begin
@@ -80,8 +80,9 @@
       ;(bound 1 cy (- h 1))
       (cond
          ((< cy 1)
+            ;; off screen at top
             (if jump?
-               (min cy l2)
+               (min (min l2 h) (+ 1 (>> h 1)))
                1))
          ((< cy h) cy)
          (jump? (max 1 (>> h 1)))
