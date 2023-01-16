@@ -1,5 +1,14 @@
 #!/usr/bin/ol --run
 
+;;;
+;;; LED - lisp editor
+;;;
+;
+; This is the entry file of led. In addition to compiling led, you can start it
+; with ol --run led/led.scm [flags here]. This is typically used while developing
+; led by running 'bin/ol --run led/led.scm -L out .', so that you can read log messages.
+;
+
 (define version-str "led v0.2.1")
 
 (define usage-text "led [args] [file-or-directory] ...")

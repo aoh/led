@@ -15,9 +15,18 @@
 
    (begin
 
+      ;; hack warning: buffer contains bytes or unicode code points depending on
+      ;; the encoding used. for rendering purposes we convert these to -(n+1) and
+      ;; back to mark which parts are currently selected
+
       (define (toggle-selected x) (* -1 (+ x 1)))
 
       (define (i x) x)
+
+      (define font-normal-color
+         (let ((bs (ilist 27 91 (string->list "0m"))))
+            (λ (x)
+               (append x bs))))
 
       ;; n first values to -(x+1) to denote selected code points
       (define (mark-selected lst n)
@@ -241,18 +250,64 @@
                         (values lines line-col-width))
                      (values lines 0))))))
 
+      (define (paren? x)
+         (or (eq? x #\() (eq? x #\))))
+
+      (define esc 27)
+
+      (define (dim-string lst cont)
+         (cond
+            ((null? lst)
+               (cont (font-normal lst)))
+            ((eq? (car lst) #\")
+               (cons (car lst)
+                  (font-normal
+                     (cont (cdr lst)))))
+            (else
+               (cons (car lst)
+                  (dim-string (cdr lst) cont)))))
+
+      (define (syntax-highlight lst)
+         (let loop ((lst lst))
+            (if (null? lst)
+               lst
+               (let ((x (car lst)))
+                  (cond
+                     ((eq? x esc) ;; already coloured. don't touch this.
+                        lst)
+                     ((paren? x)
+                        (font-dim
+                           (cons x
+                              (font-normal
+                                 (loop (cdr lst))))))
+                     ((eq? x #\;)
+                        (append
+                           (font-dim lst)
+                           (font-normal '())))
+                     ((eq? x #\")
+                        (font-dim
+                           (cons x
+                              (dim-string (cdr lst) syntax-highlight))))
+                     (else
+                        (cons x (loop (cdr lst)))))))))
+
+
       (define (update-buffer-view env b w h cx cy)
          (lets
             ((lsts dcx (render-buffer env b w h cx cy))
+             (lsts (if (get env 'syntax #f) (map syntax-highlight lsts) lsts))
              (status-bytes (ref (get env 'status-line #f) 2))
              (status-message (get env 'status-message null))
+             (status-prelude (get env 'status-prelude ""))
              (lsts
                 (append lsts
                    (list
-                      (append
-                         (font-dim (or status-bytes '()))
-                         (font-normal '())))
-             )))
+                      (str-foldr
+                         cons
+                         (append
+                            (or status-bytes '())
+                            (font-normal '()))
+                         status-prelude)))))
             (mail 'ui
                (tuple 'update-screen lsts))
             (mail 'ui ;; may choose to use status line instead later

@@ -8,12 +8,12 @@
       empty-led-env
       set-status-text
       clear-status-text
-      disk-modification-time     ;; what was file modification time when opened / last saved
+      disk-modification-time        ;; what was file modification time when opened / last saved
       update-disk-modification-time
-      env-char-width  ;; env rune -> n
-      update-env-value        ;; env svar sval -> ok? env'
+      env-char-width                ;; env rune -> n
+      update-env-value              ;; env svar sval -> ok? env'
       tab-width
-      *editor-variables*        ;; '((symbol   type    default-value) ...)
+      *editor-variables*            ;; '((symbol   type    default-value) ...)
 
       ;; move later
       file-modification-time)
@@ -40,6 +40,8 @@
            (find-regex           regex    ,(string->regex "m/./"))
            (find-path            string   ".")
            (close-if-dirty       boolean  #false)
+           (syntax               boolean  #false)
+           (status-prelude       string   "[32m")
            ))
 
       (define (env-cook type string)
@@ -140,6 +142,4 @@
                4)
             (else
                1)))
-
-
-      ))
+))
