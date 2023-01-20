@@ -288,6 +288,12 @@
                         (font-dim
                            (cons x
                               (dim-string (cdr lst) syntax-highlight))))
+                     ((eq? x #\/)
+                        (if (and (pair? (cdr lst)) (eq? x (cadr lst)))
+                           (append
+                              (font-dim lst)
+                              (font-normal '()))
+                           (cons x (loop (cdr lst)))))
                      (else
                         (cons x (loop (cdr lst)))))))))
 
