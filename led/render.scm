@@ -5,7 +5,8 @@
       (owl toplevel)
       (only (owl terminal) font-normal font-reverse font-dim)
       (only (led env) env-char-width)
-      (led log))
+      (led log)
+      (only (led syntax) syntax-highlight))
 
    (export
       update-buffer-view
@@ -267,36 +268,6 @@
                (cons (car lst)
                   (dim-string (cdr lst) cont)))))
 
-      (define (syntax-highlight lst)
-         (let loop ((lst lst))
-            (if (null? lst)
-               lst
-               (let ((x (car lst)))
-                  (cond
-                     ((eq? x esc) ;; already coloured. don't touch this.
-                        lst)
-                     ((paren? x)
-                        (font-dim
-                           (cons x
-                              (font-normal
-                                 (loop (cdr lst))))))
-                     ((eq? x #\;)
-                        (append
-                           (font-dim lst)
-                           (font-normal '())))
-                     ((eq? x #\")
-                        (font-dim
-                           (cons x
-                              (dim-string (cdr lst) syntax-highlight))))
-                     ((eq? x #\/)
-                        (if (and (pair? (cdr lst)) (eq? x (cadr lst)))
-                           (append
-                              (font-dim lst)
-                              (font-normal '()))
-                           (cons x (loop (cdr lst)))))
-                     (else
-                        (cons x (loop (cdr lst)))))))))
-
 
       (define (update-buffer-view env b w h cx cy)
          (lets
@@ -319,8 +290,4 @@
             (mail 'ui ;; may choose to use status line instead later
                (tuple 'set-cursor (+ dcx cx) cy))
             ;(log "status bytes are " status-bytes)
-            ))
-
-
-
-      ))
+            ))))
