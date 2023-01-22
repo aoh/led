@@ -11,13 +11,41 @@
 
    (begin
 
-      (define (grab lst elems)
+      (define (push-keyword tree lst)
          (cond
-            ((null? elems) lst)
-            ((null? lst) #f)
-            ((eq? (car lst) (car elems))
-               (grab (cdr lst) (cdr elems)))
-            (else #f)))
+            ((null? lst)
+               (put tree 'end? #t))
+            (else
+               (let ((sub (get tree (car lst) empty)))
+                  (put tree (car lst)
+                     (push-keyword sub (cdr lst)))))))
+
+      (define keywords
+         (fold
+            (lambda (k s) (push-keyword k (string->list s)))
+            empty
+            '("define" "if" "let" "let*" "lets" "cond" "else" "lambda"
+              "begin" "define-library" "import" "export")))
+
+
+      ;; → head tail
+      (define (grab tree lst)
+         (let loop ((tree tree) (lst lst) (rout '()))
+            (cond
+               ((null? lst)
+                  (if (get tree 'end? #f)
+                     (values (reverse rout) lst)
+                     (values #f lst)))
+               ((eq? tree empty)
+                  (values #f lst))
+               (else
+                  (if (get tree 'end? #f)
+                     (lets ((hd tl (loop (get tree (car lst) empty) (cdr lst) (cons (car lst) rout))))
+                        (if hd
+                           (values hd tl)
+                           (values (reverse rout) lst)))
+                     (loop (get tree (car lst) empty) (cdr lst) (cons (car lst) rout)))))))
+
 
       (define define-chars (string->list "define"))
 
@@ -39,17 +67,17 @@
                   (dim-string (cdr lst) cont)))))
 
       (define (highlight-word lst cont)
-         (cond
-             ((grab lst define-chars) =>
-                (lambda (tl)
-                   (if (or (null? tl) (eq? (car tl) #\space))
-                      (font-dim
-                         (append
-                            define-chars
-                            (font-normal (cont tl))))
-                      (cont lst))))
-             (else
-                (cont lst))))
+         (lets ((hd tl (grab keywords lst)))
+            (cond
+               ((not hd)
+                  (cont lst))
+               ((or (null? tl) (eq? (car tl) #\space))
+                  (font-dim
+                     (append
+                        hd
+                        (font-normal (cont tl)))))
+               (else
+                  (cont lst)))))
 
       (define (syntax-highlight lst)
          (let loop ((lst lst))
