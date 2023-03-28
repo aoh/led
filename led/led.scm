@@ -409,9 +409,7 @@
          (led env mode b       cx       cy w h))))
 
 (define (ui-select-current-line env mode b cx cy w h led)
-   (if (= 0 (buffer-selection-length b))
-      (led env mode (select-line b (buffer-line b)) 1 cy w h)
-      (led env mode b cx cy w h)))
+   (led env mode (select-line b (buffer-line b)) 1 cy w h))
 
 (define (ui-select-next-char env mode b cx cy w h led)
    (led env mode (buffer-selection-delta b +1) cx cy w h))
