@@ -3,6 +3,7 @@
 
    (import
       (owl toplevel)
+      (owl lcd)
       (led screen)
       (led log))
 
@@ -23,6 +24,7 @@
       (define (refresh window)
          (clear-screen)
          (mail window (tuple 'refresh)))
+
 
       ;; manage threads and their views
       ;; decide which ones get to draw on screen
@@ -54,8 +56,9 @@
       (define (ui l r i)
          (lets ((msg (wait-mail))
                 (from msg msg))
-            ;(log "got " msg " from " from)
             (cond
+               ;; input terminal sends something, which is either handled by UI itself or
+               ;; is forwarded to the currently open buffer
                ((eq? from 'input-terminal)
                   (tuple-case msg
                      ((ctrl x)
@@ -187,8 +190,7 @@
                            (mail (car l) (tuple 'set-status-text "previous buffer crashed"))
                            (ui l r i))
                         (halt 10))))
-               ((eq? from (car l))
-                  ;; forward print message from current window
+               ((eq? from (car l)) ;; <- it would be a better idea to have a message type for forwarding
                   (mail 'screen msg)
                   ;(print " - forwarding to screen")
                   (ui l r i))

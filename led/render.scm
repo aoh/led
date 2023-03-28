@@ -24,6 +24,14 @@
 
       (define (i x) x)
 
+      (define show-cursor
+         (let ((bs (ilist 27 91 (string->list "?25h"))))
+            (λ (x) (append x bs))))
+
+      (define hide-cursor
+         (let ((bs (ilist 27 91 (string->list "?25l"))))
+            (λ (x) (append x bs))))
+
       (define font-normal-color
          (let ((bs (ilist 27 91 (string->list "0m"))))
             (λ (x)
@@ -221,6 +229,7 @@
             (pad-to-length n (cons #\space lst))
             lst))
 
+
       (define (render-buffer env buff w h cx cy)
          (buff
             (λ (pos l r len line)
@@ -251,9 +260,6 @@
                         (values lines line-col-width))
                      (values lines 0))))))
 
-      (define (paren? x)
-         (or (eq? x #\() (eq? x #\))))
-
       (define esc 27)
 
       (define (dim-string lst cont)
@@ -269,7 +275,7 @@
                   (dim-string (cdr lst) cont)))))
 
 
-      (define (update-buffer-view env b w h cx cy)
+      (define (update-buffer-view env mode b w h cx cy)
          (lets
             ((lsts dcx (render-buffer env b w h cx cy))
              (lsts (if (get env 'syntax #f) (map syntax-highlight lsts) lsts))
@@ -287,7 +293,10 @@
                          status-prelude)))))
             (mail 'ui
                (tuple 'update-screen lsts))
-            (mail 'ui ;; may choose to use status line instead later
-               (tuple 'set-cursor (+ dcx cx) cy))
+            (if (eq? mode 'enter-command) ;; status line active
+               (mail 'ui
+                  (tuple 'set-cursor (+ 1 (ref (get env 'status-line #f) 3)) h))
+               (mail 'ui ;; may choose to use status line instead later
+                  (tuple 'set-cursor (+ dcx cx) cy)))
             ;(log "status bytes are " status-bytes)
             ))))

@@ -139,7 +139,7 @@
                         (mail id (tuple 'status-line null 1))
                         (status-line env buff id info w null c))
                      (let ((keys (cdr keys)))
-                        (mail id (tuple 'status-line (reverse keys) (+ 1 (length keys))))
+                        (mail id (tuple 'status-line (reverse keys) (length keys)))
                         (status-line env buff id info w keys c))))
                ((esc)
                   (mail id (tuple 'command-aborted))

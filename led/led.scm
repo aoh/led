@@ -65,10 +65,19 @@
       (+ 1 (buffer-line-offset (lambda (x) 1) b))
       w))
 
-(define (env-nice-cx env b w)
+(define (renderable-width env w h cy)
+   (if (get env 'line-numbers)
+      (lets ((rows (max 1 (- h 1)))
+             (line-col-width (+ 3 (string-length (str (+ (- (buffer-line env) cy) rows))))))
+            (max 1 (- w line-col-width))
+            (- w 10)
+            )
+      w))
+
+(define (env-nice-cx env b w h cy)
    (bound 1
       (+ 1 (buffer-line-offset (lambda (x) (env-char-width env x)) b))
-      w))
+      (renderable-width env w h cy)))
 
 (define (env-nicer-cx env b cx bp w)
    (lets
@@ -721,7 +730,7 @@
       ;'c ui-send-break
       'm ui-do))
 
-(define (next-event env b w h cx cy)
+(define (next-event env mode b w h cx cy)
    (let ((m (check-mail)))
       (if m
          (begin
@@ -731,14 +740,14 @@
                (update (tuple 'update env b)))
             ;; send buffer and environment update to threads who requested for them
             (fold (λ (_ id) (mail id update)) 0 clients)
-            (update-buffer-view env b w h cx cy)
+            (update-buffer-view env mode b w h cx cy)
             (let ((m (wait-mail)))
                (values
                   (ref m 1) (ref m 2)))))))
 
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
-   (lets ((from msg (next-event env b w h cx cy))
+   (lets ((from msg (next-event env mode b w h cx cy))
           (op (ref msg 1)))
       ; (log "led: " mode " <- " msg " from " from)
       (cond
@@ -752,7 +761,7 @@
                   (λ (cli) (mail cli msg))
                   (get env 'clients null))
                (clear-screen)
-               (update-buffer-view env b w h (min cx w) (min cy h))
+               (update-buffer-view env mode b w h (min cx w) (min cy h))
                (led env mode b (min cx w) (min cy h) w h)))
          ((eq? op 'status-line)
             (led
@@ -771,7 +780,7 @@
             (lets ((bp envp (led-eval b env (ref msg 2))))
                (if bp
                   (led envp mode bp
-                     (env-nice-cx env bp w)
+                     (env-nice-cx env bp w h cy)
                      (nicer-cy b cy bp h #t)
                      w h)
                   (led
@@ -785,7 +794,7 @@
                      (lets ((buff env (led-eval-runes b env (cdr runes))))
                         (led env 'command   ;; env always there, may have error message
                            (or buff b)      ;; in case command fails
-                           (env-nice-cx env buff w)
+                           (env-nice-cx env buff w h cy)
                            (min cy (buffer-line buff)) ;; ditto
                            w h)))
                   ((eq? (car runes) #\/)
@@ -843,7 +852,10 @@
                         (if (eq? x 41)
                            (show-matching-paren env b)
                            env)
-                        'insert b (min w (+ (+ cx dx) (env-char-width env x))) cy w h)))
+                        'insert b
+                        (min
+                           (renderable-width env w h cy)
+                           (+ (+ cx dx) (env-char-width env x))) cy w h)))
                ((refresh)
                   (led env 'insert b cx cy w h))
                ((esc)
@@ -865,7 +877,7 @@
                            ((i (if (get env 'autoindent) (buffer-line-indent b) null))
                             (b (buffer-append-noselect b (cons #\newline i))))
                            (led env 'insert b
-                              (env-nice-cx env b w)
+                              (env-nice-cx env b w h cy)
                               (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                      ((eq? k 'w)
                         (let ((pathp (get env 'path)))
@@ -893,7 +905,7 @@
                      ((i (if (get env 'autoindent) (buffer-line-indent b) null))
                       (b (buffer-append-noselect b (cons #\newline i))))
                      (led env 'insert b
-                        (env-nice-cx env b w)
+                        (env-nice-cx env b w h cy)
                         (min (- h 1) (+ cy 1)) w h))) ;; -1 for status line
                ((arrow dir)
                   (cond
@@ -1044,7 +1056,7 @@
                           (str (or (getenv "HOME") ".") "/.ledrc"))
                       *default-environment*))
                 (input (terminal-input (put empty 'eof-exit? #f)))
-                (x y ll (get-terminal-size input))
+                (x y ll (get-terminal-size input)) ; <- this can race with input
                 (_ (link (start-logger (get dict 'log)))))
             (if env
                (begin
