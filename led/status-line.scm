@@ -23,10 +23,11 @@
       ;;;
 
       (define (history-push hist line)
-         (lets ((up down <- hist))
-            (prod
-               (cons line (append (reverse down) up))
-               null)))
+         (lets ((up down <- hist)
+                (up (append (reverse down) up)))
+            (if (and (pair? up) (equal? line (car up)))
+               (prod up null)
+               (prod (cons line up) null))))
 
       ;; id is used to track which readline history is being used
       ;; it's the character used for prompt. e.g. : or /, and likely later |
@@ -48,33 +49,50 @@
          (lets ((id rleft right hist <- rl))
             (readline id (cons char rleft) right hist)))
 
+      ;; rl → n, cursor offset starting from 0
+      (define (readline-cursor rl)
+         (lets ((id rleft right hist <- rl))
+            (length rleft)))
+
       (define (readline-up rl)
          (lets
             ((id rleft right hist <- rl)
+             (this (append (reverse rleft) right))
              (up down <- hist))
             (if (null? up)
                rl
-               (values
-                  (readline id
-                     (reverse (car up))
-                     null
-                     (prod
-                        (cdr up)
-                        (cons (car up) down)))))))
+               (readline id
+                  (reverse (car up))
+                  null
+                  (prod
+                     (cdr up)
+                     (cons this down))))))
 
       (define (readline-down rl)
          (lets
             ((id rleft right hist <- rl)
+             (this (append (reverse rleft) right))
              (up down <- hist))
             (if (null? down)
                rl
-               (values
-                  (readline id
-                     (reverse (car down))
-                     null
-                     (prod
-                        (cons (car down) up)
-                        (cdr down)))))))
+               (readline id
+                  (reverse (car down))
+                  null
+                  (prod
+                     (cons this up)
+                     (cdr down))))))
+
+      (define (readline-left rl)
+         (lets ((id rleft right hist <- rl))
+            (if (null? rleft)
+               rl
+               (readline id (cdr rleft) (cons (car rleft) right) hist))))
+
+      (define (readline-right rl)
+         (lets ((id rleft right hist <- rl))
+            (if (null? right)
+               rl
+               (readline id (cons (car right) rleft) (cdr right) hist))))
 
       ;; rl → id
       (define (readline-id rl)
@@ -99,6 +117,7 @@
             line))
 
       ;; rl → rl' line, stores history, clears state
+      ;; possibly remove this
       (define (readline-flush rl)
          (lets ((id rleft right hist <- rl)
                 (line (append (reverse rleft) right)))
@@ -113,6 +132,12 @@
             (values
                (append (reverse rleft) right)
                (length rleft))))
+
+      ;; add line to end of history, if new
+      (define (readline-history-push rl line)
+         (lets ((id rleft right hist <- rl))
+            (readline id rleft right
+               (history-push hist line))))
 
       (define (pad-to len lst)
          (let loop ((lst lst) (n (length lst)))
@@ -214,7 +239,7 @@
             (mail id
                (tuple 'status-line
                   (cons (readline-id rl) line)
-                  (+ 1 (length line))))))
+                  (+ 1 (readline-cursor rl))))))
 
       ; rl = current readline state
       ; his = ff of key → readline state, for different prompts
@@ -222,8 +247,6 @@
          (lets ((envelope (wait-mail))
                 (from msg envelope))
             ;(log "status-line got " msg " from " from ", keys " keys)
-            ;(log "rl content " (list->string (readline-line rl)))
-            ;(log "history " (ff->list his))
             (tuple-case msg
                ((update env buff)
                   (if (null? keys)
@@ -245,7 +268,6 @@
                      ((rl (readline-put rl x))
                       (line (readline-line rl)))
                      (update-status-line id rl)
-                     ;(log "recurse " line) (sleep 1000)
                      (status-line env buff id info w (cons x keys) c
                         rl his)))
                ((clock c)
@@ -266,15 +288,18 @@
                            (status-line env buff id info w null c #f his)))))
                ((esc)
                   (mail id (tuple 'command-aborted))
-                  (status-line env buff id info w null c rl his))
+                  (mail id (tuple 'status-line null 1))
+                  (status-line env buff id info w null c #f his))
                ((enter)
                   (lets ((rl line (readline-flush rl))
                          (rid (readline-id rl))
                          (full (cons rid line)))
                      (mail id (tuple 'command-entered full))
                      (mail id (tuple 'status-line null 1))
-                     (status-line env buff id info w null c rl
-                        (put his (readline-id rl) rl))))
+                     (status-line env buff id info w null c #f
+                        ; alternative: push just the line and keep unmodified history
+                        (put his (readline-id rl)
+                           (readline-history-push (get his (readline-id rl) rl) line)))))
                ((ctrl key)
                   (log "control key " key)
                   (status-line env buff id info w keys c rl his))
@@ -286,6 +311,14 @@
                            (status-line env buff id info w keys c rl his)))
                      ((eq? dir 'down)
                         (lets ((rl (readline-down rl)))
+                           (update-status-line id rl)
+                           (status-line env buff id info w keys c rl his)))
+                     ((eq? dir 'left)
+                        (lets ((rl (readline-left rl)))
+                           (update-status-line id rl)
+                           (status-line env buff id info w keys c rl his)))
+                     ((eq? dir 'right)
+                        (lets ((rl (readline-right rl)))
                            (update-status-line id rl)
                            (status-line env buff id info w keys c rl his)))
                      (else
