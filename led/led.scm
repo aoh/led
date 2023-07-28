@@ -65,19 +65,17 @@
       (+ 1 (buffer-line-offset (lambda (x) 1) b))
       w))
 
-(define (renderable-width env w h cy)
+(define (renderable-width env b w h cy)
    (if (get env 'line-numbers)
       (lets ((rows (max 1 (- h 1)))
-             (line-col-width (+ 3 (string-length (str (+ (- (buffer-line env) cy) rows))))))
-            (max 1 (- w line-col-width))
-            (- w 10)
-            )
+             (line-col-width (+ 3 (string-length (str (+ (- (buffer-line b) cy) rows))))))
+            (max 1 (- w line-col-width)))
       w))
 
 (define (env-nice-cx env b w h cy)
    (bound 1
       (+ 1 (buffer-line-offset (lambda (x) (env-char-width env x)) b))
-      (renderable-width env w h cy)))
+      (renderable-width env b w h cy)))
 
 (define (env-nicer-cx env b cx bp w)
    (lets
@@ -852,7 +850,7 @@
                            env)
                         'insert b
                         (min
-                           (renderable-width env w h cy)
+                           (renderable-width env b w h cy)
                            (+ (+ cx dx) (env-char-width env x))) cy w h)))
                ((refresh)
                   (led env 'insert b cx cy w h))
