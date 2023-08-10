@@ -23,8 +23,9 @@
       (define empty-env
          (pipe empty
             ; not settable
-            (put 'undo null)
-            (put 'redo null)
+            (put 'undo null)             ;; undo stack
+            (put 'redo null)             ;; redo stack
+            (put 'saved null)            ;; undo stack at the point of save
             (put 'subprocess #false)     ;; each buffer can have own (ones)
             (put 'clients null)          ;; threads requesting updates
             ))
