@@ -24,6 +24,7 @@
 
    (begin
 
+      ;; read paths recursively to a lazy list
       (define (path-finder full-path tail)
          (cond
             ((file? full-path)
@@ -75,8 +76,8 @@
                         ;(log "matched at " row " of " path)
                         (lets
                            ((post llp (grab-row ll))
-                            ;(row-chars (append (reverse rowr) post)) ;; with prefix
-                            (row-string (str path ":" row ":" (list->string post) "\n"))) ;; just after match
+                            (row-chars (append (reverse rowr) post)) ;; with prefix
+                            (row-string (str path ":" row ":" (list->string row-chars) "\n"))) ;; just after match
                            (pair row-string
                               (match-finder llp '() path pat id (+ row 1) tl))))
                      ((eq? (car ll) #\newline)
@@ -147,6 +148,20 @@
             (else
                (lfoldn op state (ll)))))
 
+      (define (is? x)
+         (lambda (y)
+            (equal? x y)))
+
+      (define suffix-of
+         (string->regex "s/.*\\.//"))
+
+      (define (suffix-matcher suffix-options)
+         (if suffix-options
+            (let ((opts (split (is? #\,) (string->list suffix-options))))
+               (lambda (path)
+                  (first (is? (string->list (suffix-of path))) opts #f)))
+            (lambda (x) #t)))
+
       (define (start-find-thread env chars id)
          (thread (list 'finder-of id)
             (begin
@@ -155,7 +170,8 @@
                (result-sender
                   (lets/cc exit
                      ((path-ll (path-finder (get env 'find-path ".") '()))
-                      (path-ll (lkeep (get env 'find-regex something) path-ll)))
+                      (path-ll (lkeep (get env 'find-regex something) path-ll))
+                      (path-ll (lkeep (suffix-matcher (get env 'find-suffixes #f)) path-ll)))
                      (lfoldn
                         (lambda (path tll)
                            ;; check if parent buffer is still there

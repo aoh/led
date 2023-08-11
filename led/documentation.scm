@@ -95,7 +95,9 @@ EDITOR VARIABLES --------------------------------------------------------------
  :set timezone-offset <number>   - set timezone offset in hours
  :set find-path <path>           - dir under which to search for find-matches
  :set find-regex <regex>         - path pattern to match before looking for find
-                                   matches, e.g. scm$
+                                   matches, e.g. src.*scm$
+ :set find-suffixes <options>    - comma-separated list of file suffixes to search
+                                   such as scm,c,md
 
 LEX COMMANDS ------------------------------------------------------------------
 

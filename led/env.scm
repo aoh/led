@@ -40,6 +40,7 @@
            (encoding             encoding 'utf8)
            (find-regex           regex    ,(string->regex "m/./"))
            (find-path            string   ".")
+           (find-suffixes        string   #false)
            (close-if-dirty       boolean  #false)
            (syntax               boolean  #false)
            (status-prelude       string   "[32m")
