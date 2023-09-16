@@ -85,7 +85,10 @@
    (bound 1 next w)))
 
 (define (nice-cy b cy h)
-   (min cy (buffer-line b)))
+   (let ((l (buffer-line b)))
+      (if (< l h)
+         l
+         (max 1 (>> h 1)))))
 
 ;; buffer b at cy changed to bp, screen height h
 (define (nicer-cy b cy bp h jump?)
@@ -393,7 +396,8 @@
          ((char (ref (ref envelope 2) 2))
           (bp env (led-eval b env (tuple 'add-mark char))))
          (led
-            (set-status-text env "marked")
+            (set-status-text env
+               (str "mark " (list->string (list char))))
             mode bp cx cy w h))))
 
 (define (ui-go-to-mark env mode b cx cy w h led)
@@ -403,7 +407,13 @@
        (_ key msg)
        (bp env (led-eval b env (tuple 'select-mark key))))
       (if bp
-         (led env mode bp (nice-cx bp w) 1 w h)
+         (led
+            (set-status-text env
+               (str "jumped to " (list->string (list key))))
+            mode bp
+            (nice-cx bp w)
+            (nice-cy bp cy h)
+            w h)
          (led env mode b       cx       cy w h))))
 
 (define (ui-select-current-line env mode b cx cy w h led)
