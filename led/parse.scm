@@ -34,7 +34,12 @@
             (get-word "@" (tuple 'select 'selection)) ; yo dawg
             (get-parses
                ((n get-integer))
-               (tuple 'select-line n))))
+               (tuple 'select-line n))
+            (get-parses
+               ((_ (get-imm #\'))
+                (c get-rune))
+               (tuple 'select-mark c))
+            ))
 
       (define (upto-line delim)
          (get-either
