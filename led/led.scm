@@ -751,6 +751,38 @@
                (values
                   (ref m 1) (ref m 2)))))))
 
+
+(define (buffer-spaces-left b p)
+   (let loop ((r (buffer-left b)) (n 0))
+      (cond
+         ((null? r) n)
+         ((not (eq? (car r) #\space))
+            n)
+         (else
+            (loop (cdr r) (+ n 1))))))
+
+;; -> b' screen-width
+(define (backspace-select-area env b)
+   (if (get env 'autobackspace)
+      (lets
+         ((p (buffer-pos b))
+          (left-limit (get env 'insert-start))
+          (left-spaces (buffer-spaces-left b (buffer-pos b))))
+         (if (eq? left-spaces 0)
+            (let ((b (select b (- p 1) p)))
+               (values b (env-char-width env (buffer-char b))))
+            (lets ;; add limit
+               ((tab (tab-width env))
+                (extra (remainder left-spaces (max (or tab 3) 3)))
+                (selected (if (= extra 0) tab extra)))
+               (values
+                  (select b (- p selected) p)
+                  selected))))
+      (let ((p (buffer-pos b)))
+         (let ((b (select b (- p 1) p)))
+            (values b
+               (env-char-width env (buffer-char b)))))))
+
 ;; convert all actions to (led eval)ed commands later
 (define (led env mode b cx cy w h)
    (lets ((from msg (next-event env mode b w h cx cy))
@@ -928,14 +960,18 @@
                      (lets
                         ((p (buffer-pos b))
                          (lp (buffer-line-pos b))
-                         (b (select b (- p 1) p))
+                         (b width (backspace-select-area env b))
                          (bp b)
                          (b (buffer-delete b)))
                         (if (eq? lp 0)
                            (led env mode b
                               (min w (+ 1 (buffer-line-pos b)))
                               (max (- cy 1) 1) w h)
-                           (led env mode b (max 1 (- cx (env-char-width env (buffer-char bp)))) cy w h)))
+                           (led env mode b
+                              (max 1
+                                 (- cx
+                                    width))
+                              cy w h)))
                      (led env mode b cx cy w h)))
                (else is foo
                   (mail 'ui

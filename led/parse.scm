@@ -38,8 +38,7 @@
             (get-parses
                ((_ (get-imm #\'))
                 (c get-rune))
-               (tuple 'select-mark c))
-            ))
+               (tuple 'select-mark c))))
 
       (define (upto-line delim)
          (get-either
