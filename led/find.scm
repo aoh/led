@@ -174,6 +174,8 @@
                       (path-ll (lkeep (suffix-matcher (get env 'find-suffixes #f)) path-ll)))
                      (lfoldn
                         (lambda (path tll)
+                           (mail id
+                              (tuple 'set-status-text (str "Search at " path)))
                            ;; check if parent buffer is still there
                            ;(log "find " path)
                            (ping-or-exit id exit)
