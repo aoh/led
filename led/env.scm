@@ -37,6 +37,7 @@
            (timezone-offset      number   1)
            (status-line-template string   "%(%b) %f:%l+%s %[%m] %P%D")
            (autoindent           boolean  #false)
+           (autobackspace        boolean  #false)
            (encoding             encoding 'utf8)
            (find-regex           regex    ,(string->regex "m/./"))
            (find-path            string   ".")
