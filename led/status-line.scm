@@ -10,6 +10,7 @@
       (led log)
       (owl date)
       (owl lcd)
+      (only (owl unicode) utf8-encode)
       (led buffer))
 
    (export
@@ -179,7 +180,9 @@
                            ((eq? (car tl) #\s)
                               (render (buffer-selection-length buff) (cdr tl)))
                            ((eq? (car tl) #\f)
-                              (render (get env 'path "*scratch*") (cdr tl)))
+                              (append
+                                 (string->list (get env 'path "*scratch*"))
+                                 (cdr tl)))
                            ((eq? (car tl) #\b) ;; subprocess-binary
                               (lets
                                  ((subprocess (get env 'subprocess #f)))

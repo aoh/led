@@ -108,7 +108,7 @@
 
       (define (get-non-rune x)
          (get-parses
-            ((y get-rune)
+            ((y get-byte) ;; input is already decoded
              (verify (not (= x y)) #f))
             y))
 
