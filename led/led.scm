@@ -630,8 +630,8 @@
       #\/ ui-start-search
       #\% ui-select-everything
       #\s ui-spell
-      #\? ui-jump-via-map
       #\F ui-find-occurrences
+      #\? ui-jump-via-map ;; not in active use
       ))
 
 (define (ui-repaint env mode b cx cy w h led)
@@ -1068,9 +1068,16 @@
 (define (load-user-settings path env)
    (lets ((data (file->list path)))
       (log "loading user settings from " path)
-      (if data
-         (load-config-from env data)
-         env)))
+      (cond
+         ((not data)
+            env)
+         ((utf8-decode data) =>
+            (lambda (data)
+               (load-config-from env data)))
+         (else
+            (log "Bad unicode in config file")
+            (print-to stderr (str "failed to decode UTF8 of " path))
+            env))))
 
 (define (start-led-threads dict args)
    (cond
