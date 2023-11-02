@@ -56,8 +56,21 @@
          (or (eq? x #\newline)
              (eq? x #\space)))
 
+      (define (get-non-char x)
+         (get-rune-if (lambda (y) (not (eq? x y)))))
+
+      (define get-non-newline (get-non-char #\newline))
+
+      (define get-comment
+         (get-parses
+            ((skip (get-imm #\#))
+             (skip (get-star get-non-newline)))
+            'whitespace))
+
       (define get-whitespace
-         (get-byte-if whitespace-char?))
+         (get-either
+            (get-byte-if whitespace-char?)
+            get-comment))
 
       (define get-non-whitespace
          (get-byte-if (lambda (x) (not (whitespace-char? x)))))
