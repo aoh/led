@@ -7,7 +7,6 @@
 ; This is the entry file of led. In addition to compiling led, you can start it
 ; with ol --run led/led.scm [flags here]. This is typically used while developing
 ; led by running 'bin/ol --run led/led.scm -L out .', so that you can read log messages.
-;
 
 (define version-str "led v0.2.1")
 
@@ -752,14 +751,16 @@
                   (ref m 1) (ref m 2)))))))
 
 
-(define (buffer-spaces-left b p)
+
+(define (buffer-leading-spaces-left b p)
    (let loop ((r (buffer-left b)) (n 0))
       (cond
          ((null? r) n)
-         ((not (eq? (car r) #\space))
-            n)
-         (else
-            (loop (cdr r) (+ n 1))))))
+         ((eq? (car r) #\space)
+           (loop (cdr r) (+ n 1)))
+         ((eq? (car r) #\newline)
+           n)
+         (else #f))))
 
 ;; -> b' screen-width
 (define (backspace-select-area env b)
@@ -767,17 +768,24 @@
       (lets
          ((p (buffer-pos b))
           (left-limit (get env 'insert-start))
-          (left-spaces (buffer-spaces-left b (buffer-pos b))))
-         (if (eq? left-spaces 0)
-            (let ((b (select b (- p 1) p)))
-               (values b (env-char-width env (buffer-char b))))
-            (lets ;; add limit
-               ((tab (tab-width env))
-                (extra (remainder left-spaces (max (or tab 3) 3)))
-                (selected (if (= extra 0) tab extra)))
-               (values
-                  (select b (- p selected) p)
-                  selected))))
+          (left-spaces (buffer-leading-spaces-left b (buffer-pos b))))
+         (cond
+            ((eq? left-spaces 0)
+               (let ((b (select b (- p 1) p)))
+                  (values b (env-char-width env (buffer-char b)))))
+            ((not left-spaces)
+               (let ((p (buffer-pos b)))
+                  (let ((b (select b (- p 1) p)))
+                     (values b
+                        (env-char-width env (buffer-char b))))))
+            (else
+               (lets ;; add limit
+                  ((tab (tab-width env))
+                   (extra (remainder left-spaces (max (or tab 3) 3)))
+                   (selected (if (= extra 0) tab extra)))
+                  (values
+                     (select b (- p selected) p)
+                     selected)))))
       (let ((p (buffer-pos b)))
          (let ((b (select b (- p 1) p)))
             (values b
@@ -1055,7 +1063,6 @@
 
 (define (load-config-from initial-env data)
    (let ((cmds (parse-runes data "config file:")))
-      (log "PARSED " cmds)
       (if cmds
          (lets
              ((b env (string-buffer initial-env ""))
