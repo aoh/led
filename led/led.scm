@@ -8,11 +8,11 @@
 ; with ol --run led/led.scm [flags here]. This is typically used while developing
 ; led by running 'bin/ol --run led/led.scm -L out .', so that you can read log messages.
 
-(define version-str "led v0.2.1")
+(define version-str "led v0.2.2a")
 
 (define usage-text "led [args] [file-or-directory] ...")
 
-(define *expected-owl-version* "0.2.1")
+(define *expected-owl-version* "0.2.2")
 
 (if (not (equal? *owl-version* *expected-owl-version*))
    (begin
