@@ -219,7 +219,7 @@
              (seln (get-selection b)))
             (set-status-text env
                (list->string
-                  (take (first-line seln) 20))))
+                  (first-line seln))))
          (set-status-text env "?"))))
 
 

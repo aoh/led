@@ -165,6 +165,20 @@
             (cdr l)
             l))
 
+      ;; expand the message (rule list, if any) in data by taking at most max-message-size
+      ;; runes of the prefix
+      (define (expand-message data max-message-size)
+         (cond
+            ((null? data) data)
+            ((pair? (car data))
+               (append
+                  (take (car data) max-message-size)
+                  (cdr data)))
+            (else
+               (cons (car data)
+                  (expand-message (cdr data) max-message-size)))))
+
+
       (define (format-status env buff template width)
          ;(log "Formatting status line " template)
          (lets
@@ -191,16 +205,22 @@
                                        (render (car call) (cdr tl)))
                                     (cdr tl))))
                            ((eq? (car tl) #\m)
-                              (append (get env 'status-message '()) (cdr tl)))
+                              ;; leave status message as list (if any) for expansion
+                              (let ((msg (get env 'status-message '())))
+                                 (if (null? msg)
+                                    (cdr tl)
+                                    (cons msg (cdr tl)))))
                            ((eq? (car tl) #\P)
                               (cons 'pad (cdr tl))) ;; <- padding depending on size
                            ((eq? (car tl) #\D) ;; date + time
                               (render (now env) (cdr tl)))
                            ((eq? (car tl) 40)
+                              ;; parenthesis, which autoremoves if empty
                               (if (and (pair? (cdr tl)) (eq? (cadr tl) 41))
                                  (maybe-drop-space (cddr tl))
                                  tl))
                            ((eq? (car tl) 91)
+                              ;; brackets, autoremoved if empty
                               (if (and (pair? (cdr tl)) (eq? (cadr tl) 93))
                                  (maybe-drop-space (cddr tl))
                                  tl))
@@ -209,8 +229,11 @@
                         (cons c tl)))
                   '()
                   template))
-             ;; length without pad
-             (len (fold (lambda (n x) (if (eq? x 'pad) n (+ n 1))) 0 data))
+             ;; length without pad or message
+             (len (fold (lambda (n x) (if (or (eq? x 'pad) (pair? x))  n (+ n 1))) 0 data))
+             (max-message-size (- width len))
+             (data (expand-message data max-message-size))
+             (len (fold (lambda (n x) (if (eq? x 'pad)  n (+ n 1))) 0 data))
              (pad-width (- width len))
              (data
                 (foldr
