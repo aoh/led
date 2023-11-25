@@ -79,10 +79,22 @@ INSERT MODE -------------------------------------------------------------------
 
 
 
+ABBREVIATIONS -----------------------------------------------------------------
+
+Abbreviations are replaced automatically when a specific string is written in
+insert mode.
+
+  :abbr glambda λ
+  :abbr heigth height
+
+
+
 EDITOR VARIABLES --------------------------------------------------------------
 
- :set autoindent <true|false>
- :set encoding <utf8|none>       -
+ :set autoindent <true|false>    - automatically indent after enter to previous level
+ :set autobackspace <on|off>     - backspace in insert mode to shift width boundaries
+ :set syntax <on|off>            - enable heuristic highlighting of screen contetn
+ :set encoding <utf8|none>       - set buffer content encoding
  :set expand-tabs <true|false>   - convert tabs to spaces?
  :set status-line \"template\"   - set content of status line
       %l[ine number in buffer]
