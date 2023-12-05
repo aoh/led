@@ -781,7 +781,7 @@
             (else
                (lets ;; add limit
                   ((tab (tab-width env))
-                   (extra (remainder left-spaces (max (or tab 3) 3)))
+                   (extra (remainder left-spaces (or tab 3)))
                    (selected (if (= extra 0) tab extra)))
                   (values
                      (select b (- p selected) p)
