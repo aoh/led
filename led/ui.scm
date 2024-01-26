@@ -79,14 +79,14 @@
                               (let ((r (append (reverse l) r)))
                                  (refresh (car r))
                                  (ui (list (car r)) (cdr r) i)))
-                           ((eq? x 'q) ;; close current buffer (from outside), may leave zombies for now
-                              (halt 1)
-                              (lets ((l r (close-buffer l r)))
-                                 (if l
-                                    (begin
-                                       (refresh (car l))
-                                       (ui l r i))
-                                    0)))
+                           ;((eq? x 'q) ;; close current buffer (from outside), may leave zombies for now
+                           ;   (halt 1)
+                           ;   (lets ((l r (close-buffer l r)))
+                           ;      (if l
+                           ;         (begin
+                           ;            (refresh (car l))
+                           ;            (ui l r i))
+                           ;         0)))
                            (else
                               (mail (car l) msg)
                               (ui l r i))))
