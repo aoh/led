@@ -54,7 +54,9 @@
                      (if (or (not data) (eof-object? data))
                         (let ((rval (waitpid pid)))
                            (mail my-id
-                              (tuple 'push (verbose-exit rval))))
+                              (tuple 'push (verbose-exit rval)))
+                           (mail my-id
+                              (tuple 'sub-exited)))
                         (begin
                            (mail my-id (tuple 'push (vector->list data))) ;; todo, utf8
                            (loop))))))))

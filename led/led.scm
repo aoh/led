@@ -24,7 +24,7 @@
    (only (owl parse) byte-stream->exp-stream fd->exp-stream)
    (only (owl readline) port->readline-byte-stream)
    (owl unicode)
-   (only (owl sys) file? directory? kill sigkill getenv)
+   (only (owl sys) file? directory? kill sigkill sigint getenv)
    (owl terminal)
    (owl proof)
    (owl unicode)
@@ -42,7 +42,7 @@
    (led input)
    (led documentation)
    (led abbreviate)
-   (only (owl syscall) link kill)
+   ;(only (owl syscall) link kill)
    (only (led ui) start-ui ui-put-yank ui-get-yank)
    (led render)
    (led status-line))
@@ -722,6 +722,18 @@
          (else
             (led env mode bp cx cy w h)))))
 
+;; send C-c to subprocess, if present
+(define (ui-send-break env mode b cx cy w h led)
+   (let ((sub (get env 'subprocess)))
+      (if sub
+         (lets ((pid call in out <- sub))
+            (kill pid sigint)
+            (led
+               (set-status-text env (str "breaked pid " pid))
+               mode b cx cy w h))
+         ; no-op if no subprocess
+         (led env mode b cx cy w h))))
+
 
 (define *default-command-mode-control-key-bindings*
    (ff
@@ -732,7 +744,7 @@
       'j ui-format-paragraphs
       'w ui-save-buffer
       'x ui-send-to-subprocess
-      ;'c ui-send-break
+      'c ui-send-break
       'm ui-do))
 
 (define (next-event env mode b w h cx cy)
@@ -812,6 +824,11 @@
          ((eq? op 'status-line)
             (led
                (put env 'status-line msg) ;; #(status-line <bytes> <cursor-x>)
+               mode b cx cy w h))
+         ((eq? op 'sub-exited)
+            ;; subprocess is finished
+            (led
+               (set-status-text (del env 'subprocess) "suprocess exited")
                mode b cx cy w h))
          ((eq? op 'keep-me-posted)
             (led (put env 'clients (cons from (get env 'clients null)))
